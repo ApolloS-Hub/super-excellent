@@ -1,0 +1,37 @@
+{
+  "app": {
+    "title": "Super Excellent"
+  },
+  "nav": {
+    "conversations": "Chat",
+    "noConversations": "No conversations yet",
+    "settings": "Settings",
+    "agents": "Agent Monitor"
+  },
+  "chat": {
+    "welcome": "Hello! I'm your AI Secretary. Tell me what you need and I'll arrange it.",
+    "input_placeholder": "Type your request...",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "compatible": "Compatible",
+    "placeholder_response": "Got it! The Secretary Agent is initializing."
+  },
+  "permission": {
+    "title": "Action Confirmation",
+    "description": "The AI is requesting to perform the following action:",
+    "tool": "Tool",
+    "approve": "Allow",
+    "deny": "Deny",
+    "remember": "Remember this choice for this session"
+  },
+  "settings": {
+    "title": "Settings",
+    "provider": "AI Provider",
+    "apiKey": "API Key",
+    "baseUrl": "API Endpoint",
+    "model": "Model",
+    "language": "Language",
+    "save": "Save Settings",
+    "saved": "Settings saved!"
+  }
+}

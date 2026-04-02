@@ -1,0 +1,22 @@
+{
+  "name": "super-excellent",
+  "private": true,
+  "scripts": {
+    "dev": "./scripts/dev.sh",
+    "build": "./scripts/build.sh",
+    "build:macos": "./scripts/build.sh macos",
+    "build:windows": "./scripts/build.sh windows",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r --parallel exec npx tsc --noEmit",
+    "lint": "pnpm typecheck"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@esbuild/darwin-arm64": "0.25.12",
+    "@rollup/rollup-darwin-arm64": "4.60.1"
+  }
+}
