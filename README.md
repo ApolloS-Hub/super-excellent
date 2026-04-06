@@ -21,16 +21,37 @@
 4. 收集结果
 5. 把成品交给你
 
-### AI 员工团队
+### AI 员工团队（20 个专业角色）
+
+**研发团队**
 
 | 角色 | 职责 |
 |------|------|
-| 🎯 产品经理 | 需求分析、PRD、用户故事 |
-| 💻 开发工程师 | 写代码、实现功能、修 bug |
-| 🧪 测试工程师 | 测试用例、质量验证 |
-| 🔧 运维工程师 | 部署、CI/CD、基建 |
-| 📝 技术文档 | 文档、README、指南 |
-| 🔬 研究员 | 调研、分析、对比 |
+| 🎯 产品经理 | 需求分析、PRD、用户故事、产品规划 |
+| 🏗️ 架构师 | 系统设计、架构决策、技术选型 |
+| 💻 全栈开发 | 代码实现、功能开发、Bug 修复、重构 |
+| 🎨 前端工程师 | UI 实现、组件开发、性能优化 |
+| 🔍 代码审查 | 质量把关、安全检查、最佳实践 |
+| 🧪 测试工程师 | 测试策略、自动化测试、回归测试 |
+| 🚀 运维工程师 | CI/CD、部署、监控、基础设施 |
+| 🛡️ 安全工程师 | 威胁建模、安全审计、漏洞分析 |
+| 📝 技术文档 | API 文档、用户指南、变更日志 |
+| 🔬 研究员 | 技术调研、竞品分析、方案评估 |
+| 🎭 UX 设计师 | 用户体验、交互设计、信息架构 |
+| 📊 数据分析师 | 数据分析、指标设计、可视化 |
+
+**业务团队**
+
+| 角色 | 职责 |
+|------|------|
+| 👔 运营总监 | 战略规划、业务推进、跨部门协调 |
+| 🚀 增长黑客 | 用户增长、转化漏斗、A/B 测试 |
+| 📢 内容运营 | 内容策略、社媒运营、品牌传播 |
+| ⚖️ 法务合规 | 合规检查、隐私保护、合同审核 |
+| 💰 财务分析 | 预算管理、成本分析、ROI 计算 |
+| 📅 项目经理 | 进度跟踪、风险管控、资源调配 |
+| 🎧 客户支持 | 反馈处理、FAQ 维护、满意度提升 |
+| 🛡️ 风控分析 | 风险识别、应急预案、灾难恢复 |
 
 ### 核心能力
 
@@ -85,8 +106,10 @@ Just talk to the Secretary. It will:
 
 ### Features
 
+- **20 specialized AI roles**: 12 engineering + 8 business/operations
 - **12 built-in tools**: Terminal, files, editing, search, browser, screenshot...
-- **Three-layer memory**: Short-term → Mid-term → Long-term
+- **Three-layer memory**: Short-term → Mid-term → Long-term (vector semantic search)
+- **Workflow templates**: Structured step-by-step workflows for business roles
 - **Prompt caching**: System prompt cache, conversation compaction
 - **MCP protocol**: Connect external MCP servers
 - **5-level permissions**: From fully automatic to user approval required
