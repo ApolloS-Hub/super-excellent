@@ -3,7 +3,7 @@
  *
  * Short-term: Ring buffer (max 20), current session only, no persistence.
  * Mid-term:   IndexedDB, user preferences / frequent paths / commands, 30-day TTL.
- * Long-term:  MEMORY.md via Rust file_write, project context (AGENTS.md).
+ * Long-term:  local persisted memory + semantic retrieval in agent-core.
  */
 
 // ────────────────────────── Types ──────────────────────────
@@ -206,7 +206,7 @@ export async function buildMidTermSummary(): Promise<string> {
   return sections.join("\n\n");
 }
 
-// ────────────────────────── Long-term Memory (localStorage + MEMORY.md) ──────────────────────────
+// ────────────────────────── Long-term Memory (persistent local store) ──────────────────────────
 
 export function loadMemory(): string {
   try {
