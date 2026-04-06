@@ -1,15 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Stack, Text, Paper, Badge, Group, Button, Table,
-  Notification, Code,
+  Stack, Text, Paper, Badge, Group, Button,
+  Notification, Code, Stepper, SimpleGrid, ScrollArea,
 } from "@mantine/core";
-import { healthCheck, repairConfig } from "../lib/tauri-bridge";
+import { healthCheck, repairConfig, listenAgentStream, isTauriAvailable } from "../lib/tauri-bridge";
+import { onAgentEvent } from "../lib/event-bus";
+import { getTeamConfig, type Worker as TeamWorker } from "../lib/team";
 import type { HealthStatus } from "../lib/tauri-bridge";
+import { startMonitor, stopMonitor, isMonitorRunning, getAllTasks } from "../lib/runtime";
+import { permissionEngine, PERMISSION_LEVEL_META } from "../lib/permission-engine";
 
 interface MonitorPageProps {
   onBack: () => void;
 }
+
+const WORKFLOW_PHASES = [
+  { id: "think", emoji: "💭", label: "Think", labelZh: "构思", desc: "Clarify goals, challenge assumptions" },
+  { id: "plan", emoji: "📋", label: "Plan", labelZh: "规划", desc: "Architecture, task breakdown" },
+  { id: "build", emoji: "🔨", label: "Build", labelZh: "构建", desc: "Execute, write code" },
+  { id: "review", emoji: "🔍", label: "Review", labelZh: "审查", desc: "Code review, security" },
+  { id: "test", emoji: "🧪", label: "Test", labelZh: "测试", desc: "Verify, validate" },
+  { id: "ship", emoji: "🚀", label: "Ship", labelZh: "交付", desc: "Deploy, deliver" },
+  { id: "reflect", emoji: "🔬", label: "Reflect", labelZh: "复盘", desc: "Extract learnings" },
+];
+
+/* Worker 列表现在从 team.ts getTeamConfig() 动态读取 */
 
 function MonitorPage({ onBack }: MonitorPageProps) {
   const { t } = useTranslation();
@@ -17,20 +33,115 @@ function MonitorPage({ onBack }: MonitorPageProps) {
   const [repairing, setRepairing] = useState(false);
   const [repairResult, setRepairResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const refreshInterval = 5;
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [costData, setCostData] = useState({ totalCost: 0, totalTokens: 0 });
+  const [fileChanges, setFileChanges] = useState<Array<{ path: string; action: string; timestamp: number }>>([]);
+  const [teamWorkers, setTeamWorkers] = useState<TeamWorker[]>([]);
+  const [runtimeTasks, setRuntimeTasks] = useState<Array<{ status: string }>>([]);
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const tasks = getAllTasks();
+        setRuntimeTasks(tasks.map(t => ({ status: t.status })));
+      } catch { /* */ }
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Start runtime monitor
+  useEffect(() => {
+    if (!isMonitorRunning()) startMonitor();
+    return () => { stopMonitor(); };
+  }, []);
+
+  const taskCounts = {
+    running: runtimeTasks.filter(t => t.status === "in_progress").length,
+    done: runtimeTasks.filter(t => t.status === "done" || t.status === "completed").length,
+    pending: runtimeTasks.filter(t => t.status === "todo" || t.status === "pending").length,
+    failed: runtimeTasks.filter(t => t.status === "blocked" || t.status === "failed").length,
+  };
+  // Legacy worker counts merged into runtime taskCounts
+  taskCounts.running += teamWorkers.filter(w => w.status === "working").length;
+  taskCounts.failed += teamWorkers.filter(w => w.status === "error").length;
+
+  // Real-time event log
+  const [eventLog, setEventLog] = useState<Array<{ time: string; type: string; detail: string }>>([]);
+  const logViewport = useRef<HTMLDivElement>(null);
+
+  // 加载 Worker 状态、费用数据、文件变更
+  useEffect(() => {
+    const refreshAll = () => {
+      import("../lib/cost-tracker").then(m => m.getTotalUsage().then(setCostData));
+      import("../lib/file-tracker").then(m => setFileChanges(m.getFileChanges()));
+      setTeamWorkers([...getTeamConfig().workers]);
+    };
+    refreshAll();
+    const timer = setInterval(refreshAll, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Listen from event bus (works in both Tauri and browser)
+    const unsubBus = onAgentEvent((event: Record<string, unknown>) => {
+      const time = new Date().toLocaleTimeString();
+      let detail = "";
+      const type = (event.type as string) || "unknown";
+      switch (type) {
+        case "text": detail = `${((event.text as string) || "").slice(0, 80)}${((event.text as string) || "").length > 80 ? "..." : ""}`; break;
+        case "thinking": detail = `💭 ${((event.text as string) || "").slice(0, 60)}...`; break;
+        case "tool_use": detail = `🔧 ${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`; break;
+        case "error": detail = `❌ ${event.text}`; break;
+        case "result": detail = `✓ 完成`; break;
+        default: detail = JSON.stringify(event).slice(0, 100);
+      }
+      setEventLog(prev => [...prev.slice(-99), { time, type, detail }]);
+    });
+
+    // Also try Tauri event stream if available
+    let unlistenTauri: (() => void) | undefined;
+    if (isTauriAvailable()) {
+      const u = listenAgentStream((event) => {
+        const time = new Date().toLocaleTimeString();
+        let detail = "";
+        switch (event.type) {
+          case "text": detail = `${(event.text || "").slice(0, 80)}`; break;
+          case "thinking": detail = `💭 ${(event.text || "").slice(0, 60)}...`; break;
+          case "tool_use": detail = `🔧 ${event.name}(${JSON.stringify(event.input).slice(0, 60)})`; break;
+          case "tool_result": detail = `✅ ${(event.output || "").slice(0, 80)}`; break;
+          case "error": detail = `❌ ${event.error}`; break;
+          case "done": detail = `✓ ${event.stop_reason}`; break;
+          case "usage": detail = `📊 in:${event.usage?.input_tokens} out:${event.usage?.output_tokens}`; break;
+          default: detail = JSON.stringify(event).slice(0, 100);
+        }
+        setEventLog(prev => [...prev.slice(-99), { time, type: event.type, detail }]);
+      });
+      unlistenTauri = () => u?.();
+    }
+
+    return () => {
+      unsubBus();
+      unlistenTauri?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    logViewport.current?.scrollTo({ top: logViewport.current.scrollHeight, behavior: "smooth" });
+  }, [eventLog]);
 
   const runHealthCheck = async () => {
     try {
       const status = await healthCheck();
       setHealth(status);
       setError(null);
+      setLastRefresh(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Health check failed (Tauri not available in dev mode)");
-      // Provide mock data in dev mode
-      setHealth({
-        config_valid: true,
-        config_error: null,
-        app_version: "0.1.0-dev",
-      });
+      setHealth({ config_valid: true, config_error: null, app_version: "0.1.0-dev" });
+      setLastRefresh(new Date());
     }
   };
 
@@ -47,52 +158,48 @@ function MonitorPage({ onBack }: MonitorPageProps) {
     }
   };
 
-  useEffect(() => {
-    runHealthCheck();
-  }, []);
+  // Initial load
+  useEffect(() => { runHealthCheck(); }, []);
 
-  const workers = [
-    { id: "product", name: "产品经理", nameEn: "Product Manager", status: "idle" },
-    { id: "developer", name: "开发工程师", nameEn: "Developer", status: "idle" },
-    { id: "tester", name: "测试工程师", nameEn: "QA Engineer", status: "idle" },
-    { id: "devops", name: "运维工程师", nameEn: "DevOps", status: "idle" },
-    { id: "writer", name: "技术文档", nameEn: "Writer", status: "idle" },
-    { id: "researcher", name: "研究员", nameEn: "Researcher", status: "idle" },
-  ];
+  // Auto-refresh polling
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = setInterval(runHealthCheck, refreshInterval * 1000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, refreshInterval]);
 
   return (
-    <Stack maw={700} mx="auto">
+    <Stack maw={800} mx="auto">
       <Group justify="space-between">
         <Text size="xl" fw={700}>🤖 {t("nav.agents")}</Text>
         <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
       </Group>
 
-      {error && (
-        <Notification color="yellow" withCloseButton={false}>
-          ⚠️ {error}
-        </Notification>
-      )}
-
-      {repairResult && (
-        <Notification color="green" withCloseButton onClose={() => setRepairResult(null)}>
-          {repairResult}
-        </Notification>
-      )}
+      {error && <Notification color="yellow" withCloseButton={false}>⚠️ {error}</Notification>}
+      {repairResult && <Notification color="green" withCloseButton onClose={() => setRepairResult(null)}>{repairResult}</Notification>}
 
       {/* System Health */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
           <Text fw={600}>系统健康 / System Health</Text>
           <Group gap="xs">
+            <Badge
+              color={autoRefresh ? "green" : "gray"}
+              variant="light"
+              style={{ cursor: "pointer" }}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+            >
+              {autoRefresh ? `🔄 ${refreshInterval}s` : "⏸️ 暂停"}
+            </Badge>
+            {lastRefresh && (
+              <Text size="xs" c="dimmed">{lastRefresh.toLocaleTimeString()}</Text>
+            )}
             <Button size="xs" variant="light" onClick={runHealthCheck}>刷新</Button>
             {health && !health.config_valid && (
-              <Button size="xs" color="red" onClick={handleRepair} loading={repairing}>
-                修复配置
-              </Button>
+              <Button size="xs" color="red" onClick={handleRepair} loading={repairing}>修复配置</Button>
             )}
           </Group>
         </Group>
-
         {health && (
           <Stack gap="xs">
             <Group>
@@ -101,9 +208,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
                 {health.config_valid ? "✅ 正常" : "❌ 异常"}
               </Badge>
             </Group>
-            {health.config_error && (
-              <Code block color="red">{health.config_error}</Code>
-            )}
+            {health.config_error && <Code block color="red">{health.config_error}</Code>}
             <Group>
               <Text size="sm">版本:</Text>
               <Badge variant="outline">{health.app_version}</Badge>
@@ -112,43 +217,237 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         )}
       </Paper>
 
-      {/* Worker Status */}
+      {/* 7-Phase Workflow Pipeline */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">AI 员工 / Workers</Text>
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>角色</Table.Th>
-              <Table.Th>状态</Table.Th>
-              <Table.Th>任务</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {workers.map(w => (
-              <Table.Tr key={w.id}>
-                <Table.Td>
-                  <Text size="sm">{w.name}</Text>
-                  <Text size="xs" c="dimmed">{w.nameEn}</Text>
-                </Table.Td>
-                <Table.Td>
-                  <Badge color="gray" size="sm">空闲</Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">—</Text>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        <Text fw={600} mb="md">工作流管线 / Workflow Pipeline</Text>
+        <Stepper active={-1} size="xs" color="blue">
+          {WORKFLOW_PHASES.map(p => (
+            <Stepper.Step
+              key={p.id}
+              label={`${p.emoji} ${p.labelZh}`}
+              description={p.label}
+            />
+          ))}
+        </Stepper>
+        <Text size="xs" c="dimmed" mt="xs" ta="center">
+          Think → Plan → Build → Review → Test → Ship → Reflect
+        </Text>
       </Paper>
 
-      {/* Tool Stats */}
+      {/* AI 员工团队 — 从 team.ts 读取真实状态 */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">工具 / Tools</Text>
-        <Text size="sm" c="dimmed">12 个内置工具可用</Text>
-        <Text size="sm" c="dimmed">0 个 MCP 服务器已连接</Text>
+        <Group justify="space-between" mb="sm">
+          <Text fw={600}>🤖 AI 员工团队 / Workers ({teamWorkers.length})</Text>
+          <Badge color={teamWorkers.some(w => w.status === "working") ? "green" : "gray"} variant="light">
+            {teamWorkers.filter(w => w.status === "working").length} 工作中
+          </Badge>
+        </Group>
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
+          {teamWorkers.map(w => (
+            <Paper
+              key={w.id}
+              p="xs"
+              radius="sm"
+              withBorder
+              style={{
+                borderColor: w.status === "working" ? "var(--mantine-color-green-5)" : undefined,
+                borderWidth: w.status === "working" ? 2 : undefined,
+              }}
+            >
+              <Group gap={6} wrap="nowrap">
+                <Text size="lg">{w.emoji}</Text>
+                <Stack gap={0}>
+                  <Text size="xs" fw={500} truncate>{w.name}</Text>
+                  <Text size="xs" c="dimmed" truncate>{w.role}</Text>
+                </Stack>
+              </Group>
+              <Badge
+                color={w.status === "working" ? "green" : w.status === "error" ? "red" : "gray"}
+                size="xs"
+                mt={4}
+                fullWidth
+              >
+                {w.status === "working" ? `🟢 工作中` : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
+              </Badge>
+              {w.currentTask && (
+                <Text size="xs" c="green" mt={2} truncate>📌 {w.currentTask}</Text>
+              )}
+            </Paper>
+          ))}
+        </SimpleGrid>
+      </Paper>
+
+      {/* Cost & Usage */}
+      <Paper p="md" radius="md" withBorder>
+        <Text fw={600} mb="sm">💰 费用 & Token 使用 / Cost & Usage</Text>
+        <SimpleGrid cols={4}>
+          <Stack gap={0} align="center">
+            <Text size="xl" fw={700}>{costData.totalCost < 0.01 ? `$${costData.totalCost.toFixed(4)}` : `$${costData.totalCost.toFixed(2)}`}</Text>
+            <Text size="xs" c="dimmed">总费用</Text>
+          </Stack>
+          <Stack gap={0} align="center">
+            <Text size="xl" fw={700}>{costData.totalTokens > 1000 ? `${(costData.totalTokens/1000).toFixed(1)}K` : costData.totalTokens}</Text>
+            <Text size="xs" c="dimmed">总 Token</Text>
+          </Stack>
+          <Stack gap={0} align="center">
+            <Text size="xl" fw={700}>{taskCounts.running}</Text>
+            <Text size="xs" c="dimmed">进行中</Text>
+          </Stack>
+          <Stack gap={0} align="center">
+            <Text size="xl" fw={700}>{taskCounts.done}</Text>
+            <Text size="xs" c="dimmed">已完成</Text>
+          </Stack>
+        </SimpleGrid>
+      </Paper>
+
+      {/* Permission Overview */}
+      <PermissionOverviewPanel />
+
+      {/* File Changes */}
+      {fileChanges.length > 0 && (
+        <Paper p="md" radius="md" withBorder>
+          <Group justify="space-between" mb="sm">
+            <Text fw={600}>📁 文件变更 / File Changes ({fileChanges.length})</Text>
+            <Button size="xs" variant="light" onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}>清空</Button>
+          </Group>
+          <Stack gap={2}>
+            {fileChanges.slice(-20).map((fc, i: number) => (
+              <Group key={i} gap="xs">
+                <Badge size="xs" color={fc.action === "create" ? "green" : fc.action === "modify" ? "yellow" : fc.action === "delete" ? "red" : "gray"}>
+                  {fc.action}
+                </Badge>
+                <Text size="xs" style={{ fontFamily: "monospace" }}>{fc.path}</Text>
+              </Group>
+            ))}
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Tools & Integrations */}
+      <Paper p="md" radius="md" withBorder>
+        <Text fw={600} mb="sm">工具与集成 / Tools</Text>
+        <Group gap="xs">
+          <Badge variant="light" color="blue">11 内置工具</Badge>
+          <Badge variant="light" color="green">5 LLM 提供商</Badge>
+          <Badge variant="light" color="violet">MCP 扩展协议</Badge>
+          <Badge variant="light" color="orange">浏览器控制</Badge>
+          <Badge variant="light" color="cyan">持续学习引擎</Badge>
+          <Badge variant="light" color="red">Rust 后端</Badge>
+        </Group>
+      </Paper>
+
+      {/* Real-time Event Log */}
+      <Paper p="md" radius="md" withBorder>
+        <Group justify="space-between" mb="sm">
+          <Text fw={600}>📋 实时事件日志 / Event Log</Text>
+          <Group gap="xs">
+            <Badge color={eventLog.length > 0 ? "green" : "gray"} variant="light">
+              {eventLog.length} 条
+            </Badge>
+            <Button size="xs" variant="light" onClick={() => setEventLog([])}>清空</Button>
+          </Group>
+        </Group>
+        <ScrollArea h={200} viewportRef={logViewport}>
+          {eventLog.length === 0 ? (
+            <Text size="xs" c="dimmed" ta="center" py="md">
+              等待 Agent 活动...（在聊天中发送消息后，这里会实时显示事件）
+            </Text>
+          ) : (
+            <Stack gap={2}>
+              {eventLog.map((entry: { time: string; type: string; detail: string }, i: number) => (
+                <Group key={i} gap="xs" wrap="nowrap">
+                  <Text size="xs" c="dimmed" style={{ flexShrink: 0, fontFamily: "monospace" }}>{entry.time}</Text>
+                  <Badge size="xs" variant="dot" color={
+                    entry.type === "error" ? "red" :
+                    entry.type === "tool_use" ? "yellow" :
+                    entry.type === "done" ? "green" :
+                    entry.type === "thinking" ? "violet" :
+                    "blue"
+                  }>{entry.type}</Badge>
+                  <Text size="xs" truncate style={{ fontFamily: "monospace" }}>{entry.detail}</Text>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </ScrollArea>
       </Paper>
     </Stack>
+  );
+}
+
+function PermissionOverviewPanel() {
+  const [level, setLevel] = useState(() => permissionEngine.getLevel());
+  const [rules, setRules] = useState(() => permissionEngine.getRules());
+  const [stats, setStats] = useState(() => permissionEngine.getDenialStats());
+  const [recentCount, setRecentCount] = useState(() => permissionEngine.getRecentDenialCount(300_000));
+
+  useEffect(() => {
+    const refresh = () => {
+      setLevel(permissionEngine.getLevel());
+      setRules(permissionEngine.getRules());
+      setStats(permissionEngine.getDenialStats());
+      setRecentCount(permissionEngine.getRecentDenialCount(300_000));
+    };
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const meta = PERMISSION_LEVEL_META[level];
+
+  return (
+    <Paper p="md" radius="md" withBorder>
+      <Group justify="space-between" mb="sm">
+        <Text fw={600}>🛡️ 权限概览 / Permission Overview</Text>
+        <Badge color={meta.color} variant="light">
+          {meta.symbol} {meta.label}
+        </Badge>
+      </Group>
+
+      <SimpleGrid cols={3} mb="sm">
+        <Stack gap={0} align="center">
+          <Text size="xl" fw={700}>{rules.length}</Text>
+          <Text size="xs" c="dimmed">自定义规则</Text>
+        </Stack>
+        <Stack gap={0} align="center">
+          <Text size="xl" fw={700} c={stats.length > 0 ? "red" : "green"}>{stats.reduce((s, v) => s + v.count, 0)}</Text>
+          <Text size="xs" c="dimmed">总拒绝次数</Text>
+        </Stack>
+        <Stack gap={0} align="center">
+          <Text size="xl" fw={700} c={recentCount > 0 ? "orange" : "green"}>{recentCount}</Text>
+          <Text size="xs" c="dimmed">近5分钟拒绝</Text>
+        </Stack>
+      </SimpleGrid>
+
+      {stats.length > 0 && (
+        <Stack gap={4}>
+          <Text size="xs" c="dimmed" fw={600}>拒绝 TOP 工具:</Text>
+          {stats.slice(0, 5).map(s => (
+            <Group key={s.tool} gap="xs">
+              <Badge size="xs" color="red" variant="light">{s.count}×</Badge>
+              <Text size="xs" ff="monospace">{s.tool}</Text>
+              <Text size="xs" c="dimmed" truncate style={{ maxWidth: 200 }}>
+                {s.topReasons.join(" · ")}
+              </Text>
+            </Group>
+          ))}
+        </Stack>
+      )}
+
+      {rules.length > 0 && (
+        <Stack gap={4} mt="xs">
+          <Text size="xs" c="dimmed" fw={600}>活跃规则:</Text>
+          {rules.map((r, i) => (
+            <Group key={i} gap="xs">
+              <Badge size="xs" color={r.action === "allow" ? "green" : r.action === "deny" ? "red" : "yellow"}>
+                {r.action}
+              </Badge>
+              <Text size="xs" ff="monospace">{r.tool}</Text>
+              {r.path && <Text size="xs" c="dimmed">{r.path}</Text>}
+            </Group>
+          ))}
+        </Stack>
+      )}
+    </Paper>
   );
 }
 

@@ -1,0 +1,96 @@
+/* Markdown Theme Styles — used with react-markdown */
+
+.md-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--mantine-color-text);
+  word-break: break-word;
+}
+
+/* ═══════ DARK MODE ═══════ */
+[data-mantine-color-scheme="dark"] .md-code-block {
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+[data-mantine-color-scheme="dark"] .md-inline-code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f38ba8;
+}
+[data-mantine-color-scheme="dark"] .md-blockquote {
+  border-left: 3px solid #6c7086;
+  color: #a6adc8;
+  background: rgba(255, 255, 255, 0.03);
+}
+[data-mantine-color-scheme="dark"] .md-hr {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+[data-mantine-color-scheme="dark"] .md-table-th,
+[data-mantine-color-scheme="dark"] .md-table-td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+[data-mantine-color-scheme="dark"] .md-table-th {
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-mantine-color-scheme="dark"] .md-link {
+  color: #89b4fa;
+}
+[data-mantine-color-scheme="dark"] .md-content strong {
+  color: #f5e0dc;
+}
+
+/* ═══════ LIGHT MODE ═══════ */
+[data-mantine-color-scheme="light"] .md-code-block {
+  background: #f5f5f5;
+  color: #1e1e2e;
+}
+[data-mantine-color-scheme="light"] .md-inline-code {
+  background: rgba(0, 0, 0, 0.06);
+  color: #d20f39;
+}
+[data-mantine-color-scheme="light"] .md-blockquote {
+  border-left: 3px solid #ccd0da;
+  color: #5c5f77;
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-mantine-color-scheme="light"] .md-hr {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+[data-mantine-color-scheme="light"] .md-table-th,
+[data-mantine-color-scheme="light"] .md-table-td {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+[data-mantine-color-scheme="light"] .md-table-th {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-mantine-color-scheme="light"] .md-link {
+  color: #1e66f5;
+}
+[data-mantine-color-scheme="light"] .md-content strong {
+  color: #4c4f69;
+}
+
+/* ═══════ THINKING ANIMATIONS ═══════ */
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+@keyframes thinking-bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.cursor-blink {
+  animation: cursor-blink-anim 1s step-end infinite;
+}
+
+@keyframes cursor-blink-anim {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

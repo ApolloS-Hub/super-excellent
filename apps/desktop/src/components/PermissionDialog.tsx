@@ -9,12 +9,18 @@
  * - bypassPermissions: approve everything (no dialog)
  * - plan: show plan but don't execute
  */
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Modal, Stack, Text, Group, Button, Code, Badge, Checkbox,
-  Paper, Divider,
+  Paper, Divider, SegmentedControl,
 } from "@mantine/core";
+import {
+  permissionEngine,
+  PERMISSION_LEVELS,
+  PERMISSION_LEVEL_META,
+  type PermissionLevel,
+} from "../lib/permission-engine";
 
 export interface PermissionRequest {
   id: string;
@@ -184,3 +190,58 @@ export class PermissionManager {
 
 // Singleton for the app
 export const permissionManager = new PermissionManager();
+
+/**
+ * Permission Level Selector — compact inline control
+ */
+interface PermissionLevelSelectorProps {
+  value: PermissionLevel;
+  onChange: (level: PermissionLevel) => void;
+  compact?: boolean;
+}
+
+export function PermissionLevelSelector({ value, onChange, compact }: PermissionLevelSelectorProps) {
+  const data = PERMISSION_LEVELS.map(level => {
+    const meta = PERMISSION_LEVEL_META[level];
+    return {
+      value: level,
+      label: compact ? `${meta.symbol}` : `${meta.symbol} ${meta.label}`,
+    };
+  });
+
+  return (
+    <SegmentedControl
+      value={value}
+      onChange={(val) => onChange(val as PermissionLevel)}
+      data={data}
+      size="xs"
+      fullWidth={!compact}
+    />
+  );
+}
+
+/**
+ * Hook: usePermissionLevel — reactive permission level state
+ */
+export function usePermissionLevel(): [PermissionLevel, (level: PermissionLevel) => void] {
+  const [level, setLevel] = useState<PermissionLevel>(permissionEngine.getLevel());
+
+  const updateLevel = useCallback((newLevel: PermissionLevel) => {
+    permissionEngine.setLevel(newLevel);
+    setLevel(newLevel);
+    window.dispatchEvent(new CustomEvent("permission-level-change", {
+      detail: { level: newLevel },
+    }));
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { level: PermissionLevel };
+      setLevel(detail.level);
+    };
+    window.addEventListener("permission-level-change", handler);
+    return () => window.removeEventListener("permission-level-change", handler);
+  }, []);
+
+  return [level, updateLevel];
+}
