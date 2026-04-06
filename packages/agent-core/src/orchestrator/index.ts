@@ -1,6 +1,11 @@
-/**
- * Orchestrator module — Secretary-Worker pattern
- */
 export { SecretaryAgent } from "./secretary.js";
-export { WORKER_ROLES, getWorkerById, getWorkersByExpertise } from "./workers.js";
-export type { WorkerRole, SubTask, OrchestrationPlan, SecretaryConfig, WorkerResult } from "./types.js";
+export { WORKER_ROLES as LEGACY_WORKER_ROLES, getWorkerById, getWorkersByExpertise } from "./workers.js";
+export { WorkflowEngine, PHASE_ORDER, PHASE_GATES } from "./workflow.js";
+export { WorkflowTaskCoordinator } from "./coordinator.js";
+export * from "./task-graph.js";
+export { WORKER_ROLES, getRolesByPhase, getRoleById, getAllRoles } from "./roles.js";
+export type { WorkerRole as ExtendedWorkerRole, WorkerRole as RoleDefinition } from "./roles.js";
+export type { SecretaryConfig, WorkerRole, SubTask, OrchestrationPlan, WorkerResult } from "./types.js";
+export type { WorkflowPhase, WorkflowState, PhaseGate } from "./workflow.js";
+export type { Task, TaskGraph, TaskStatus, TaskPriority } from "./task-graph.js";
+export type { CoordinatorConfig, PhaseCheckResult, CoordinatorState } from "./coordinator.js";

@@ -1,0 +1,14 @@
+{
+  "name": "@super-excellent/recovery",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "se-recovery": "./dist/cli.js" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

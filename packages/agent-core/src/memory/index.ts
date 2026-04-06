@@ -84,3 +84,5 @@ export { ShortTermMemory } from "./short-term.js";
 export { MidTermMemory, MEMORY_SLOTS } from "./mid-term.js";
 export { LongTermMemory } from "./long-term.js";
 export type { MemoryConfig, MemorySnapshot, MemoryEntry, MemoryLayer } from "./types.js";
+export * from "./learnings.js";
+export type { Learning, LearningStore } from "./learnings.js";

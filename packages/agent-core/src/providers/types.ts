@@ -1,5 +1,5 @@
 export interface ProviderConfig {
-  type: "anthropic" | "openai" | "compatible";
+  type: "anthropic" | "openai" | "google" | "compatible";
   apiKey: string;
   baseURL?: string;
   model: string;

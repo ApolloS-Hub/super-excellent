@@ -18,7 +18,9 @@ export { createToolExecutor, BUILTIN_TOOLS, setUserInputCallback } from "./tools
 export type { ToolDefinitionFull, ToolExecutor, PermissionMode } from "./tools/types.js";
 
 // Orchestrator (Secretary-Worker)
-export { SecretaryAgent, WORKER_ROLES, getWorkerById, getWorkersByExpertise } from "./orchestrator/index.js";
+export { SecretaryAgent, LEGACY_WORKER_ROLES, getWorkerById, getWorkersByExpertise, WorkflowEngine, WORKER_ROLES, getAllRoles, getRolesByPhase, getRoleById, WorkflowTaskCoordinator } from "./orchestrator/index.js";
+export * from "./orchestrator/task-graph.js";
+export { OperationRecorder } from "./tools/builtin/recorder.js";
 export type { WorkerRole, SubTask, OrchestrationPlan, SecretaryConfig, WorkerResult } from "./orchestrator/types.js";
 
 // Memory (Three-layer)
