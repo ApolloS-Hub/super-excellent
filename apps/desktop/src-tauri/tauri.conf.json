@@ -49,14 +49,7 @@
   },
   "plugins": {
     "shell": {
-      "open": true,
-      "scope": [
-        {
-          "name": "run-agent",
-          "cmd": "node",
-          "args": true
-        }
-      ]
+      "open": true
     }
   }
 }

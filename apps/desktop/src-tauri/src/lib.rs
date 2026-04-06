@@ -1,9 +1,353 @@
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
+use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tauri::Emitter;
 
-// ===== S11: Terminal Command Execution =====
+mod api;
+mod tools;
+mod compact;
+mod session;
+mod config;
+mod mcp;
+
+use api::types::*;
+use api::ApiClient;
+
+// ═══════════ Tauri State ═══════════
+
+struct AppState {
+    workspace_dir: Mutex<Option<String>>,
+    permission_mode: Mutex<PermissionMode>,
+}
+
+// ═══════════ Agent Commands ═══════════
+
+/// Send a chat message with streaming via Tauri events
+#[tauri::command]
+async fn agent_chat(
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    model: String,
+    messages: Vec<Value>,
+    system_prompt: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<Value, String> {
+    let provider_type = match provider.as_str() {
+        "anthropic" => ProviderType::Anthropic,
+        "openai" => ProviderType::OpenAI,
+        "google" => ProviderType::Google,
+        "kimi" => ProviderType::Kimi,
+        _ => ProviderType::Compatible,
+    };
+
+    let config = ProviderConfig {
+        provider: provider_type,
+        api_key,
+        base_url,
+        model,
+        max_tokens: 4096,
+    };
+
+    let client = ApiClient::new(config);
+
+    let chat_messages: Vec<ChatMessage> = messages.iter().filter_map(|m| {
+        let role = m.get("role")?.as_str()?;
+        let content = m.get("content")?.as_str()?;
+        Some(ChatMessage {
+            role: role.to_string(),
+            content: MessageContent::Text(content.to_string()),
+            tool_call_id: m.get("tool_call_id").and_then(|v| v.as_str()).map(String::from),
+        })
+    }).collect();
+
+    // Stream via Tauri events
+    let handle = app_handle.clone();
+    let mut full_text = String::new();
+    let mut usage_total = Usage::default();
+
+    client.send_message_stream(
+        &chat_messages,
+        system_prompt.as_deref(),
+        None,
+        |event| {
+            let _ = handle.emit("agent-stream", serde_json::to_value(&event).unwrap_or_default());
+        },
+    ).await?;
+
+    // Also do a non-streaming call to get the full response for the return value
+    let response = client.send_message(
+        &chat_messages,
+        system_prompt.as_deref(),
+        None,
+    ).await?;
+
+    serde_json::to_value(&response).map_err(|e| format!("Serialize error: {}", e))
+}
+
+/// Stream-only chat — frontend handles all UI via events
+#[tauri::command]
+async fn agent_chat_stream(
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    model: String,
+    messages: Vec<Value>,
+    system_prompt: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let provider_type = match provider.as_str() {
+        "anthropic" => ProviderType::Anthropic,
+        "openai" => ProviderType::OpenAI,
+        "google" => ProviderType::Google,
+        "kimi" => ProviderType::Kimi,
+        _ => ProviderType::Compatible,
+    };
+
+    let config = ProviderConfig {
+        provider: provider_type,
+        api_key,
+        base_url,
+        model,
+        max_tokens: 4096,
+    };
+
+    let client = ApiClient::new(config);
+
+    let chat_messages: Vec<ChatMessage> = messages.iter().filter_map(|m| {
+        let role = m.get("role")?.as_str()?;
+        let content = m.get("content")?.as_str()?;
+        Some(ChatMessage {
+            role: role.to_string(),
+            content: MessageContent::Text(content.to_string()),
+            tool_call_id: m.get("tool_call_id").and_then(|v| v.as_str()).map(String::from),
+        })
+    }).collect();
+
+    let handle = app_handle.clone();
+
+    client.send_message_stream(
+        &chat_messages,
+        system_prompt.as_deref(),
+        None,
+        |event| {
+            let _ = handle.emit("agent-stream", serde_json::to_value(&event).unwrap_or_default());
+        },
+    ).await?;
+
+    Ok(())
+}
+
+/// Execute a tool by name
+#[tauri::command]
+async fn agent_execute_tool(
+    name: String,
+    input: Value,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    // Log invocation
+    let input_str = input.to_string();
+    let _ = std::fs::write("/tmp/se-tool-log.txt", format!("name={}\ninput={}\n", name, &input_str[..input_str.len().min(500)]));
+
+    let workspace = state.workspace_dir.lock().unwrap().clone();
+    let mode = *state.permission_mode.lock().unwrap();
+
+    let decision = tools::check_permission(&name, &input, mode, workspace.as_deref());
+    match decision {
+        PermissionDecision::Deny => {
+            let msg = format!("Permission denied for tool '{}' in {:?} mode", name, mode);
+            let _ = std::fs::write("/tmp/se-tool-result.txt", format!("DENY: {}", msg));
+            return Err(msg);
+        }
+        PermissionDecision::Ask => {}
+        PermissionDecision::Allow => {}
+    }
+
+    // Use tokio::task::spawn_blocking for sync operations
+    let name_clone = name.clone();
+    let workspace_clone = workspace.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(tools::execute_tool(&name_clone, input, workspace_clone.as_deref()))
+    }).await.map_err(|e| format!("Task join error: {}", e))?;
+
+    match &result {
+        Ok(output) => {
+            let _ = std::fs::write("/tmp/se-tool-result.txt", format!("OK[{}]: {}", name, &output[..output.len().min(200)]));
+        }
+        Err(err) => {
+            let _ = std::fs::write("/tmp/se-tool-result.txt", format!("ERR[{}]: {}", name, err));
+        }
+    }
+    result
+}
+
+/// Get all available tool definitions
+#[tauri::command]
+fn agent_get_tools() -> Vec<Value> {
+    tools::all_tool_definitions().into_iter().map(|t| {
+        json!({
+            "name": t.name,
+            "description": t.description,
+            "input_schema": t.input_schema,
+        })
+    }).collect()
+}
+
+/// Set the workspace directory for permission checks
+#[tauri::command]
+fn set_workspace_dir(dir: String, state: tauri::State<'_, AppState>) {
+    *state.workspace_dir.lock().unwrap() = Some(dir);
+}
+
+/// Set permission mode
+#[tauri::command]
+fn set_permission_mode(mode: String, state: tauri::State<'_, AppState>) {
+    let pm = match mode.as_str() {
+        "read-only" => PermissionMode::ReadOnly,
+        "workspace-write" => PermissionMode::WorkspaceWrite,
+        "accept-edits" => PermissionMode::AcceptEdits,
+        "dont-ask" => PermissionMode::DontAsk,
+        "bypass" => PermissionMode::BypassPermissions,
+        _ => PermissionMode::WorkspaceWrite,
+    };
+    *state.permission_mode.lock().unwrap() = pm;
+}
+
+/// Validate an API key by making a minimal request
+#[tauri::command]
+async fn validate_api_key(
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    model: String,
+) -> Result<Value, String> {
+    let provider_type = match provider.as_str() {
+        "anthropic" => ProviderType::Anthropic,
+        "openai" => ProviderType::OpenAI,
+        "google" => ProviderType::Google,
+        "kimi" => ProviderType::Kimi,
+        _ => ProviderType::Compatible,
+    };
+
+    let config = ProviderConfig {
+        provider: provider_type.clone(),
+        api_key: api_key.clone(),
+        base_url,
+        model,
+        max_tokens: 1,
+    };
+
+    let client = ApiClient::new(config);
+    let test_msg = vec![ChatMessage {
+        role: "user".to_string(),
+        content: MessageContent::Text("hi".to_string()),
+        tool_call_id: None,
+    }];
+
+    match client.send_message(&test_msg, None, None).await {
+        Ok(_) => Ok(json!({"valid": true})),
+        Err(e) => {
+            if e.contains("401") || e.contains("Unauthorized") {
+                Ok(json!({"valid": false, "error": "API Key 无效 (401)"}))
+            } else if e.contains("403") || e.contains("Forbidden") {
+                Ok(json!({"valid": false, "error": "API Key 权限不足 (403)"}))
+            } else if e.contains("429") || e.contains("Rate") {
+                Ok(json!({"valid": true})) // Rate limited = key is valid
+            } else if e.contains("model") || e.contains("overloaded") {
+                Ok(json!({"valid": true})) // Model issue but key works
+            } else {
+                Ok(json!({"valid": false, "error": e}))
+            }
+        }
+    }
+}
+
+// ═══════════ Session Commands ═══════════
+
+#[tauri::command]
+fn save_session(data: Value) -> Result<(), String> {
+    let session: session::SessionData = serde_json::from_value(data)
+        .map_err(|e| format!("Invalid session data: {}", e))?;
+    session::save_session(&session)
+}
+
+#[tauri::command]
+fn load_session(id: String) -> Result<Value, String> {
+    let s = session::load_session(&id)?;
+    serde_json::to_value(s).map_err(|e| format!("Serialize: {}", e))
+}
+
+#[tauri::command]
+fn list_sessions() -> Result<Vec<Value>, String> {
+    let sessions = session::list_sessions()?;
+    sessions.into_iter()
+        .map(|s| serde_json::to_value(s).map_err(|e| format!("Serialize: {}", e)))
+        .collect()
+}
+
+#[tauri::command]
+fn delete_session_cmd(id: String) -> Result<(), String> {
+    session::delete_session(&id)
+}
+
+#[tauri::command]
+fn export_sessions() -> Result<String, String> {
+    session::export_all_sessions()
+}
+
+#[tauri::command]
+fn import_sessions(json_data: String) -> Result<usize, String> {
+    session::import_sessions(&json_data)
+}
+
+// ═══════════ Compact Commands ═══════════
+
+#[tauri::command]
+fn check_compact_needed(messages: Vec<Value>) -> bool {
+    let chat_msgs: Vec<api::types::ChatMessage> = messages.iter().filter_map(|m| {
+        let role = m.get("role")?.as_str()?;
+        let content = m.get("content")?.as_str()?;
+        Some(api::types::ChatMessage {
+            role: role.to_string(),
+            content: api::types::MessageContent::Text(content.to_string()),
+            tool_call_id: None,
+        })
+    }).collect();
+    compact::should_compact(&chat_msgs, &compact::CompactConfig::default())
+}
+
+#[tauri::command]
+fn compact_conversation(messages: Vec<Value>) -> Result<Value, String> {
+    let chat_msgs: Vec<api::types::ChatMessage> = messages.iter().filter_map(|m| {
+        let role = m.get("role")?.as_str()?;
+        let content = m.get("content")?.as_str()?;
+        Some(api::types::ChatMessage {
+            role: role.to_string(),
+            content: api::types::MessageContent::Text(content.to_string()),
+            tool_call_id: None,
+        })
+    }).collect();
+
+    let config = compact::CompactConfig::default();
+    let result = compact::compact_messages(&chat_msgs, &config);
+    let new_msgs = compact::build_compacted_messages(&chat_msgs, &config);
+
+    let new_msgs_json: Vec<Value> = new_msgs.iter().map(|m| {
+        json!({ "role": m.role, "content": m.content.as_text() })
+    }).collect();
+
+    Ok(json!({
+        "result": serde_json::to_value(&result).unwrap_or_default(),
+        "messages": new_msgs_json,
+    }))
+}
+
+// ═══════════ Legacy Commands (kept for compatibility) ═══════════
 
 #[derive(Serialize)]
 struct CommandResult {
@@ -38,8 +382,6 @@ fn execute_command(command: String, cwd: Option<String>, timeout_ms: Option<u64>
         success: output.status.success(),
     })
 }
-
-// ===== S12: File System Operations with Sandbox =====
 
 #[derive(Serialize)]
 struct FileInfo {
@@ -97,15 +439,11 @@ fn delete_file(path: String, allowed_dirs: Vec<String>) -> Result<String, String
     Ok(format!("Deleted {}", path))
 }
 
-/// Security gate: check if path is within allowed directories
 fn check_path_allowed(path: &str, allowed_dirs: &[String]) -> Result<(), String> {
-    if allowed_dirs.is_empty() {
-        return Ok(()); // No restrictions configured
-    }
+    if allowed_dirs.is_empty() { return Ok(()); }
     
     let canonical = fs::canonicalize(path)
         .or_else(|_| {
-            // File might not exist yet; check parent
             if let Some(parent) = PathBuf::from(path).parent() {
                 fs::canonicalize(parent).map(|p| p.join(PathBuf::from(path).file_name().unwrap_or_default()))
             } else {
@@ -127,7 +465,7 @@ fn check_path_allowed(path: &str, allowed_dirs: &[String]) -> Result<(), String>
     Err(format!("Access denied: {} is outside allowed directories", path))
 }
 
-// ===== S15: Watchdog / Health Check =====
+// ═══════════ Health Check ═══════════
 
 #[derive(Serialize)]
 struct HealthStatus {
@@ -146,7 +484,7 @@ fn health_check() -> HealthStatus {
                 Err(e) => (false, Some(format!("Invalid JSON: {}", e))),
             }
         }
-        Err(_) => (true, None), // No config file yet is OK
+        Err(_) => (true, None),
     };
     
     HealthStatus {
@@ -161,13 +499,11 @@ fn repair_config() -> Result<String, String> {
     let config_path = dirs_config_path();
     let backup_path = format!("{}.backup", config_path);
     
-    // Backup current config
     if PathBuf::from(&config_path).exists() {
         fs::copy(&config_path, &backup_path).ok();
     }
     
-    // Write default config
-    let default_config = serde_json::json!({
+    let default_config = json!({
         "provider": "anthropic",
         "model": "claude-sonnet-4-6",
         "language": "zh-CN"
@@ -189,13 +525,36 @@ fn dirs_config_path() -> String {
     format!("{}/.super-excellent/config.json", home)
 }
 
-// ===== App Entry =====
+// ═══════════ App Entry ═══════════
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(AppState {
+            workspace_dir: Mutex::new(None),
+            permission_mode: Mutex::new(PermissionMode::WorkspaceWrite),
+        })
         .invoke_handler(tauri::generate_handler![
+            // Agent commands
+            agent_chat,
+            agent_chat_stream,
+            agent_execute_tool,
+            agent_get_tools,
+            set_workspace_dir,
+            set_permission_mode,
+            validate_api_key,
+            // Session commands
+            save_session,
+            load_session,
+            list_sessions,
+            delete_session_cmd,
+            export_sessions,
+            import_sessions,
+            // Compact commands
+            check_compact_needed,
+            compact_conversation,
+            // Legacy commands
             execute_command,
             read_file,
             write_file,
