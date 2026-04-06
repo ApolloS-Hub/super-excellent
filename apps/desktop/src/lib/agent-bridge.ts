@@ -841,14 +841,17 @@ async function _callOpenAINonStream(
       "Authorization": `Bearer ${config.apiKey}`,
     };
 
+    const isCompatible = config.provider === "compatible";
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
       messages,
-      tools: TOOL_DEFINITIONS,
-      tool_choice: "auto",
       stream: false,
     };
+    if (!isCompatible) {
+      body.tools = TOOL_DEFINITIONS;
+      body.tool_choice = "auto";
+    }
 
     let response: Response;
     try {
@@ -1054,16 +1057,18 @@ async function callOpenAI(
       "Authorization": `Bearer ${config.apiKey}`,
     };
 
-    // 流式请求体 — stream: true + stream_options 获取 usage
+    const isCompatible = config.provider === "compatible";
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
       messages,
-      tools: TOOL_DEFINITIONS,
-      tool_choice: "auto",
       stream: true,
       stream_options: { include_usage: true },
     };
+    if (!isCompatible) {
+      body.tools = TOOL_DEFINITIONS;
+      body.tool_choice = "auto";
+    }
 
     let response: Response;
     try {

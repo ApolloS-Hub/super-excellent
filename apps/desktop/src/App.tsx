@@ -125,12 +125,20 @@ function App() {
 
   // Conversation actions
   const handleNewConversation = useCallback(() => {
-    const conv = createConversation();
-    setConversations(prev => [conv, ...prev]);
-    setActiveConvId(conv.id);
-    setCurrentPage("chat");
-    close();
-  }, [close]);
+    setConversations(prev => {
+      const current = prev.find(c => c.id === activeConvId);
+      if (current && current.messages.length === 0) {
+        setCurrentPage("chat");
+        close();
+        return prev;
+      }
+      const conv = createConversation();
+      setActiveConvId(conv.id);
+      setCurrentPage("chat");
+      close();
+      return [conv, ...prev];
+    });
+  }, [close, activeConvId]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConvId(id);
@@ -413,6 +421,16 @@ function ConversationItem({
         backgroundColor: active ? "var(--mantine-color-blue-light)" : "transparent",
       }}
       onClick={() => !editing && onSelect(conv.id)}
+      onContextMenu={e => {
+        e.preventDefault();
+        const action = window.prompt("操作: 输入新名称(改名) 或输入 delete(删除)", conv.title);
+        if (action === null) return;
+        if (action.toLowerCase() === "delete") {
+          onDelete(conv.id);
+        } else if (action.trim() && action.trim() !== conv.title) {
+          onRename(conv.id, action.trim());
+        }
+      }}
       onMouseEnter={e => {
         if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--mantine-color-default-hover)";
       }}
