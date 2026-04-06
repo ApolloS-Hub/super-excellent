@@ -131,7 +131,7 @@ pnpm dev
 │  Agent Core (TypeScript)                   │
 │  ├── QueryEngine (agentic loop)            │
 │  ├── Secretary (Coordinator-Worker)        │
-│  ├── 6 Worker roles                        │
+│  ├── Multi-role worker system              │
 │  ├── 12 built-in tools                     │
 │  ├── Three-layer memory                    │
 │  ├── Prompt cache optimization             │
