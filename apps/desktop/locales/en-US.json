@@ -5,6 +5,10 @@
   "nav": {
     "conversations": "Chat",
     "noConversations": "No conversations yet",
+    "newConversation": "New Chat",
+    "deleteConversation": "Delete",
+    "searchConversations": "Search chats...",
+    "noMessages": "No messages",
     "settings": "Settings",
     "agents": "Agent Monitor"
   },
@@ -32,6 +36,7 @@
     "model": "Model",
     "language": "Language",
     "save": "Save Settings",
-    "saved": "Settings saved!"
+    "saved": "Settings saved! API Key verified ✓",
+    "validating": "Validating API Key..."
   }
 }
