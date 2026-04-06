@@ -7,9 +7,13 @@ on:
 
 jobs:
   quality-gates:
-    name: typecheck-test-build
-    runs-on: macos-latest
+    name: ${{ matrix.os }} quality gates
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout

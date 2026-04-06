@@ -104,7 +104,7 @@ pnpm dev
 
 | Layer | Technology |
 |-------|-----------|
-| Desktop | Tauri 2.x (Rust + WebView) |
+| Desktop | Tauri 2.x (Rust + WebView) — macOS verified, Windows CI smoke |
 | Frontend | React 19 + TypeScript + Vite 6 |
 | UI | Mantine + Tailwind CSS |
 | Agent | TypeScript (custom engine) |
