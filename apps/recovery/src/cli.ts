@@ -117,7 +117,7 @@ function checkBackups(): HealthCheck {
       autoFix: () => ensureDir(BACKUP_DIR),
     };
   }
-  const backups = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith(".json"));
+  const backups = fs.readdirSync(BACKUP_DIR).filter((f: string) => f.endsWith(".json"));
   if (backups.length === 0) {
     return { name: "Backups", status: "warn", message: "No backups found" };
   }
@@ -144,7 +144,7 @@ function checkDataIntegrity(): HealthCheck {
   if (!fs.existsSync(DATA_DIR)) {
     return { name: "Data Integrity", status: "ok", message: "No data files (using IndexedDB)" };
   }
-  const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".json"));
+  const files = fs.readdirSync(DATA_DIR).filter((f: string) => f.endsWith(".json"));
   let corrupt = 0;
   for (const file of files) {
     try {
@@ -235,7 +235,7 @@ function runBackup() {
 
   // Prune old backups (keep latest 10)
   const backups = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith("backup-"))
+    .filter((f: string) => f.startsWith("backup-"))
     .sort()
     .reverse();
   for (const old of backups.slice(10)) {
@@ -254,7 +254,7 @@ function runRestore() {
   }
 
   const backups = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith("backup-"))
+    .filter((f: string) => f.startsWith("backup-"))
     .sort()
     .reverse();
 
@@ -318,8 +318,8 @@ function runExportData() {
     try { data.config = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")); } catch { /* skip */ }
   }
   if (fs.existsSync(DATA_DIR)) {
-    const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".json"));
-    data.dataFiles = files.map(f => ({
+    const files = fs.readdirSync(DATA_DIR).filter((f: string) => f.endsWith(".json"));
+    data.dataFiles = files.map((f: string) => ({
       name: f,
       content: (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), "utf-8")); } catch { return null; } })(),
     }));

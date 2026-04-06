@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { tmpdir } from "os";
 import { join } from "path";
-import { rm, mkdir } from "fs/promises";
+import { rm, mkdir, mkdtemp } from "fs/promises";
 import { ShortTermMemory } from "../src/memory/short-term.js";
 import { LongTermMemory } from "../src/memory/long-term.js";
 import { MemoryManager } from "../src/memory/index.js";
@@ -239,5 +239,26 @@ describe("MemoryManager", () => {
     const recent = mm.shortTerm.getRecent(1);
     expect(recent).toHaveLength(1);
     expect(recent[0].content).toContain("TypeScript");
+  });
+
+  it("injects recalled long-term context into snapshots across manager instances", async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), "se-memory-manager-"));
+
+    try {
+      const mm1 = new MemoryManager({ storageDir });
+      await mm1.processConversationTurn(
+        "Remember our deployment rule",
+        "Deploy Super Excellent through GitHub Actions only after typecheck, test, and build all pass.",
+      );
+
+      const mm2 = new MemoryManager({ storageDir });
+      const snapshot = await mm2.getSnapshot("What is our deploy rule for GitHub Actions?");
+
+      expect(snapshot.entriesUsed).toBeGreaterThan(0);
+      expect(snapshot.context).toContain("# Relevant History");
+      expect(snapshot.context).toContain("typecheck, test, and build all pass");
+    } finally {
+      await rm(storageDir, { recursive: true, force: true });
+    }
   });
 });
