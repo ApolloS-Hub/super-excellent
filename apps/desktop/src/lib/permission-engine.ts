@@ -355,6 +355,25 @@ class PermissionEngine {
     this.denials = [];
     this.persist();
   }
+
+  /** Export a structured audit report for review or persistence. */
+  getAuditReport(): {
+    level: PermissionLevel;
+    rulesCount: number;
+    denialCount: number;
+    recentDenials: number;
+    topDeniedTools: DenialStat[];
+    rules: PermissionRule[];
+  } {
+    return {
+      level: this.level,
+      rulesCount: this.rules.length,
+      denialCount: this.denials.length,
+      recentDenials: this.getRecentDenialCount(3600_000),
+      topDeniedTools: this.getDenialStats().slice(0, 5),
+      rules: this.getRules(),
+    };
+  }
 }
 
 export const permissionEngine = new PermissionEngine();

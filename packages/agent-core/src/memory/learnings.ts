@@ -107,7 +107,17 @@ export function extractFromCompletion(
     });
   }
 
-  // For successes, only record if there's something noteworthy
+  if (result === "success") {
+    return addLearning(store, {
+      type: "pattern",
+      title: `${taskTitle} 成功模式`,
+      description: `任务 "${taskTitle}" 成功完成`,
+      context: taskDescription,
+      tags: [...tags, "success"],
+      source: taskTitle,
+    });
+  }
+
   return null;
 }
 
