@@ -6,3 +6,4 @@ target/
 .DS_Store
 Thumbs.db
 vendor/
+apps/desktop/src-tauri/.cargo/config.toml
