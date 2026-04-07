@@ -43,7 +43,9 @@ describe("Built-in Tools", () => {
   it("should execute Read tool", async () => {
     const executor = createToolExecutor();
     // Read this test file itself
-    const result = await executor.execute("Read", { path: import.meta.url.replace("file://", "").split("?")[0] });
+    const { fileURLToPath } = await import("node:url");
+    const thisFile = fileURLToPath(import.meta.url);
+    const result = await executor.execute("Read", { path: thisFile });
     expect(result).toContain("describe");
   });
 
