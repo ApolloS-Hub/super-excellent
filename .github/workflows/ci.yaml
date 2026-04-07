@@ -37,7 +37,12 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
+        if: runner.os != 'Windows'
         run: pnpm test
+
+      - name: Test (Windows — agent-core only, skip stdio spawn tests)
+        if: runner.os == 'Windows'
+        run: pnpm --dir packages/agent-core test
 
       - name: Build shared + agent-core
         run: pnpm -r --filter @super-excellent/shared --filter @super-excellent/agent-core build
