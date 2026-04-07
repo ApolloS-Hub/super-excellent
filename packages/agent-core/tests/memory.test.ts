@@ -233,7 +233,7 @@ describe("MemoryManager", () => {
   });
 
   it("should process conversation turns", async () => {
-    const mm = new MemoryManager({ storageDir: "/tmp/se-test-mem" });
+    const mm = new MemoryManager({ storageDir: join(tmpdir(), "se-test-mem") });
     await mm.processConversationTurn("What is TypeScript?", "TypeScript is a typed superset of JavaScript.");
 
     const recent = mm.shortTerm.getRecent(1);
