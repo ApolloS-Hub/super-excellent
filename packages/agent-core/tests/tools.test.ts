@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createToolExecutor, BUILTIN_TOOLS } from "../src/tools/index.js";
 import { McpManager } from "../src/mcp/client.js";
+import { _stripHtml, _extractTitle } from "../src/tools/builtin/browser.js";
 
 describe("Built-in Tools", () => {
-  it("should have 12 tools", () => {
-    expect(BUILTIN_TOOLS).toHaveLength(12);
+  it("should have 13 tools", () => {
+    expect(BUILTIN_TOOLS).toHaveLength(13);
   });
 
   it("should include all expected tools", () => {
@@ -21,6 +22,7 @@ describe("Built-in Tools", () => {
     expect(names).toContain("ListDir");
     expect(names).toContain("BrowserOpen");
     expect(names).toContain("Screenshot");
+    expect(names).toContain("BrowserFetch");
   });
 
   it("should mark read-only tools correctly", () => {
@@ -33,6 +35,7 @@ describe("Built-in Tools", () => {
     expect(readOnly).toContain("AskUser");
     expect(readOnly).toContain("ListDir");
     expect(readOnly).toContain("Screenshot");
+    expect(readOnly).toContain("BrowserFetch");
     expect(readOnly).not.toContain("Bash");
     expect(readOnly).not.toContain("Write");
   });
@@ -51,6 +54,85 @@ describe("Built-in Tools", () => {
   });
 });
 
+describe("BrowserFetch helpers", () => {
+  it("stripHtml removes script and style tags", () => {
+    const html = `<html><head><style>body{color:red}</style></head>
+      <body><script>alert(1)</script><p>Hello world</p></body></html>`;
+    const text = _stripHtml(html);
+    expect(text).not.toContain("alert");
+    expect(text).not.toContain("color:red");
+    expect(text).toContain("Hello world");
+  });
+
+  it("extractTitle returns the page title", () => {
+    expect(_extractTitle("<html><head><title>My Page</title></head></html>")).toBe("My Page");
+  });
+
+  it("extractTitle returns empty string when no title", () => {
+    expect(_extractTitle("<html><body>no title</body></html>")).toBe("");
+  });
+
+  it("BrowserFetch returns title + body for valid HTML", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+
+    // Mock global fetch
+    const fakeFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        `<html><head><title>Test Page</title></head>
+         <body><script>evil()</script><p>Some content here</p></body></html>`,
+    });
+    vi.stubGlobal("fetch", fakeFetch);
+
+    const result = await tool.execute({ url: "https://example.com" });
+    expect(result).toContain("Title: Test Page");
+    expect(result).toContain("Some content here");
+    expect(result).not.toContain("evil");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("BrowserFetch respects maxChars", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+    const longBody = "A".repeat(10000);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => `<html><body>${longBody}</body></html>`,
+    }));
+
+    const result = await tool.execute({ url: "https://example.com", maxChars: 100 });
+    // Body portion should be at most 100 chars
+    expect(result.length).toBeLessThanOrEqual(100);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("BrowserFetch handles HTTP errors", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+    }));
+
+    const result = await tool.execute({ url: "https://example.com/nope" });
+    expect(result).toBe("HTTP 404: Not Found");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("BrowserFetch handles fetch errors", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    const result = await tool.execute({ url: "https://example.com" });
+    expect(result).toContain("Error fetching URL");
+    expect(result).toContain("network down");
+
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("McpManager", () => {
   it("should create manager with no servers", () => {
     const manager = new McpManager();
@@ -60,7 +142,6 @@ describe("McpManager", () => {
 
   it("should track server names", async () => {
     const manager = new McpManager();
-    // Can't actually connect without a real MCP server, but structure works
     expect(manager.getServerNames()).toEqual([]);
     await manager.disconnectAll();
   });

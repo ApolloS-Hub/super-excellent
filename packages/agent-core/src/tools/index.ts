@@ -12,9 +12,9 @@ import { webFetchTool } from "./builtin/web-fetch.js";
 import { webSearchTool } from "./builtin/web-search.js";
 import { askUserTool } from "./builtin/ask-user.js";
 import { listDirTool } from "./builtin/list-dir.js";
-import { browserOpenTool, screenshotTool } from "./builtin/browser.js";
+import { browserOpenTool, screenshotTool, browserFetchTool } from "./builtin/browser.js";
 
-/** All built-in tools (12 tools) */
+/** All built-in tools (13 tools) */
 export const BUILTIN_TOOLS: ToolDefinitionFull[] = [
   bashTool,
   readTool,
@@ -28,6 +28,7 @@ export const BUILTIN_TOOLS: ToolDefinitionFull[] = [
   listDirTool,
   browserOpenTool,
   screenshotTool,
+  browserFetchTool,
 ];
 
 /**
