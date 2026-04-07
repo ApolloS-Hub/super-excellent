@@ -22,6 +22,8 @@ export interface McpServerConfig {
   url?: string;
   /** Environment variables */
   env?: Record<string, string>;
+  /** Connect timeout in ms (default 30000) */
+  connectTimeoutMs?: number;
 }
 
 interface McpTool {
@@ -229,13 +231,14 @@ export class McpClient {
         this.process?.stdin?.write(message + "\n");
       }
 
-      // Timeout after 30s
+      // Timeout (configurable, default 30s)
+      const timeoutMs = this.config.connectTimeoutMs ?? 30000;
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`MCP request timeout: ${method}`));
         }
-      }, 30000);
+      }, timeoutMs);
     });
   }
 

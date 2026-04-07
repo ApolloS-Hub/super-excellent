@@ -73,11 +73,11 @@ describe("McpClient — echo server integration", () => {
   });
 
   it("times out on extremely slow server", async () => {
-    // Use a 60s delay — our client has a 30s timeout, so it should reject.
-    client = new McpClient(makeConfig(["--slow", "60000"]));
+    // Use a 10s delay — our client has a 5s timeout for this test.
+    client = new McpClient({ ...makeConfig(["--slow", "10000"]), connectTimeoutMs: 5000 });
 
     await expect(client.connect()).rejects.toThrow(/timeout/i);
-  }, 35000);
+  }, 10000);
 });
 
 describe("McpManager — multi-server", () => {
