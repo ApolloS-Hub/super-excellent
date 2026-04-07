@@ -6,4 +6,3 @@ target/
 .DS_Store
 Thumbs.db
 vendor/
-pnpm-lock.yaml
