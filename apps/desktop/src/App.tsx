@@ -19,6 +19,7 @@ import { migrateFromLocalStorage } from "./lib/session-store";
 import { registerAgent, startMonitor } from "./lib/runtime";
 import type { Conversation } from "./lib/conversations";
 import { setState as setAppState } from "./lib/app-state";
+import { check } from "@tauri-apps/plugin-updater";
 
 type Page = "chat" | "settings" | "monitor";
 
@@ -43,6 +44,20 @@ function App() {
       registerAgent({ agentId: id, displayName: id });
     });
     startMonitor();
+  }, []);
+
+  // Check for updates on mount
+  useEffect(() => {
+    check().then(async (update) => {
+      if (update) {
+        console.log(`Update available: ${update.version}`);
+        if (window.confirm(`New version ${update.version} available. Update now?`)) {
+          await update.downloadAndInstall();
+        }
+      }
+    }).catch((e) => {
+      console.warn("Update check failed:", e);
+    });
   }, []);
 
   // Load conversations on mount
