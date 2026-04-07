@@ -85,5 +85,16 @@ jobs:
       - name: Build shared + agent-core
         run: pnpm -r --filter @super-excellent/shared --filter @super-excellent/agent-core build
 
+      - name: Remove updater signing requirement for CI
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const f = 'apps/desktop/src-tauri/tauri.conf.json';
+            const c = JSON.parse(fs.readFileSync(f,'utf8'));
+            if (c.plugins?.updater) delete c.plugins.updater.pubkey;
+            fs.writeFileSync(f, JSON.stringify(c, null, 4));
+          "
+
       - name: Tauri build (Windows MSI)
         run: pnpm --dir apps/desktop tauri build
