@@ -44,3 +44,41 @@ jobs:
 
       - name: Build desktop web app
         run: pnpm --dir apps/desktop build
+
+  windows-msi:
+    name: Windows MSI build
+    runs-on: windows-latest
+    timeout-minutes: 40
+    needs: quality-gates
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared + agent-core
+        run: pnpm -r --filter @super-excellent/shared --filter @super-excellent/agent-core build
+
+      - name: Tauri build (Windows MSI)
+        run: pnpm --dir apps/desktop tauri build
