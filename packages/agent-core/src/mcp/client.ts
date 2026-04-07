@@ -5,6 +5,8 @@
  * Allows extending the tool system with external capabilities.
  */
 import { spawn, type ChildProcess } from "child_process";
+import http from "http";
+import https from "https";
 import type { ToolDefinitionFull } from "../tools/types.js";
 
 export interface McpServerConfig {
@@ -31,6 +33,8 @@ interface McpTool {
 export class McpClient {
   private config: McpServerConfig;
   private process: ChildProcess | null = null;
+  private sseAbort: AbortController | null = null;
+  private ssePostUrl: string | null = null;
   private tools: McpTool[] = [];
   private requestId = 0;
   private pendingRequests = new Map<number, {
@@ -48,7 +52,7 @@ export class McpClient {
     if (this.config.transport === "stdio") {
       await this.connectStdio();
     } else {
-      throw new Error("SSE transport not yet implemented");
+      await this.connectSse();
     }
   }
 
@@ -81,6 +85,10 @@ export class McpClient {
     if (this.process) {
       this.process.kill();
       this.process = null;
+    }
+    if (this.sseAbort) {
+      this.sseAbort.abort();
+      this.sseAbort = null;
     }
   }
 
@@ -120,6 +128,86 @@ export class McpClient {
     }
   }
 
+  private async connectSse(): Promise<void> {
+    if (!this.config.url) {
+      throw new Error("No URL specified for SSE MCP server");
+    }
+
+    const baseUrl = this.config.url;
+    this.sseAbort = new AbortController();
+
+    // Connect to SSE endpoint and wait for the "endpoint" event
+    // which tells us where to POST JSON-RPC messages.
+    const postUrl = await new Promise<string>((resolve, reject) => {
+      const mod = baseUrl.startsWith("https") ? https : http;
+      const req = mod.get(baseUrl, { signal: this.sseAbort!.signal }, (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`SSE connection failed with status ${res.statusCode}`));
+          return;
+        }
+        let sseBuf = "";
+        let eventType = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => {
+          sseBuf += chunk;
+          const lines = sseBuf.split("\n");
+          sseBuf = lines.pop() || "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              const data = line.slice(5).trim();
+              if (eventType === "endpoint") {
+                // Resolve the POST URL (may be relative)
+                const resolved = data.startsWith("http")
+                  ? data
+                  : new URL(data, baseUrl).toString();
+                this.ssePostUrl = resolved;
+                resolve(resolved);
+              } else if (eventType === "message") {
+                try {
+                  const msg = JSON.parse(data);
+                  if ("id" in msg && this.pendingRequests.has(msg.id)) {
+                    const pending = this.pendingRequests.get(msg.id)!;
+                    this.pendingRequests.delete(msg.id);
+                    if ("error" in msg) {
+                      pending.reject(new Error(msg.error.message || "MCP error"));
+                    } else {
+                      pending.resolve(msg.result);
+                    }
+                  }
+                } catch {
+                  // skip unparseable
+                }
+              }
+              eventType = "";
+            }
+          }
+        });
+        res.on("error", (err) => reject(err));
+      });
+      req.on("error", (err) => reject(err));
+
+      // Timeout waiting for endpoint event
+      setTimeout(() => reject(new Error("SSE endpoint event timeout")), 30000);
+    });
+
+    // Initialize
+    await this.sendRequest("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "super-excellent", version: "0.1.0" },
+    });
+
+    this.sendNotification("notifications/initialized", {});
+
+    // List tools
+    const toolsResponse = await this.sendRequest("tools/list", {});
+    if (toolsResponse && typeof toolsResponse === "object" && "tools" in toolsResponse) {
+      this.tools = (toolsResponse as { tools: McpTool[] }).tools;
+    }
+  }
+
   private sendRequest(method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = ++this.requestId;
@@ -132,7 +220,14 @@ export class McpClient {
         params,
       });
 
-      this.process?.stdin?.write(message + "\n");
+      if (this.ssePostUrl) {
+        this.postJsonRpc(message).catch((err) => {
+          this.pendingRequests.delete(id);
+          reject(err);
+        });
+      } else {
+        this.process?.stdin?.write(message + "\n");
+      }
 
       // Timeout after 30s
       setTimeout(() => {
@@ -150,7 +245,33 @@ export class McpClient {
       method,
       params,
     });
-    this.process?.stdin?.write(message + "\n");
+    if (this.ssePostUrl) {
+      this.postJsonRpc(message).catch((err) => {
+        console.error(`[MCP ${this.config.name}] notification error:`, err);
+      });
+    } else {
+      this.process?.stdin?.write(message + "\n");
+    }
+  }
+
+  private postJsonRpc(body: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const url = new URL(this.ssePostUrl!);
+      const mod = url.protocol === "https:" ? https : http;
+      const req = mod.request(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          res.resume();
+          resolve();
+        } else {
+          reject(new Error(`POST failed with status ${res.statusCode}`));
+        }
+      });
+      req.on("error", reject);
+      req.end(body);
+    });
   }
 
   private processBuffer(): void {
