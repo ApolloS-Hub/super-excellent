@@ -39,7 +39,7 @@ interface ChatPageProps {
   onCreateConversation: () => Conversation;
 }
 
-function ChatPage({ conversation, conversations, onConversationsUpdate, onNewConversation, onCreateConversation }: ChatPageProps) {
+function ChatPage({ conversation, conversations, onConversationsUpdate, onCreateConversation }: ChatPageProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
