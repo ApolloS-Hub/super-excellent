@@ -815,7 +815,10 @@ async function _callOpenAINonStream(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const systemPrompt = await buildSystemPrompt();
+  const isCompatible = config.provider === "compatible";
+  const systemPrompt = isCompatible
+    ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
+    : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
@@ -823,7 +826,7 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = 20;
+  const MAX_ITERATIONS = isCompatible ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
 
@@ -845,7 +848,6 @@ async function _callOpenAINonStream(
       "Authorization": `Bearer ${config.apiKey}`,
     };
 
-    const isCompatible = config.provider === "compatible";
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
@@ -913,7 +915,7 @@ async function _callOpenAINonStream(
     }
 
     const text = msg.content || "";
-    const parsed = parseTextToolCall(text);
+    const parsed = isCompatible ? null : parseTextToolCall(text);
     if (parsed) {
       totalToolCalls++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });
@@ -1031,7 +1033,10 @@ async function callOpenAI(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const systemPrompt = await buildSystemPrompt();
+  const isCompatible = config.provider === "compatible";
+  const systemPrompt = isCompatible
+    ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
+    : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
@@ -1039,7 +1044,7 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = 20;
+  const MAX_ITERATIONS = isCompatible ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
 
@@ -1061,7 +1066,6 @@ async function callOpenAI(
       "Authorization": `Bearer ${config.apiKey}`,
     };
 
-    const isCompatible = config.provider === "compatible";
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
@@ -1237,8 +1241,8 @@ async function callOpenAI(
     }
 
     // ── 纯文本响应 ──
-    // 检查文本中的工具调用
-    const parsed = parseTextToolCall(fullText);
+    // 检查文本中的工具调用（compatible 模式跳过）
+    const parsed = isCompatible ? null : parseTextToolCall(fullText);
     if (parsed) {
       totalToolCalls++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });
