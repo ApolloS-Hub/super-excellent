@@ -336,8 +336,12 @@ export async function sendMessage(
       cost: 0,
     });
 
+    // 兼容 provider（自定义端点）跳过 worker 编排，直接走 LLM 对话
+    // 因为轻量/兼容模型通常不支持 function calling 和复杂 system prompt
+    const skipWorkerDispatch = config.provider === "compatible";
+
     // 秘书意图分析 — 决定消息路由策略
-    const intent = analyzeIntent(message);
+    const intent = skipWorkerDispatch ? { type: "chat" as const, workers: [] as string[], plan: "直连对话" } : analyzeIntent(message);
 
     const watchdogState = getWatchdogState();
     if (watchdogState.isDegraded) {
