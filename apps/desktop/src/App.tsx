@@ -140,20 +140,11 @@ function App() {
 
   // Conversation actions
   const handleNewConversation = useCallback(() => {
-    setConversations(prev => {
-      const current = prev.find(c => c.id === activeConvId);
-      if (current && current.messages.length === 0) {
-        setCurrentPage("chat");
-        close();
-        return prev;
-      }
-      const conv = createConversation();
-      setActiveConvId(conv.id);
-      setCurrentPage("chat");
-      close();
-      return [conv, ...prev];
-    });
-  }, [close, activeConvId]);
+    // Switch to draft mode (null activeConvId) — conversation is created on first message
+    setActiveConvId(null);
+    setCurrentPage("chat");
+    close();
+  }, [close]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConvId(id);
@@ -177,6 +168,14 @@ function App() {
 
   const handleConversationsUpdate = useCallback((updated: Conversation[]) => {
     setConversations(updated);
+  }, []);
+
+  // Lazily create a conversation on first message (draft → real)
+  const handleCreateConversation = useCallback((): Conversation => {
+    const conv = createConversation();
+    setConversations(prev => [conv, ...prev]);
+    setActiveConvId(conv.id);
+    return conv;
   }, []);
 
   // Filter conversations
@@ -321,6 +320,7 @@ function App() {
             conversations={conversations}
             onConversationsUpdate={handleConversationsUpdate}
             onNewConversation={handleNewConversation}
+            onCreateConversation={handleCreateConversation}
           />
         )}
         {currentPage === "settings" && (
