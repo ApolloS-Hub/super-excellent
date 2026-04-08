@@ -902,6 +902,7 @@ async function _callOpenAINonStream(
       }
       messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
 
+      const toolResults: string[] = [];
       for (const tc of msg.tool_calls) {
         if (signal.aborted) break;
         const fn = tc.function;
@@ -913,11 +914,20 @@ async function _callOpenAINonStream(
           const result = await executeTool(fn.name, args);
           onEvent({ type: "thinking", text: `✅ ${fn.name}: ${result.slice(0, 120)}\n` });
           messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
+          toolResults.push(`**${fn.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${fn.name}: ${err}\n` });
           messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
+          toolResults.push(`**${fn.name}** 执行失败：${err}`);
         }
+      }
+      // Try one more round to let model summarize; if it fails or loops, emit results directly
+      if (iteration >= MAX_ITERATIONS - 1 || config.provider === "compatible") {
+        const summary = toolResults.join("\n\n");
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
+        break;
       }
       continue;
     }
@@ -1229,6 +1239,7 @@ async function callOpenAI(
         tool_calls: toolCallsArray,
       });
 
+      const streamToolResults: string[] = [];
       for (const tc of toolCallsArray) {
         if (signal.aborted) break;
         let args: Record<string, unknown> = {};
@@ -1239,11 +1250,19 @@ async function callOpenAI(
           const result = await executeTool(tc.function.name, args);
           onEvent({ type: "thinking", text: `✅ ${tc.function.name}: ${result.slice(0, 120)}\n` });
           messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
+          streamToolResults.push(`**${tc.function.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${tc.function.name}: ${err}\n` });
           messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
+          streamToolResults.push(`**${tc.function.name}** 执行失败：${err}`);
         }
+      }
+      if (iteration >= MAX_ITERATIONS - 1 || config.provider === "compatible") {
+        const summary = streamToolResults.join("\n\n");
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
+        break;
       }
       continue;
     }
