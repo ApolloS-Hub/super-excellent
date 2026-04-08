@@ -996,6 +996,17 @@ async function _callOpenAINonStream(
     return;
   }
 
+  // Loop exhausted: emit tool results if any
+  if (totalToolCalls > 0) {
+    const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+    if (toolMsgs.length > 0) {
+      const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
+      onEvent({ type: "text", text: summary });
+      onEvent({ type: "result", text: summary });
+      currentAbortController = null;
+      return;
+    }
+  }
   onEvent({ type: "error", text: `⚠️ 达到 ${MAX_ITERATIONS} 轮上限。${totalToolCalls} 次工具调用。` });
   currentAbortController = null;
 }
@@ -1343,6 +1354,17 @@ async function callOpenAI(
     return;
   }
 
+  // Loop exhausted: emit tool results if any
+  if (totalToolCalls > 0) {
+    const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+    if (toolMsgs.length > 0) {
+      const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
+      onEvent({ type: "text", text: summary });
+      onEvent({ type: "result", text: summary });
+      currentAbortController = null;
+      return;
+    }
+  }
   onEvent({ type: "error", text: `⚠️ 达到 ${MAX_ITERATIONS} 轮上限。${totalToolCalls} 次工具调用。` });
   currentAbortController = null;
 }
