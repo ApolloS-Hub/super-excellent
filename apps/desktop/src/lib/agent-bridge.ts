@@ -1241,13 +1241,16 @@ async function callOpenAI(
       try {
         const result = await executeTool(parsed.name, parsed.args);
         onEvent({ type: "thinking", text: `✅ ${parsed.name}: ${result.slice(0, 120)}\n` });
-        messages.push({ role: "assistant", content: fullText });
-        messages.push({ role: "user", content: `工具结果:\n${result.slice(0, 15000)}\n\n继续执行。完成则总结。` });
+        const summary = `**${parsed.name}** 执行完成：\n\n${result.slice(0, 3000)}`;
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
       } catch (e) {
-        messages.push({ role: "assistant", content: fullText });
-        messages.push({ role: "user", content: `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` });
+        const err = e instanceof Error ? e.message : String(e);
+        const summary = `**${parsed.name}** 执行失败：${err}`;
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
       }
-      continue;
+      break;
     }
 
     // 自动保存检测
