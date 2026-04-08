@@ -762,7 +762,12 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last?.role === "assistant") {
-            last.content = `❌ ${event.text}`;
+            // Append error instead of overwriting tool results
+            if (last.content && last.content.trim().length > 0) {
+              last.content += `\n\n❌ ${event.text}`;
+            } else {
+              last.content = `❌ ${event.text}`;
+            }
             last.isStreaming = false;
           }
           return updated;

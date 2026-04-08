@@ -837,6 +837,7 @@ async function _callOpenAINonStream(
   const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
   let iteration = 0;
   let totalToolCalls = 0;
+  let lastToolOutput = "";
 
   while (iteration < MAX_ITERATIONS) {
     if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
@@ -886,11 +887,16 @@ async function _callOpenAINonStream(
       });
     } catch (e) {
       if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
+      if (lastToolOutput) break;
       throw e;
     }
 
     if (!response.ok) {
       const err = await response.text();
+      if (lastToolOutput) {
+        onEvent({ type: "thinking", text: `\u26a0\ufe0f API ${response.status}\uff0c\u4f46\u5de5\u5177\u5df2\u6267\u884c\n` });
+        break;
+      }
       throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
     }
 
@@ -927,6 +933,7 @@ async function _callOpenAINonStream(
           onEvent({ type: "thinking", text: `✅ ${fn.name}: ${result.slice(0, 120)}\n` });
           messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
           toolResults.push(`**${fn.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
+          lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${fn.name}: ${err}\n` });
@@ -1147,10 +1154,16 @@ async function callOpenAI(
 
     if (!response.ok) {
       const err = await response.text();
+      // If tools already ran, break to display results instead of throwing
+      if (lastToolOutput) {
+        onEvent({ type: "thinking", text: `⚠️ API ${response.status}，但工具已执行\n` });
+        break;
+      }
       throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
     }
 
     if (!response.body) {
+      if (lastToolOutput) break;
       onEvent({ type: "thinking", text: "⚠️ 无 ReadableStream，降级为非流式\n" });
       await _callOpenAINonStream(message, config, onEvent, conversationHistory);
       return;
