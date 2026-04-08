@@ -982,15 +982,15 @@ async function* parseSSELines(
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-      const payload = trimmed.slice(6);
+      if (!trimmed || !trimmed.startsWith("data:")) continue;
+      const payload = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed.slice(5);
       if (payload === "[DONE]") return;
       yield payload;
     }
   }
   // 处理残余 buffer
-  if (buffer.trim().startsWith("data: ")) {
-    const payload = buffer.trim().slice(6);
+  if (buffer.trim().startsWith("data:")) {
+    const payload = buffer.trim().startsWith("data: ") ? buffer.trim().slice(6) : buffer.trim().slice(5);
     if (payload !== "[DONE]") yield payload;
   }
 }
