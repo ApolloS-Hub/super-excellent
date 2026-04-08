@@ -6,7 +6,8 @@
  * Legacy tools below are also registered into the registry for unified access.
  */
 import { isTauriAvailable } from "./tauri-bridge";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+// tauriFetch reserved for other tools
+// import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
   registerTool,
   getToolsAsOpenAI,
@@ -921,44 +922,48 @@ export {
 async function executeWebSearch(args: Record<string, unknown>): Promise<string> {
   const query = String(args.query || "");
   if (!query) return "❌ 缺少 query 参数";
+  
+  // Use Tauri's execute_command to run curl with system proxy
+  const tauriReady = isTauriAvailable();
+  if (!tauriReady) return "⚠️ 搜索需要桌面 App 环境";
+  
   try {
-    // Use Bing (works in China without proxy, returns server-rendered HTML)
-    const resp = await tauriFetch(
-      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=8`,
-      {
-        method: "GET",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-        connectTimeout: 15000,
-      },
-    );
-    const html = await resp.text();
+    const { invoke } = await import("@tauri-apps/api/core");
+    // Try Bing with proper headers via curl (inherits system proxy)
+    const result = await invoke("execute_command", {
+      command: `curl -sL --connect-timeout 10 --max-time 15 -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" -H "Accept-Language: en-US,en;q=0.9" "https://www.bing.com/search?q=${encodeURIComponent(query)}&count=8"`,
+      cwd: null,
+      timeoutMs: 20000,
+    }) as { stdout: string; stderr: string; success: boolean };
+    
+    if (!result.success || !result.stdout) {
+      return `搜索 "${query}" 失败: ${result.stderr?.slice(0, 200) || "无输出"}`;
+    }
+    
+    const html = result.stdout;
     const results: string[] = [];
-    // Parse Bing results: split by class="b_algo"
     const blocks = html.split('class="b_algo"');
     for (let i = 1; i < blocks.length && results.length < 5; i++) {
       const block = blocks[i];
       const titleMatch = block.match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
       const descMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
       if (titleMatch) {
-        const url = titleMatch[1];
-        const title = titleMatch[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#\d+;/g, "").trim();
-        const desc = descMatch
-          ? descMatch[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim().slice(0, 150)
-          : "";
-        if (title && !url.includes("bing.com/ck")) {
-          results.push(`${results.length + 1}. ${title}\n   ${url}\n   ${desc}`);
-        } else if (title) {
-          results.push(`${results.length + 1}. ${title}\n   ${desc}`);
-        }
+        const title = titleMatch[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim();
+        const desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim().slice(0, 150) : "";
+        if (title) results.push(`${results.length + 1}. ${title}\n   ${desc}`);
       }
     }
+    
     if (results.length > 0) {
       return `🔍 搜索结果 (${query}):\n\n${results.join("\n\n")}`;
     }
-    return `搜索 "${query}" 暂无结果。Bing 可能返回了 JS 渲染页面。`;
+    
+    // Bing might have returned JS-rendered page, return raw text summary
+    const textContent = html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<style[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (textContent.length > 100) {
+      return `🔍 搜索 "${query}" 的页面摘要:\n${textContent.slice(0, 2000)}`;
+    }
+    return `搜索 "${query}" 暂无可解析的结果`;
   } catch (e) {
     return `搜索失败: ${e instanceof Error ? e.message : String(e)}`;
   }
