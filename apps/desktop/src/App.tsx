@@ -72,13 +72,18 @@ function App() {
     });
   }, []); // activeConvId is intentionally omitted to only set it on initial load if null
 
-  // Persist conversations when active one changes
+  // Persist ALL conversations when any change occurs
   useEffect(() => {
-    const active = conversations.find(c => c.id === activeConvId);
-    if (active) {
-      saveConversationsAsync([active]).catch(console.error);
+    if (conversations.length > 0) {
+      saveConversationsAsync(conversations).catch(console.error);
+      // Also sync to localStorage as backup
+      try {
+        localStorage.setItem("conversations", JSON.stringify(conversations));
+      } catch { /* quota exceeded */ }
+    } else {
+      try { localStorage.removeItem("conversations"); } catch {}
     }
-  }, [conversations, activeConvId]);
+  }, [conversations]);
 
   // Load cost data
   useEffect(() => {
