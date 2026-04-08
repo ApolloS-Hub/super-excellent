@@ -9,6 +9,7 @@
  */
 import { isTauriAvailable, validateApiKeyRust } from "./tauri-bridge";
 import { analyzeIntent, dispatchToWorker, orchestrateMultiStep } from "./coordinator";
+import { emitAgentEvent as emitBusEvent } from "./event-bus";
 import { watchdogWrap, getWatchdogState, markRecovered } from "./watchdog";
 import { recordUsage as recordRuntimeUsage } from "./runtime";
 import {
@@ -340,8 +341,14 @@ export async function sendMessage(
     // 因为轻量/兼容模型通常不支持 function calling 和复杂 system prompt
     const skipWorkerDispatch = config.provider === "compatible";
 
+    // Emit user_message event for event log
+    emitBusEvent({ type: "user_message", text: message });
+
     // 秘书意图分析 — 决定消息路由策略
     const intent = skipWorkerDispatch ? { type: "chat" as const, workers: [] as string[], plan: "直连对话" } : analyzeIntent(message);
+
+    // Emit intent_analysis event for event log
+    emitBusEvent({ type: "intent_analysis", intentType: intent.type, workers: intent.workers, plan: intent.plan });
 
     const watchdogState = getWatchdogState();
     if (watchdogState.isDegraded) {

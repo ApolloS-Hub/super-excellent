@@ -96,15 +96,29 @@ function MonitorPage({ onBack }: MonitorPageProps) {
   useEffect(() => {
     // Listen from event bus (works in both Tauri and browser)
     const unsubBus = onAgentEvent((event: Record<string, unknown>) => {
+      const type = (event.type as string) || "unknown";
+
+      // Real-time worker status updates (P0-2)
+      if (type === "worker_activate" || type === "worker_complete") {
+        setTeamWorkers([...getTeamConfig().workers]);
+      }
+
+      // Event log entries are now handled by the global event log in event-bus.ts
+      // We still build local log for backward compat with Tauri stream below
       const time = new Date().toLocaleTimeString();
       let detail = "";
-      const type = (event.type as string) || "unknown";
       switch (type) {
         case "text": detail = `${((event.text as string) || "").slice(0, 80)}${((event.text as string) || "").length > 80 ? "..." : ""}`; break;
         case "thinking": detail = `💭 ${((event.text as string) || "").slice(0, 60)}...`; break;
         case "tool_use": detail = `🔧 ${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`; break;
+        case "tool_result": detail = `✅ ${((event.toolOutput as string) || "").slice(0, 80)}`; break;
         case "error": detail = `❌ ${event.text}`; break;
         case "result": detail = `✓ 完成`; break;
+        case "worker_activate": detail = `🟢 ${event.worker} 开始工作`; break;
+        case "worker_complete": detail = `⚪ ${event.worker} 完成`; break;
+        case "user_message": detail = `💬 ${((event.text as string) || "").slice(0, 60)}`; break;
+        case "intent_analysis": detail = `🧠 ${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`; break;
+        case "worker_dispatch": detail = `🎯 派发给 ${event.worker}`; break;
         default: detail = JSON.stringify(event).slice(0, 100);
       }
       setEventLog(prev => [...prev.slice(-99), { time, type, detail }]);
@@ -351,9 +365,12 @@ function MonitorPage({ onBack }: MonitorPageProps) {
                   <Text size="xs" c="dimmed" style={{ flexShrink: 0, fontFamily: "monospace" }}>{entry.time}</Text>
                   <Badge size="xs" variant="dot" color={
                     entry.type === "error" ? "red" :
-                    entry.type === "tool_use" ? "yellow" :
-                    entry.type === "done" ? "green" :
+                    entry.type === "tool_use" || entry.type === "tool_result" ? "yellow" :
+                    entry.type === "done" || entry.type === "result" || entry.type === "worker_complete" ? "green" :
                     entry.type === "thinking" ? "violet" :
+                    entry.type === "worker_activate" || entry.type === "worker_dispatch" ? "teal" :
+                    entry.type === "intent_analysis" ? "grape" :
+                    entry.type === "user_message" ? "indigo" :
                     "blue"
                   }>{entry.type}</Badge>
                   <Text size="xs" truncate style={{ fontFamily: "monospace" }}>{entry.detail}</Text>

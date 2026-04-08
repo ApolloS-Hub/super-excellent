@@ -10,6 +10,17 @@ import {
   completeWorkerTask,
   type Worker,
 } from "./team";
+import { emitAgentEvent } from "./event-bus";
+
+/** Worker 所属团队映射 */
+const ENGINEERING_IDS = new Set([
+  "product", "architect", "developer", "frontend", "code_reviewer",
+  "tester", "devops", "security", "writer", "researcher", "ux_designer", "data_analyst",
+]);
+
+function getWorkerTeam(workerId: string): string {
+  return ENGINEERING_IDS.has(workerId) ? "研发团队" : "业务团队";
+}
 
 // ═══════════ 类型定义 ═══════════
 
@@ -207,15 +218,25 @@ export async function dispatchToWorker(
   // 标记 Worker 为工作状态
   assignTask(workerId, task.slice(0, 50));
 
+  const team = getWorkerTeam(workerId);
+
+  // Emit worker_activate event for MonitorPage real-time tracking
+  emitAgentEvent({ type: "worker_activate", worker: worker.name, workerId, team });
+  emitAgentEvent({ type: "worker_dispatch", worker: worker.name, workerId, team });
+
   onEvent({
     type: "thinking",
-    text: `\n🎯 秘书派发任务给 ${worker.emoji} ${worker.name}...\n`,
+    text: `\n🎯 派给 ${worker.emoji} ${worker.name}（${team}）\n`,
   });
 
   try {
     // 用 Worker 自己的 system prompt 构建上下文，调用 LLM
     const result = await callWorkerLLM(worker, task, config, onEvent, history);
     completeWorkerTask(workerId);
+
+    // Emit worker_complete event
+    emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: true });
+
     return {
       workerId,
       workerName: worker.name,
@@ -225,6 +246,10 @@ export async function dispatchToWorker(
   } catch (err) {
     completeWorkerTask(workerId);
     const errMsg = err instanceof Error ? err.message : String(err);
+
+    // Emit worker_complete event (with failure)
+    emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: false });
+
     return {
       workerId,
       workerName: worker.name,
