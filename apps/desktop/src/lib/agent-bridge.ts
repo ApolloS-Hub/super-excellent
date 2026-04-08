@@ -1088,6 +1088,7 @@ async function callOpenAI(
   const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
   let iteration = 0;
   let totalToolCalls = 0;
+  let lastToolOutput = "";
 
   while (iteration < MAX_ITERATIONS) {
     if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
@@ -1286,6 +1287,7 @@ async function callOpenAI(
           onEvent({ type: "thinking", text: `✅ ${tc.function.name}: ${result.slice(0, 120)}\n` });
           messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
           streamToolResults.push(`**${tc.function.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
+          lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${tc.function.name}: ${err}\n` });
@@ -1364,6 +1366,12 @@ async function callOpenAI(
       currentAbortController = null;
       return;
     }
+  }
+  if (lastToolOutput) {
+    onEvent({ type: "text", text: lastToolOutput });
+    onEvent({ type: "result", text: lastToolOutput });
+    currentAbortController = null;
+    return;
   }
   onEvent({ type: "error", text: `⚠️ 达到 ${MAX_ITERATIONS} 轮上限。${totalToolCalls} 次工具调用。` });
   currentAbortController = null;
