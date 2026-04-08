@@ -162,14 +162,13 @@ function App() {
   }, [close]);
 
   const handleDeleteConversation = useCallback((id: string) => {
-    if (!window.confirm("确定要删除这个对话吗？")) return;
     setConversations(prev => {
       const next = deleteConversation(prev, id);
-      if (activeConvId === id) {
-        setActiveConvId(next.length > 0 ? next[0].id : null);
-      }
       return next;
     });
+    if (activeConvId === id) {
+      setActiveConvId(null);
+    }
   }, [activeConvId]);
 
   const handleRenameConversation = useCallback((id: string, title: string) => {
