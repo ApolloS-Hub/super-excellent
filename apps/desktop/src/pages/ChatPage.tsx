@@ -36,9 +36,10 @@ interface ChatPageProps {
   conversations: Conversation[];
   onConversationsUpdate: (convs: Conversation[]) => void;
   onNewConversation: () => void;
+  onCreateConversation: () => Conversation;
 }
 
-function ChatPage({ conversation, conversations, onConversationsUpdate, onNewConversation }: ChatPageProps) {
+function ChatPage({ conversation, conversations, onConversationsUpdate, onNewConversation, onCreateConversation }: ChatPageProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -59,9 +60,15 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onNewCon
   const [askInput, setAskInput] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
 
-  // Sync local messages with conversation
+  // Sync local messages with conversation and clear stale state on switch
   useEffect(() => {
     setLocalMessages(conversation?.messages ?? []);
+    setToolCalls([]);
+    setIsThinking(false);
+    setIsLoading(false);
+    setAskPending(null);
+    setAskInput("");
+    setDroppedFiles([]);
   }, [conversation?.id, conversation?.messages?.length]);
 
   useEffect(() => {
@@ -112,10 +119,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onNewCon
   }, []);
 
   // Persist local messages back to conversation
-  const persistMessages = useCallback((msgs: ChatMessage[]) => {
-    if (!conversation) return;
+  const persistMessages = useCallback((msgs: ChatMessage[], convIdOverride?: string) => {
+    const convId = convIdOverride || conversation?.id;
+    if (!convId) return;
     const updated = conversations.map(c => {
-      if (c.id !== conversation.id) return c;
+      if (c.id !== convId) return c;
       const title = c.messages.length === 0 && msgs.length > 0
         ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || c.title)
         : c.title;
@@ -572,10 +580,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onNewCon
       console.log("[handleSend] BAIL: empty input or loading");
       return;
     }
-    if (!conversation) {
-      console.log("[handleSend] BAIL: no conversation, creating new");
-      onNewConversation();
-      return;
+    // Draft mode: lazily create conversation on first message
+    let activeConv = conversation;
+    if (!activeConv) {
+      console.log("[handleSend] draft mode, creating conversation on first message");
+      activeConv = onCreateConversation();
     }
 
     // Slash commands
@@ -792,27 +801,16 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onNewCon
     } finally {
       setIsLoading(false);
       setIsThinking(false);
-      // Persist final state
+      // Persist final state (pass convId for draft-mode where conversation prop is still null)
+      const persistId = activeConv.id;
       setLocalMessages(prev => {
-        persistMessages(prev);
+        persistMessages(prev, persistId);
         return prev;
       });
     }
-  }, [input, isLoading, conversation, localMessages, droppedFiles, persistMessages, onNewConversation]);
+  }, [input, isLoading, conversation, localMessages, droppedFiles, persistMessages, onCreateConversation]);
 
-  // No conversation selected
-  if (!conversation) {
-    return (
-      <Stack h="calc(100vh - 100px)" justify="center" align="center">
-        <Text size="xl">🌟 {t("app.title")}</Text>
-        <Text c="dimmed">{t("chat.welcome")}</Text>
-        <Button onClick={onNewConversation} mt="md" size="lg" variant="light">
-          ➕ {t("nav.newConversation")}
-        </Button>
-      </Stack>
-    );
-  }
-
+  // Draft mode (no conversation yet) or existing conversation — render chat UI
   return (
     <Stack
       h="calc(100vh - 100px)"
