@@ -834,7 +834,7 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : 20;
+  const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
   let iteration = 0;
   let totalToolCalls = 0;
 
@@ -1062,7 +1062,7 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : 20;
+  const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
   let iteration = 0;
   let totalToolCalls = 0;
 
