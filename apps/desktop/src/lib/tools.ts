@@ -6,6 +6,7 @@
  * Legacy tools below are also registered into the registry for unified access.
  */
 import { isTauriAvailable } from "./tauri-bridge";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
   registerTool,
   getToolsAsOpenAI,
@@ -921,10 +922,9 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   const query = String(args.query || "");
   if (!query) return "❌ 缺少 query 参数";
   try {
-    const { fetch: tFetch } = await import("@tauri-apps/plugin-http");
     // Try DuckDuckGo
     try {
-      const resp = await tFetch(
+      const resp = await tauriFetch(
         `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
         { method: "GET", connectTimeout: 10000 },
       );
@@ -943,7 +943,7 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
     } catch { /* DuckDuckGo failed, try Baidu */ }
 
     // Fallback: Baidu
-    const bResp = await tFetch(
+    const bResp = await tauriFetch(
       `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`,
       { method: "GET", connectTimeout: 10000 },
     );
