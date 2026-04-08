@@ -922,39 +922,43 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   const query = String(args.query || "");
   if (!query) return "❌ 缺少 query 参数";
   try {
-    // Try DuckDuckGo
-    try {
-      const resp = await tauriFetch(
-        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-        { method: "GET", connectTimeout: 10000 },
-      );
-      const html = await resp.text();
-      const results: string[] = [];
-      let idx = 0;
-      for (const chunk of html.split('class="result__a"').slice(1, 6)) {
-        idx++;
-        const hrefMatch = chunk.match(/href="([^"]+)"/);
-        const titleMatch = chunk.match(/>([^<]+)<\/a>/);
-        if (hrefMatch && titleMatch) {
-          results.push(`${idx}. ${titleMatch[1].trim()}\n   ${hrefMatch[1]}`);
+    // Use Bing (works in China without proxy, returns server-rendered HTML)
+    const resp = await tauriFetch(
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=8`,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        },
+        connectTimeout: 15000,
+      },
+    );
+    const html = await resp.text();
+    const results: string[] = [];
+    // Parse Bing results: split by class="b_algo"
+    const blocks = html.split('class="b_algo"');
+    for (let i = 1; i < blocks.length && results.length < 5; i++) {
+      const block = blocks[i];
+      const titleMatch = block.match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+      const descMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+      if (titleMatch) {
+        const url = titleMatch[1];
+        const title = titleMatch[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#\d+;/g, "").trim();
+        const desc = descMatch
+          ? descMatch[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim().slice(0, 150)
+          : "";
+        if (title && !url.includes("bing.com/ck")) {
+          results.push(`${results.length + 1}. ${title}\n   ${url}\n   ${desc}`);
+        } else if (title) {
+          results.push(`${results.length + 1}. ${title}\n   ${desc}`);
         }
       }
-      if (results.length > 0) return results.join("\n\n");
-    } catch { /* DuckDuckGo failed, try Baidu */ }
-
-    // Fallback: Baidu
-    const bResp = await tauriFetch(
-      `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`,
-      { method: "GET", connectTimeout: 10000 },
-    );
-    const bHtml = await bResp.text();
-    const bResults: string[] = [];
-    let bIdx = 0;
-    for (const m of bHtml.matchAll(/<h3[^>]*><a[^>]*href="([^"]+)"[^>]*>([^<]*(?:<em>[^<]*<\/em>[^<]*)*)<\/a>/g)) {
-      if (++bIdx > 5) break;
-      bResults.push(`${bIdx}. ${m[2].replace(/<\/?em>/g, "")}\n   ${m[1]}`);
     }
-    return bResults.length > 0 ? bResults.join("\n\n") : `搜索 "${query}" 暂无结果。请尝试手动搜索。`;
+    if (results.length > 0) {
+      return `🔍 搜索结果 (${query}):\n\n${results.join("\n\n")}`;
+    }
+    return `搜索 "${query}" 暂无结果。Bing 可能返回了 JS 渲染页面。`;
   } catch (e) {
     return `搜索失败: ${e instanceof Error ? e.message : String(e)}`;
   }
