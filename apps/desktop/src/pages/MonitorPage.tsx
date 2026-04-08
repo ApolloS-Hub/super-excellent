@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Stack, Text, Paper, Badge, Group, Button,
-  Notification, Code, Stepper, SimpleGrid, ScrollArea,
+  Notification, Code, Stepper, SimpleGrid, ScrollArea, Tabs,
 } from "@mantine/core";
 import { healthCheck, repairConfig, listenAgentStream, isTauriAvailable } from "../lib/tauri-bridge";
 import { onAgentEvent } from "../lib/event-bus";
@@ -26,6 +26,15 @@ const WORKFLOW_PHASES = [
 ];
 
 /* Worker 列表现在从 team.ts getTeamConfig() 动态读取 */
+
+const ENGINEERING_IDS = new Set([
+  "product", "architect", "developer", "frontend", "code_reviewer",
+  "tester", "devops", "security", "writer", "researcher", "ux_designer", "data_analyst",
+]);
+const BUSINESS_IDS = new Set([
+  "ops_director", "growth_hacker", "content_ops", "legal_compliance",
+  "financial_analyst", "project_manager", "customer_support", "risk_analyst",
+]);
 
 function MonitorPage({ onBack }: MonitorPageProps) {
   const { t } = useTranslation();
@@ -234,7 +243,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </Text>
       </Paper>
 
-      {/* AI 员工团队 — 从 team.ts 读取真实状态 */}
+      {/* AI 员工团队 — 分团队展示 */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
           <Text fw={600}>🤖 AI 员工团队 / Workers ({teamWorkers.length})</Text>
@@ -242,39 +251,22 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             {teamWorkers.filter(w => w.status === "working").length} 工作中
           </Badge>
         </Group>
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
-          {teamWorkers.map(w => (
-            <Paper
-              key={w.id}
-              p="xs"
-              radius="sm"
-              withBorder
-              style={{
-                borderColor: w.status === "working" ? "var(--mantine-color-green-5)" : undefined,
-                borderWidth: w.status === "working" ? 2 : undefined,
-              }}
-            >
-              <Group gap={6} wrap="nowrap">
-                <Text size="lg">{w.emoji}</Text>
-                <Stack gap={0}>
-                  <Text size="xs" fw={500} truncate>{w.name}</Text>
-                  <Text size="xs" c="dimmed" truncate>{w.role}</Text>
-                </Stack>
-              </Group>
-              <Badge
-                color={w.status === "working" ? "green" : w.status === "error" ? "red" : "gray"}
-                size="xs"
-                mt={4}
-                fullWidth
-              >
-                {w.status === "working" ? `🟢 工作中` : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
-              </Badge>
-              {w.currentTask && (
-                <Text size="xs" c="green" mt={2} truncate>📌 {w.currentTask}</Text>
-              )}
-            </Paper>
-          ))}
-        </SimpleGrid>
+        <Tabs defaultValue="engineering">
+          <Tabs.List>
+            <Tabs.Tab value="engineering">
+              🛠️ 研发团队 ({teamWorkers.filter(w => ENGINEERING_IDS.has(w.id)).length})
+            </Tabs.Tab>
+            <Tabs.Tab value="business">
+              💼 业务团队 ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
+            </Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value="engineering" pt="sm">
+            <WorkerGrid workers={teamWorkers.filter(w => ENGINEERING_IDS.has(w.id))} />
+          </Tabs.Panel>
+          <Tabs.Panel value="business" pt="sm">
+            <WorkerGrid workers={teamWorkers.filter(w => BUSINESS_IDS.has(w.id))} />
+          </Tabs.Panel>
+        </Tabs>
       </Paper>
 
       {/* Cost & Usage */}
@@ -372,6 +364,44 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </ScrollArea>
       </Paper>
     </Stack>
+  );
+}
+
+function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
+  return (
+    <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
+      {workers.map(w => (
+        <Paper
+          key={w.id}
+          p="xs"
+          radius="sm"
+          withBorder
+          style={{
+            borderColor: w.status === "working" ? "var(--mantine-color-green-5)" : undefined,
+            borderWidth: w.status === "working" ? 2 : undefined,
+          }}
+        >
+          <Group gap={6} wrap="nowrap">
+            <Text size="lg">{w.emoji}</Text>
+            <Stack gap={0}>
+              <Text size="xs" fw={500} truncate>{w.name}</Text>
+              <Text size="xs" c="dimmed" truncate>{w.role}</Text>
+            </Stack>
+          </Group>
+          <Badge
+            color={w.status === "working" ? "green" : w.status === "error" ? "red" : "gray"}
+            size="xs"
+            mt={4}
+            fullWidth
+          >
+            {w.status === "working" ? "🟢 工作中" : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
+          </Badge>
+          {w.currentTask && (
+            <Text size="xs" c="green" mt={2} truncate>📌 {w.currentTask}</Text>
+          )}
+        </Paper>
+      ))}
+    </SimpleGrid>
   );
 }
 

@@ -41,6 +41,36 @@ export const WORKER_TOOL_WHITELIST: Record<string, string[]> = {
     "grep", "glob", "web_search", "web_fetch", "todo_write",
     "project_detect",
   ],
+  architect: [
+    "bash", "file_write", "file_read", "file_edit", "list_dir",
+    "grep", "glob", "web_search", "web_fetch", "todo_write",
+    "project_detect",
+  ],
+  frontend: [
+    "bash", "file_write", "file_read", "file_edit", "list_dir",
+    "grep", "glob", "web_search", "web_fetch", "browser_open",
+    "todo_write", "diff_view",
+  ],
+  code_reviewer: [
+    "file_read", "file_edit", "list_dir", "grep", "glob",
+    "todo_write", "diff_view",
+  ],
+  security: [
+    "bash", "file_read", "file_edit", "list_dir", "grep", "glob",
+    "web_search", "web_fetch", "todo_write",
+  ],
+  researcher: [
+    "web_search", "web_fetch", "file_write", "file_read", "bash",
+    "todo_write", "memory_write", "memory_read",
+  ],
+  ux_designer: [
+    "file_write", "file_read", "web_search", "web_fetch",
+    "todo_write", "memory_write",
+  ],
+  data_analyst: [
+    "bash", "file_write", "file_read", "web_search", "web_fetch",
+    "todo_write", "memory_read",
+  ],
   writer: [
     "file_write", "file_read", "list_dir", "grep",
     "web_search", "web_fetch", "todo_write",
@@ -105,8 +135,26 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
     status: "idle",
   },
   {
+    id: "architect",
+    name: "架构师",
+    role: "architect",
+    emoji: "🏗️",
+    systemPrompt: `你是一位资深软件架构师 (Software Architect)。
+
+## 核心职责
+- 系统架构设计：选择合适的架构模式（微服务/单体/Serverless）
+- 技术选型：评估技术栈、框架和中间件的适用性
+- 架构评审：审查系统设计方案，识别潜在瓶颈和风险
+- 技术规范：制定编码规范、API 设计规范、数据库设计规范
+
+## 可用工具
+bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_write, project_detect`,
+    config: {},
+    status: "idle",
+  },
+  {
     id: "developer",
-    name: "开发工程师",
+    name: "全栈开发",
     role: "developer",
     emoji: "💻",
     systemPrompt: `你是一位高级全栈开发工程师 (Senior Full-Stack Developer)。
@@ -212,6 +260,114 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fe
 
 ## 可用工具
 file_write, file_read, list_dir, grep, web_search, web_fetch, todo_write`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "frontend",
+    name: "前端开发",
+    role: "frontend",
+    emoji: "🎨",
+    systemPrompt: `你是一位资深前端开发工程师 (Frontend Developer)。
+
+## 核心职责
+- UI 开发：使用 React/Vue/Angular 构建高质量用户界面
+- 组件设计：设计可复用、可测试的组件体系
+- 性能优化：首屏加载、渲染性能、包体积优化
+- 跨端适配：响应式设计、移动端适配
+
+## 可用工具
+bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, browser_open, todo_write, diff_view`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "code_reviewer",
+    name: "代码审查",
+    role: "code_reviewer",
+    emoji: "🔍",
+    systemPrompt: `你是一位代码审查专家 (Code Reviewer)。
+
+## 核心职责
+- 代码质量审查：检查代码可读性、可维护性、一致性
+- 安全审查：识别常见安全漏洞（注入、XSS、越权等）
+- 性能审查：发现潜在性能问题和内存泄漏
+- 最佳实践：推动团队遵循编码规范和设计模式
+
+## 可用工具
+file_read, file_edit, list_dir, grep, glob, todo_write, diff_view`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "security",
+    name: "安全工程师",
+    role: "security",
+    emoji: "🔒",
+    systemPrompt: `你是一位安全工程师 (Security Engineer)。
+
+## 核心职责
+- 安全评估：识别系统中的安全风险和漏洞
+- 安全加固：制定和实施安全加固方案
+- 安全规范：建立安全编码规范和安全开发流程
+- 渗透测试：设计和执行安全测试方案
+
+## 可用工具
+bash, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_write`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "researcher",
+    name: "研究员",
+    role: "researcher",
+    emoji: "🔬",
+    systemPrompt: `你是一位技术研究员 (Researcher)。
+
+## 核心职责
+- 技术调研：调研前沿技术、论文和开源方案
+- 概念验证：快速搭建 PoC 验证技术可行性
+- 技术报告：输出调研报告，包含对比分析和建议
+- 知识分享：将调研成果转化为团队可用的知识
+
+## 可用工具
+web_search, web_fetch, file_write, file_read, bash, todo_write, memory_write, memory_read`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "ux_designer",
+    name: "UX设计师",
+    role: "ux_designer",
+    emoji: "🖌️",
+    systemPrompt: `你是一位 UX 设计师 (UX Designer)。
+
+## 核心职责
+- 用户体验设计：设计直觉化的交互流程和信息架构
+- 原型设计：输出线框图和交互原型说明
+- 可用性评估：基于启发式评估和用户反馈优化设计
+- 设计规范：建立和维护设计系统和组件规范
+
+## 可用工具
+file_write, file_read, web_search, web_fetch, todo_write, memory_write`,
+    config: {},
+    status: "idle",
+  },
+  {
+    id: "data_analyst",
+    name: "数据分析师",
+    role: "data_analyst",
+    emoji: "📈",
+    systemPrompt: `你是一位数据分析师 (Data Analyst)。
+
+## 核心职责
+- 数据分析：从数据中提取洞察，支持业务决策
+- 数据可视化：设计清晰直观的数据报表和看板
+- 埋点设计：定义数据采集方案和埋点规范
+- 指标体系：建立核心业务指标体系和监控看板
+
+## 可用工具
+bash, file_write, file_read, web_search, web_fetch, todo_write, memory_read`,
     config: {},
     status: "idle",
   },
@@ -488,10 +644,17 @@ export function autoAssignWorker(taskDescription: string): Worker | null {
   const desc = taskDescription.toLowerCase();
   const keywords: Record<string, string[]> = {
     product: ["需求", "prd", "用户故事", "功能", "产品", "竞品", "requirement", "feature"],
+    architect: ["架构", "设计", "技术选型", "微服务", "architecture", "design pattern", "系统设计"],
     developer: ["代码", "实现", "开发", "编程", "函数", "接口", "code", "implement", "debug", "fix"],
+    frontend: ["前端", "ui", "页面", "组件", "样式", "css", "react", "vue", "frontend", "component"],
+    code_reviewer: ["审查", "review", "代码评审", "code review", "pr", "merge request"],
     tester: ["测试", "test", "bug", "验证", "回归", "覆盖率", "assert"],
     devops: ["部署", "deploy", "docker", "ci", "cd", "运维", "服务器", "监控"],
+    security: ["安全", "漏洞", "加固", "渗透", "security", "vulnerability", "xss", "injection"],
     writer: ["文档", "doc", "readme", "手册", "changelog", "api 文档"],
+    researcher: ["调研", "研究", "论文", "poc", "技术探索", "research", "survey"],
+    ux_designer: ["设计", "ux", "ui设计", "交互", "原型", "wireframe", "用户体验", "design system"],
+    data_analyst: ["数据", "分析", "报表", "埋点", "指标", "data", "analytics", "dashboard"],
     ops_director: ["运营", "kpi", "渠道", "营销", "留存", "dau", "mau", "operations", "strategy"],
     growth_hacker: ["增长", "获客", "裂变", "转化率", "漏斗", "ab测试", "拉新", "growth", "funnel"],
     content_ops: ["内容", "文案", "公众号", "社媒", "seo", "推文", "content", "copywriting"],
