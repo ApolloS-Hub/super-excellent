@@ -511,6 +511,11 @@ export function describeToolAction(toolName: string, args: Record<string, unknow
 // ═══════════ Tool Execution ═══════════
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  // Web search — handle before anything else to avoid Rust invoke stack overflow
+  if (name === "web_search") {
+    return executeWebSearch(args);
+  }
+
   // Registry-first: new tools (ask_user, sleep, task_*, plan mode, tool_search) route through registry
   const registryResult = await executeRegistryTool(name, args);
   if (registryResult.handled) return registryResult.result;
@@ -557,40 +562,6 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
   // ═══════ Notebook Edit (inspired by Claude Code NotebookEditTool) ═══════
   if (name === "notebook_edit") {
     return executeNotebookEdit(args);
-  }
-
-  // ═══════ Web search via Tauri HTTP plugin (bypass Rust invoke) ═══════
-  if (name === "web_search") {
-    const query = String(args.query || "");
-    if (!query) return "❌ 缺少 query 参数";
-    try {
-      const { fetch: tFetch } = await import("@tauri-apps/plugin-http");
-      const resp = await tFetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, { method: "GET" });
-      const html = await resp.text();
-      const results: string[] = [];
-      let idx = 0;
-      for (const chunk of html.split('class="result__a"').slice(1, 6)) {
-        idx++;
-        const hrefMatch = chunk.match(/href="([^"]+)"/);
-        const titleMatch = chunk.match(/>([^<]+)<\/a>/);
-        if (hrefMatch && titleMatch) {
-          results.push(`${idx}. ${titleMatch[1].trim()}\n   ${hrefMatch[1]}`);
-        }
-      }
-      if (results.length > 0) return results.join("\n\n");
-      // Fallback to Baidu
-      const bResp = await tFetch(`https://www.baidu.com/s?wd=${encodeURIComponent(query)}`, { method: "GET" });
-      const bHtml = await bResp.text();
-      const bResults: string[] = [];
-      let bIdx = 0;
-      for (const m of bHtml.matchAll(/<h3[^>]*><a[^>]*href="([^"]+)"[^>]*>([^<]*(?:<em>[^<]*<\/em>[^<]*)*)<\/a>/g)) {
-        if (++bIdx > 5) break;
-        bResults.push(`${bIdx}. ${m[2].replace(/<\/?em>/g, '')}\n   ${m[1]}`);
-      }
-      return bResults.length > 0 ? bResults.join("\n\n") : `搜索 "${query}" 暂无结果`;
-    } catch (e) {
-      return `搜索失败: ${e instanceof Error ? e.message : String(e)}`;
-    }
   }
 
   // ═══════ Frontend-only tools (no Rust needed) ═══════
@@ -945,3 +916,46 @@ export {
   type ToolCategory,
   type OpenAIToolDef as RegistryOpenAIToolDef,
 } from "./tool-registry";
+
+async function executeWebSearch(args: Record<string, unknown>): Promise<string> {
+  const query = String(args.query || "");
+  if (!query) return "❌ 缺少 query 参数";
+  try {
+    const { fetch: tFetch } = await import("@tauri-apps/plugin-http");
+    // Try DuckDuckGo
+    try {
+      const resp = await tFetch(
+        `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+        { method: "GET", connectTimeout: 10000 },
+      );
+      const html = await resp.text();
+      const results: string[] = [];
+      let idx = 0;
+      for (const chunk of html.split('class="result__a"').slice(1, 6)) {
+        idx++;
+        const hrefMatch = chunk.match(/href="([^"]+)"/);
+        const titleMatch = chunk.match(/>([^<]+)<\/a>/);
+        if (hrefMatch && titleMatch) {
+          results.push(`${idx}. ${titleMatch[1].trim()}\n   ${hrefMatch[1]}`);
+        }
+      }
+      if (results.length > 0) return results.join("\n\n");
+    } catch { /* DuckDuckGo failed, try Baidu */ }
+
+    // Fallback: Baidu
+    const bResp = await tFetch(
+      `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`,
+      { method: "GET", connectTimeout: 10000 },
+    );
+    const bHtml = await bResp.text();
+    const bResults: string[] = [];
+    let bIdx = 0;
+    for (const m of bHtml.matchAll(/<h3[^>]*><a[^>]*href="([^"]+)"[^>]*>([^<]*(?:<em>[^<]*<\/em>[^<]*)*)<\/a>/g)) {
+      if (++bIdx > 5) break;
+      bResults.push(`${bIdx}. ${m[2].replace(/<\/?em>/g, "")}\n   ${m[1]}`);
+    }
+    return bResults.length > 0 ? bResults.join("\n\n") : `搜索 "${query}" 暂无结果。请尝试手动搜索。`;
+  } catch (e) {
+    return `搜索失败: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
