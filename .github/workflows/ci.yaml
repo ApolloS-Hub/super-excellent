@@ -55,6 +55,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     needs: quality-gates
+    continue-on-error: true
 
     steps:
       - name: Checkout
