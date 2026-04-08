@@ -36,10 +36,9 @@ interface ChatPageProps {
   conversations: Conversation[];
   onConversationsUpdate: (convs: Conversation[]) => void;
   onNewConversation: () => void;
-  onCreateConversation: () => Conversation;
 }
 
-function ChatPage({ conversation, conversations, onConversationsUpdate, onCreateConversation }: ChatPageProps) {
+function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPageProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -119,8 +118,8 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onCreate
   }, []);
 
   // Persist local messages back to conversation
-  const persistMessages = useCallback((msgs: ChatMessage[], convIdOverride?: string) => {
-    const convId = convIdOverride || conversation?.id;
+  const persistMessages = useCallback((msgs: ChatMessage[]) => {
+    const convId = conversation?.id;
     if (!convId) return;
     const updated = conversations.map(c => {
       if (c.id !== convId) return c;
@@ -576,15 +575,9 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onCreate
   const handleSend = useCallback(async () => {
     console.log("[handleSend] called, input=", JSON.stringify(input), "isLoading=", isLoading, "conv=", !!conversation, "convId=", conversation?.id);
 
-    if (!input.trim() || isLoading) {
-      console.log("[handleSend] BAIL: empty input or loading");
+    if (!input.trim() || isLoading || !conversation) {
+      console.log("[handleSend] BAIL: empty input, loading, or no conversation");
       return;
-    }
-    // Draft mode: lazily create conversation on first message
-    let activeConv = conversation;
-    if (!activeConv) {
-      console.log("[handleSend] draft mode, creating conversation on first message");
-      activeConv = onCreateConversation();
     }
 
     // Slash commands
@@ -801,16 +794,14 @@ function ChatPage({ conversation, conversations, onConversationsUpdate, onCreate
     } finally {
       setIsLoading(false);
       setIsThinking(false);
-      // Persist final state (pass convId for draft-mode where conversation prop is still null)
-      const persistId = activeConv.id;
       setLocalMessages(prev => {
-        persistMessages(prev, persistId);
+        persistMessages(prev);
         return prev;
       });
     }
-  }, [input, isLoading, conversation, localMessages, droppedFiles, persistMessages, onCreateConversation]);
+  }, [input, isLoading, conversation, localMessages, droppedFiles, persistMessages]);
 
-  // Draft mode (no conversation yet) or existing conversation — render chat UI
+  // Render chat UI
   return (
     <Stack
       h="calc(100vh - 100px)"
