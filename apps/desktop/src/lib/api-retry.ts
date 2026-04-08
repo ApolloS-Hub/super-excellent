@@ -2,8 +2,9 @@
  * API Retry — exponential backoff with jitter, 429 Retry-After awareness
  *
  * Inspired by Claude Code's withRetry pattern.
- * Zero external dependencies.
+ * Uses Tauri HTTP plugin fetch to bypass WebView mixed-content restrictions.
  */
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 export interface RetryConfig {
   maxRetries: number;
@@ -105,7 +106,7 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
     try {
-      const response = await fetch(url, options);
+      const response = await tauriFetch(url, options);
 
       if (response.ok) return response;
 
