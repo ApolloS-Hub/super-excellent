@@ -4,6 +4,7 @@
  */
 
 import type { AgentConfig, AgentEvent } from "./agent-bridge";
+import { fetchWithRetry } from "./api-retry";
 import {
   getWorker,
   assignTask,
@@ -295,7 +296,7 @@ async function callWorkerLLM(
   }
   messages.push({ role: "user", content: task });
 
-  const MAX_WORKER_ITERATIONS = 15;
+  const MAX_WORKER_ITERATIONS = config.provider === "compatible" ? 2 : 15;
   let iteration = 0;
   let fullOutput = "";
 
@@ -320,7 +321,7 @@ async function callWorkerLLM(
       body.tool_choice = "auto";
     }
 
-    const response = await fetch(`${baseURL}/v1/chat/completions`, {
+    const response = await fetchWithRetry(`${baseURL}/v1/chat/completions`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
@@ -390,6 +391,14 @@ async function callWorkerLLM(
             tool_call_id: tc.id,
           });
         }
+      }
+      // Compatible provider: emit tool results directly and stop
+      if (config.provider === "compatible") {
+        const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : "工具执行完成，但无返回结果";
+        onEvent({ type: "text", text: summary });
+        fullOutput = summary;
+        break;
       }
       continue;
     }
