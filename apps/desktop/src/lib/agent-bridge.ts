@@ -28,6 +28,7 @@ export interface AgentConfig {
   model: string;
   proxyURL?: string;
   workDir?: string;
+  enableTools?: boolean;
 }
 
 export interface ChatMessage {
@@ -339,7 +340,7 @@ export async function sendMessage(
 
     // 兼容 provider（自定义端点）跳过 worker 编排，直接走 LLM 对话
     // 因为轻量/兼容模型通常不支持 function calling 和复杂 system prompt
-    const skipWorkerDispatch = config.provider === "compatible";
+    const skipWorkerDispatch = config.enableTools === false;
 
     // Emit user_message event for event log
     emitBusEvent({ type: "user_message", text: message });
@@ -822,8 +823,8 @@ async function _callOpenAINonStream(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const isCompatible = config.provider === "compatible";
-  const systemPrompt = isCompatible
+  const noTools = config.enableTools === false;
+  const systemPrompt = noTools
     ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
     : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
@@ -833,7 +834,7 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = isCompatible ? 1 : 20;
+  const MAX_ITERATIONS = noTools ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
 
@@ -861,7 +862,7 @@ async function _callOpenAINonStream(
       messages,
       stream: false,
     };
-    if (!isCompatible) {
+    if (!noTools) {
       body.tools = TOOL_DEFINITIONS;
       body.tool_choice = "auto";
     }
@@ -922,7 +923,7 @@ async function _callOpenAINonStream(
     }
 
     const text = msg.content || "";
-    const parsed = isCompatible ? null : parseTextToolCall(text);
+    const parsed = noTools ? null : parseTextToolCall(text);
     if (parsed) {
       totalToolCalls++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });
@@ -1040,8 +1041,8 @@ async function callOpenAI(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const isCompatible = config.provider === "compatible";
-  const systemPrompt = isCompatible
+  const noTools = config.enableTools === false;
+  const systemPrompt = noTools
     ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
     : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
@@ -1051,7 +1052,7 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = isCompatible ? 1 : 20;
+  const MAX_ITERATIONS = noTools ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
 
@@ -1080,7 +1081,7 @@ async function callOpenAI(
       stream: true,
       stream_options: { include_usage: true },
     };
-    if (!isCompatible) {
+    if (!noTools) {
       body.tools = TOOL_DEFINITIONS;
       body.tool_choice = "auto";
     }
@@ -1249,7 +1250,7 @@ async function callOpenAI(
 
     // ── 纯文本响应 ──
     // 检查文本中的工具调用（compatible 模式跳过）
-    const parsed = isCompatible ? null : parseTextToolCall(fullText);
+    const parsed = noTools ? null : parseTextToolCall(fullText);
     if (parsed) {
       totalToolCalls++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });

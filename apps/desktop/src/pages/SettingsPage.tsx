@@ -310,6 +310,15 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                 />
               )}
 
+              {isCompatible && (
+                <Switch
+                  label="启用工具调用 / Enable Tools"
+                  description="后端模型支持 function calling 时开启（如 Kimi、GPT、Claude）"
+                  checked={config.enableTools !== false}
+                  onChange={(e) => setConfig({ ...config, enableTools: e.currentTarget.checked })}
+                />
+              )}
+
               <Group>
                 <Button onClick={handleSave} flex={1}>
                   💾 保存
