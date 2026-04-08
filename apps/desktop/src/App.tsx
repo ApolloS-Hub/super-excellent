@@ -140,12 +140,19 @@ function App() {
 
   // Conversation actions
   const handleNewConversation = useCallback(() => {
+    // If already on an empty conversation, just stay there
+    const current = conversations.find(c => c.id === activeConvId);
+    if (current && current.messages.length === 0) {
+      setCurrentPage("chat");
+      close();
+      return;
+    }
     const conv = createConversation();
     setConversations(prev => [conv, ...prev]);
     setActiveConvId(conv.id);
     setCurrentPage("chat");
     close();
-  }, [close]);
+  }, [close, conversations, activeConvId]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConvId(id);
