@@ -5,7 +5,7 @@ import {
   Notification, Code, Stepper, SimpleGrid, ScrollArea, Tabs,
 } from "@mantine/core";
 import { healthCheck, repairConfig, listenAgentStream, isTauriAvailable } from "../lib/tauri-bridge";
-import { onAgentEvent } from "../lib/event-bus";
+import { onAgentEvent, getEventLog, clearEventLog } from "../lib/event-bus";
 import { getTeamConfig, type Worker as TeamWorker } from "../lib/team";
 import type { HealthStatus } from "../lib/tauri-bridge";
 import { startMonitor, stopMonitor, isMonitorRunning, getAllTasks } from "../lib/runtime";
@@ -77,8 +77,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
   taskCounts.running += teamWorkers.filter(w => w.status === "working").length;
   taskCounts.failed += teamWorkers.filter(w => w.status === "error").length;
 
-  // Real-time event log
-  const [eventLog, setEventLog] = useState<Array<{ time: string; type: string; detail: string }>>([]);
+  // Real-time event log — seeded from global event log
+  const [eventLog, setEventLog] = useState<Array<{ time: string; type: string; detail: string }>>(() => {
+    return getEventLog().reverse().map(e => ({ time: e.time, type: e.type, detail: e.detail }));
+  });
   const logViewport = useRef<HTMLDivElement>(null);
 
   // 加载 Worker 状态、费用数据、文件变更
@@ -350,7 +352,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <Badge color={eventLog.length > 0 ? "green" : "gray"} variant="light">
               {eventLog.length} 条
             </Badge>
-            <Button size="xs" variant="light" onClick={() => setEventLog([])}>清空</Button>
+            <Button size="xs" variant="light" onClick={() => { clearEventLog(); setEventLog([]); }}>清空</Button>
           </Group>
         </Group>
         <ScrollArea h={200} viewportRef={logViewport}>
