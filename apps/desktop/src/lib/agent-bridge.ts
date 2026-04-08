@@ -842,6 +842,18 @@ async function _callOpenAINonStream(
     if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
     iteration++;
 
+    // Compatible provider: after first tool call, emit results and stop
+    if (config.provider === "compatible" && totalToolCalls > 0) {
+      const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+      if (toolMsgs.length > 0) {
+        const summary = toolMsgs.join("\n\n---\n\n").slice(0, 5000);
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
+        currentAbortController = null;
+        return;
+      }
+    }
+
     // 智能 auto-compact：基于 token 使用量
     if (shouldAutoCompact(tokenState, config.model)) {
       onEvent({ type: "thinking", text: "⚠️ Token 接近上限，自动压缩中...\n" });
@@ -1069,6 +1081,18 @@ async function callOpenAI(
   while (iteration < MAX_ITERATIONS) {
     if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
     iteration++;
+
+    // Compatible provider: after first tool call, emit results and stop
+    if (config.provider === "compatible" && totalToolCalls > 0) {
+      const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+      if (toolMsgs.length > 0) {
+        const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
+        currentAbortController = null;
+        return;
+      }
+    }
 
     // 智能 auto-compact — 对齐 CC reactiveCompact
     if (shouldAutoCompact(tokenState, config.model)) {
