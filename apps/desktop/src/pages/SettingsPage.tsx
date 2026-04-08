@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Stack, TextInput, Select, Button, Text, Paper, Group,
   PasswordInput, Notification, Badge, useMantineColorScheme,
-  Divider, Box, ActionIcon,
+  Divider, Box, ActionIcon, Tabs, Switch,
 } from "@mantine/core";
 import { loadConfig, saveConfig, validateApiKey } from "../lib/agent-bridge";
 import type { AgentConfig } from "../lib/agent-bridge";
@@ -64,7 +64,7 @@ interface SettingsPageProps {
 
 function SettingsPage({ onBack }: SettingsPageProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useMantineColorScheme();
+  const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
   const [config, setConfig] = useState<AgentConfig>(loadConfig());
   const [editing, setEditing] = useState(false);
@@ -239,7 +239,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
     );
   }
 
-  // ═══════ Edit Mode ═══════
+  // ═══════ Edit Mode (categorized with Tabs) ═══════
   return (
     <Stack maw={600} mx="auto">
       <Group justify="space-between">
@@ -253,128 +253,161 @@ function SettingsPage({ onBack }: SettingsPageProps) {
         </Notification>
       )}
 
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <Select
-            label={t("settings.provider")}
-            data={PROVIDER_OPTIONS}
-            value={config.provider}
-            onChange={handleProviderChange}
-          />
+      <Tabs defaultValue="model">
+        <Tabs.List>
+          <Tabs.Tab value="model">🤖 模型配置</Tabs.Tab>
+          <Tabs.Tab value="general">⚙️ 常规设置</Tabs.Tab>
+          <Tabs.Tab value="advanced">🔧 高级设置</Tabs.Tab>
+        </Tabs.List>
 
-          <PasswordInput
-            label={t("settings.apiKey")}
-            placeholder="sk-..."
-            value={config.apiKey}
-            onChange={(e) => setConfig({ ...config, apiKey: e.currentTarget.value })}
-          />
-
-          {/* Kimi needs baseURL */}
-          {config.provider === "kimi" && (
-            <TextInput
-              label={t("settings.baseUrl")}
-              placeholder="https://api.moonshot.cn/v1"
-              value={config.baseURL || "https://api.moonshot.cn/v1"}
-              onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
-            />
-          )}
-
-          {/* Preset providers: model dropdown */}
-          {!isCompatible && models.length > 0 && (
-            <Select
-              label={t("settings.model")}
-              data={models}
-              value={config.model}
-              onChange={(val) => val && setConfig({ ...config, model: val })}
-            />
-          )}
-
-          {/* Custom: base URL + model ID */}
-          {isCompatible && (
-            <>
-              <TextInput
-                label="API 端点 / Base URL"
-                placeholder="https://api.example.com/v1"
-                value={config.baseURL || ""}
-                onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
-                description="兼容 OpenAI 协议的 API 地址"
+        {/* ── 模型配置 (Model Config) ── */}
+        <Tabs.Panel value="model" pt="md">
+          <Paper p="md" radius="md" withBorder>
+            <Stack gap="md">
+              <Select
+                label={t("settings.provider")}
+                data={PROVIDER_OPTIONS}
+                value={config.provider}
+                onChange={handleProviderChange}
               />
-              <TextInput
-                label="模型名称 / Model ID"
-                placeholder="例如: deepseek-chat, qwen-max, llama-3"
-                value={customModel || config.model}
-                onChange={(e) => {
-                  setCustomModel(e.currentTarget.value);
-                  setConfig({ ...config, model: e.currentTarget.value });
-                }}
-                description="供应商提供的模型标识符"
+
+              <PasswordInput
+                label={t("settings.apiKey")}
+                placeholder="sk-..."
+                value={config.apiKey}
+                onChange={(e) => setConfig({ ...config, apiKey: e.currentTarget.value })}
               />
-            </>
-          )}
 
-          <TextInput
-            label="📁 工作目录 / Workspace（可选）"
-            placeholder="~/Projects"
-            value={config.workDir || ""}
-            onChange={(e) => setConfig({ ...config, workDir: e.currentTarget.value })}
-            description="AI Agent 创建文件、运行命令时的默认目录"
-          />
+              {!isCompatible && models.length > 0 && (
+                <Select
+                  label={t("settings.model")}
+                  data={models}
+                  value={config.model}
+                  onChange={(val) => val && setConfig({ ...config, model: val })}
+                />
+              )}
 
-          <TextInput
-            label="🌐 代理设置 / Proxy（可选）"
-            placeholder="http://127.0.0.1:7890"
-            value={config.proxyURL || ""}
-            onChange={(e) => setConfig({ ...config, proxyURL: e.currentTarget.value })}
-            description="工具的网络请求（搜索、抓取网页）会走此代理"
-          />
+              {(isCompatible || config.provider === "kimi") && (
+                <TextInput
+                  label="API 端点 / Base URL"
+                  placeholder={config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "https://api.example.com/v1"}
+                  value={config.baseURL || (config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "")}
+                  onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
+                  description={isCompatible ? "兼容 OpenAI 协议的 API 地址" : undefined}
+                />
+              )}
 
-          <Group>
-            <Button onClick={handleSave} flex={1}>
-              💾 保存
-            </Button>
-            {hasKey && (
-              <Button variant="subtle" onClick={() => setEditing(false)}>
-                取消
-              </Button>
-            )}
-          </Group>
-        </Stack>
-      </Paper>
+              {isCompatible && (
+                <TextInput
+                  label="模型名称 / Model ID"
+                  placeholder="例如: deepseek-chat, qwen-max, llama-3"
+                  value={customModel || config.model}
+                  onChange={(e) => {
+                    setCustomModel(e.currentTarget.value);
+                    setConfig({ ...config, model: e.currentTarget.value });
+                  }}
+                  description="供应商提供的模型标识符"
+                />
+              )}
 
-      {/* MCP Configuration */}
-      <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">🔌 MCP 扩展 / Extensions</Text>
-        <Text size="sm" c="dimmed" mb="md">
-          通过 MCP (Model Context Protocol) 连接外部工具和服务
-        </Text>
-        <MCPConfigPanel />
-      </Paper>
+              <Group>
+                <Button onClick={handleSave} flex={1}>
+                  💾 保存
+                </Button>
+                {hasKey && (
+                  <Button variant="subtle" onClick={() => setEditing(false)}>
+                    取消
+                  </Button>
+                )}
+              </Group>
+            </Stack>
+          </Paper>
+        </Tabs.Panel>
 
-      {/* Permission Level */}
-      <PermissionSettingsPanel />
+        {/* ── 常规设置 (General) ── */}
+        <Tabs.Panel value="general" pt="md">
+          <Stack gap="md">
+            <Paper p="md" radius="md" withBorder>
+              <Text fw={600} mb="sm">🌐 语言与外观 / Language & Appearance</Text>
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Stack gap={2}>
+                    <Text size="sm" fw={500}>深色模式 / Dark Mode</Text>
+                    <Text size="xs" c="dimmed">切换界面明暗主题</Text>
+                  </Stack>
+                  <Switch
+                    checked={isDark}
+                    onChange={() => toggleColorScheme()}
+                    size="md"
+                  />
+                </Group>
+              </Stack>
+            </Paper>
 
-      {/* Keyboard Shortcuts */}
-      <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">⌨️ 快捷键 / Keyboard Shortcuts</Text>
-        <Stack gap="xs">
-          <Group justify="space-between">
-            <Text size="sm">新对话</Text>
-            <Badge variant="outline" size="sm">⌘/Ctrl + N</Badge>
-          </Group>
-          <Group justify="space-between">
-            <Text size="sm">设置</Text>
-            <Badge variant="outline" size="sm">⌘/Ctrl + ,</Badge>
-          </Group>
-          <Group justify="space-between">
-            <Text size="sm">发送消息</Text>
-            <Badge variant="outline" size="sm">Enter</Badge>
-          </Group>
-          <Group justify="space-between">
-            <Text size="sm">换行</Text>
-            <Badge variant="outline" size="sm">Shift + Enter</Badge>
-          </Group>
-        </Stack>
-      </Paper>
+            <Paper p="md" radius="md" withBorder>
+              <Text fw={600} mb="sm">⌨️ 快捷键 / Keyboard Shortcuts</Text>
+              <Stack gap="xs">
+                <Group justify="space-between">
+                  <Text size="sm">新对话</Text>
+                  <Badge variant="outline" size="sm">⌘/Ctrl + N</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">设置</Text>
+                  <Badge variant="outline" size="sm">⌘/Ctrl + ,</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">发送消息</Text>
+                  <Badge variant="outline" size="sm">Enter</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">换行</Text>
+                  <Badge variant="outline" size="sm">Shift + Enter</Badge>
+                </Group>
+              </Stack>
+            </Paper>
+
+            <Paper p="md" radius="md" withBorder>
+              <Text fw={600} mb="sm">🔌 MCP 扩展 / Extensions</Text>
+              <Text size="sm" c="dimmed" mb="md">
+                通过 MCP (Model Context Protocol) 连接外部工具和服务
+              </Text>
+              <MCPConfigPanel />
+            </Paper>
+          </Stack>
+        </Tabs.Panel>
+
+        {/* ── 高级设置 (Advanced) ── */}
+        <Tabs.Panel value="advanced" pt="md">
+          <Stack gap="md">
+            <Paper p="md" radius="md" withBorder>
+              <Text fw={600} mb="sm">📁 工作环境 / Workspace</Text>
+              <Stack gap="md">
+                <TextInput
+                  label="工作目录 / Workspace"
+                  placeholder="~/Projects"
+                  value={config.workDir || ""}
+                  onChange={(e) => setConfig({ ...config, workDir: e.currentTarget.value })}
+                  description="AI Agent 创建文件、运行命令时的默认目录"
+                />
+
+                <TextInput
+                  label="代理设置 / Proxy"
+                  placeholder="http://127.0.0.1:7890"
+                  value={config.proxyURL || ""}
+                  onChange={(e) => setConfig({ ...config, proxyURL: e.currentTarget.value })}
+                  description="工具的网络请求（搜索、抓取网页）会走此代理"
+                />
+
+                <Button onClick={handleSave} variant="light">
+                  💾 保存工作环境
+                </Button>
+              </Stack>
+            </Paper>
+
+            <PermissionSettingsPanel />
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }
