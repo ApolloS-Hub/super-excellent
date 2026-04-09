@@ -513,6 +513,30 @@ export function describeToolAction(toolName: string, args: Record<string, unknow
 // ═══════════ Tool Execution ═══════════
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  // Execute before_tool hooks
+  try {
+    const { executeHooks } = await import("./hooks");
+    const hookResult = await executeHooks("before_tool", { toolName: name, toolInput: args });
+    if (hookResult.blocked) {
+      return `⛔ Hook 拦截: ${hookResult.reason || "操作被阻止"}`;
+    }
+    if (hookResult.modifiedInput) {
+      Object.assign(args, hookResult.modifiedInput);
+    }
+  } catch { /* hooks not available */ }
+
+  const result = await _executeToolInner(name, args);
+
+  // Execute after_tool hooks
+  try {
+    const { executeHooks } = await import("./hooks");
+    await executeHooks("after_tool", { toolName: name, toolInput: args, toolOutput: result });
+  } catch { /* hooks not available */ }
+
+  return result;
+}
+
+async function _executeToolInner(name: string, args: Record<string, unknown>): Promise<string> {
   // Web search — handle before anything else to avoid Rust invoke stack overflow
   if (name === "web_search") {
     return executeWebSearch(args);
