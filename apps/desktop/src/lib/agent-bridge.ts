@@ -952,7 +952,7 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const loop = createLoopState(messages, noTools ? 1 : 20);
+  const loop = createLoopState(messages, noTools ? 1 : (config.provider === "compatible" ? 2 : 20));
 
   // ── LoopState-driven agent loop ──
   while (shouldContinueLoop(loop)) {
@@ -1239,7 +1239,7 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const loop = createLoopState(messages, noTools ? 1 : 20);
+  const loop = createLoopState(messages, noTools ? 1 : (config.provider === "compatible" ? 2 : 20));
 
   // ── LoopState-driven streaming agent loop ──
   while (shouldContinueLoop(loop)) {

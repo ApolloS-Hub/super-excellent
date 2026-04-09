@@ -954,7 +954,7 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
     const { invoke } = await import("@tauri-apps/api/core");
     const results: string[] = [];
     // Extract English keywords for HN, use full query for Google News
-    const enOnly = query.replace(/[\u4e00-\u9fff]/g, " ").replace(/\d{4}/g, "").replace(/\s+/g, " ").trim() || "AI";
+    const enOnly = query.replace(/[\u4e00-\u9fff]/g, " ").replace(/\d{4}/g, "").replace(/\b(news|latest|最新|新闻|搜索|search|find|today|recent|breakthroughs?)\b/gi, "").replace(/\s+/g, " ").trim() || "AI";
     const eqEn = encodeURIComponent(enOnly);
     const eqFull = encodeURIComponent(query.replace(/[^\w\s\u4e00-\u9fff]/g, " ").trim());
 
