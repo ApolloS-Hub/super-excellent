@@ -259,7 +259,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </Text>
       </Paper>
 
-      {/* AI 员工团队 — 分团队展示 */}
+      {/* AI 员工团队 — 分团队展示 + 记忆 + 任务 */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
           <Text fw={600}>🤖 AI 员工团队 / Workers ({teamWorkers.length})</Text>
@@ -275,12 +275,24 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <Tabs.Tab value="business">
               💼 业务团队 ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
             </Tabs.Tab>
+            <Tabs.Tab value="memory">
+              🧠 记忆
+            </Tabs.Tab>
+            <Tabs.Tab value="tasks">
+              📋 任务
+            </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="engineering" pt="sm">
             <WorkerGrid workers={teamWorkers.filter(w => ENGINEERING_IDS.has(w.id))} />
           </Tabs.Panel>
           <Tabs.Panel value="business" pt="sm">
             <WorkerGrid workers={teamWorkers.filter(w => BUSINESS_IDS.has(w.id))} />
+          </Tabs.Panel>
+          <Tabs.Panel value="memory" pt="sm">
+            <MemoryPanel />
+          </Tabs.Panel>
+          <Tabs.Panel value="tasks" pt="sm">
+            <TaskPanel tasks={runtimeTasks} />
           </Tabs.Panel>
         </Tabs>
       </Paper>
@@ -540,6 +552,100 @@ function PermissionOverviewPanel() {
         </Stack>
       )}
     </Paper>
+  );
+}
+
+function MemoryPanel() {
+  const [entries, setEntries] = useState<Array<{ key: string; content: string; category: string; timestamp: number; accessCount: number }>>([]);
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const refresh = async () => {
+      const { memoryStore } = await import("../lib/memory-store");
+      const all = await memoryStore.load();
+      setEntries(all);
+      setCount(all.length);
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const catColor: Record<string, string> = {
+    preference: "blue", fact: "green", project: "violet", instruction: "orange",
+  };
+
+  return (
+    <Stack gap="xs">
+      <Group gap="xs">
+        <Badge variant="light" color="blue">{count} 条记忆</Badge>
+      </Group>
+      {entries.length === 0 ? (
+        <Text size="xs" c="dimmed">暂无记忆条目。AI 会在对话中自动学习。</Text>
+      ) : (
+        <ScrollArea h={200}>
+          <Stack gap={4}>
+            {entries.map(e => (
+              <Paper key={e.key} p="xs" radius="sm" withBorder>
+                <Group gap="xs" justify="space-between" wrap="nowrap">
+                  <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                    <Badge size="xs" color={catColor[e.category] || "gray"}>{e.category}</Badge>
+                    <Text size="xs" truncate>{e.content}</Text>
+                  </Group>
+                  <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                    ×{e.accessCount}
+                  </Text>
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        </ScrollArea>
+      )}
+    </Stack>
+  );
+}
+
+function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
+  const [allTasks, setAllTasks] = useState<Array<{ taskId: string; title: string; status: string; owner: string }>>([]);
+
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const items = getAllTasks();
+        setAllTasks(items.map(t => ({ taskId: t.taskId, title: t.title, status: t.status, owner: t.owner })));
+      } catch { /* */ }
+    };
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const statusIcon: Record<string, string> = {
+    todo: "⬜", in_progress: "🔄", blocked: "🚫", done: "✅",
+  };
+
+  return (
+    <Stack gap="xs">
+      <Group gap="xs">
+        <Badge variant="light" color="blue">{allTasks.length} 个任务</Badge>
+        <Badge variant="light" color="green">{tasks.filter(t => t.status === "done" || t.status === "completed").length} 已完成</Badge>
+      </Group>
+      {allTasks.length === 0 ? (
+        <Text size="xs" c="dimmed">暂无任务。使用 AI 创建任务。</Text>
+      ) : (
+        <ScrollArea h={200}>
+          <Stack gap={4}>
+            {allTasks.map(t => (
+              <Group key={t.taskId} gap="xs" wrap="nowrap">
+                <Text size="xs">{statusIcon[t.status] || "❓"}</Text>
+                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{t.title}</Text>
+                <Badge size="xs" variant="outline">{t.owner}</Badge>
+              </Group>
+            ))}
+          </Stack>
+        </ScrollArea>
+      )}
+    </Stack>
   );
 }
 

@@ -328,8 +328,8 @@ async function buildContextPart(): Promise<string> {
   return sections.join("\n\n");
 }
 
-/** 构建 memory 部分 — 三层记忆摘要 */
-function buildMemoryPart(): string {
+/** 构建 memory 部分 — 三层记忆摘要 + memory-store */
+async function buildMemoryPart(): Promise<string> {
   const sections: string[] = [];
 
   const shortTerm = _getShortTermSummary();
@@ -345,6 +345,15 @@ function buildMemoryPart(): string {
   if (longTerm) {
     sections.push(`## 长期记忆\n${longTerm}`);
   }
+
+  // Inject persistent memory-store entries
+  try {
+    const { memoryStore } = await import("./memory-store");
+    const storeSection = await memoryStore.buildPromptSection();
+    if (storeSection) {
+      sections.push(`## 跨会话记忆\n${storeSection}`);
+    }
+  } catch { /* memory-store not available */ }
 
   return sections.join("\n\n");
 }
@@ -372,7 +381,7 @@ async function buildSystemPrompt(options?: {
     tools: (options?.skipTools) ? "" : await buildToolsPart(),
     context: await buildContextPart(),
     constraints: "",
-    memory: buildMemoryPart(),
+    memory: await buildMemoryPart(),
   };
 
   // 组装：过滤空 section
