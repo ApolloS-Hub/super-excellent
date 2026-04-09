@@ -983,18 +983,19 @@ async function _callOpenAINonStream(
       });
     } catch (e) {
       if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
-      if (loop.lastToolOutput) { loop.transitionReason = 'api_error'; break; }
-      throw e;
+      // Error Recovery: 不 throw，设 api_error + 展示已有结果
+      const errMsg = e instanceof Error ? e.message : String(e);
+      onEvent({ type: "error", text: `⚠️ API 请求失败: ${errMsg.slice(0, 200)}` });
+      loop.transitionReason = 'api_error';
+      break;
     }
 
     if (!response.ok) {
       const err = await response.text();
-      if (loop.lastToolOutput) {
-        onEvent({ type: "thinking", text: `⚠️ API ${response.status}，但工具已执行\n` });
-        loop.transitionReason = 'api_error';
-        break;
-      }
-      throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
+      // Error Recovery: 不 throw，设 api_error
+      onEvent({ type: "error", text: `⚠️ API ${response.status}: ${err.slice(0, 200)}` });
+      loop.transitionReason = 'api_error';
+      break;
     }
 
     const data = await response.json();
@@ -1007,7 +1008,11 @@ async function _callOpenAINonStream(
     }
 
     const choice = data.choices?.[0];
-    if (!choice) throw new Error("API 无响应");
+    if (!choice) {
+      onEvent({ type: "error", text: "⚠️ API 无响应" });
+      loop.transitionReason = 'api_error';
+      break;
+    }
     const msg = choice.message;
 
     // ── 处理 tool_calls ──
@@ -1274,19 +1279,29 @@ async function callOpenAI(
 
     if (!response.ok) {
       const err = await response.text();
-      if (loop.lastToolOutput) {
-        onEvent({ type: "thinking", text: `⚠️ API ${response.status}，但工具已执行\n` });
+      // Error Recovery: 流式 API 错误 → 降级到非流式
+      onEvent({ type: "thinking", text: `⚠️ 流式 API ${response.status}，降级为非流式\n` });
+      try {
+        await _callOpenAINonStream(message, config, onEvent, conversationHistory);
+        return;
+      } catch {
+        // 非流式也失败 → 展示已有内容
+        onEvent({ type: "error", text: `⚠️ API ${response.status}: ${err.slice(0, 200)}` });
         loop.transitionReason = 'api_error';
         break;
       }
-      throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
     }
 
     if (!response.body) {
-      if (loop.lastToolOutput) { loop.transitionReason = 'api_error'; break; }
+      // Error Recovery: 无 ReadableStream → 降级为非流式
       onEvent({ type: "thinking", text: "⚠️ 无 ReadableStream，降级为非流式\n" });
-      await _callOpenAINonStream(message, config, onEvent, conversationHistory);
-      return;
+      try {
+        await _callOpenAINonStream(message, config, onEvent, conversationHistory);
+        return;
+      } catch {
+        loop.transitionReason = 'api_error';
+        break;
+      }
     }
 
     // ── 流式解析 ──
