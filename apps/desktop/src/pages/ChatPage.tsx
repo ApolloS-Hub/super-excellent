@@ -780,7 +780,14 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
         setLocalMessages(prev => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last?.role === "assistant") last.isStreaming = false;
+          if (last?.role === "assistant") {
+            if (event.text && event.text.length > 10) {
+              // Show tool result as main content, hide thinking noise
+              const modelText = last.content.split(/\n(?=[\u{1F4AD}\u{1F504}\u{1F4E6}\u{2705}\u{274C}\u{1F4B0}\u{231B}\u{1F3AF}])/u)[0]?.trim() || "";
+              last.content = modelText ? modelText + "\n\n" + event.text : event.text;
+            }
+            last.isStreaming = false;
+          }
           return updated;
         });
       }
