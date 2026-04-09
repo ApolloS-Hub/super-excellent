@@ -694,6 +694,13 @@ async function callAnthropic(
       await processAnthropicToolBlocks(content, messages, executeTool, onEvent, signal);
       totalToolCalls += content.filter(b => b.type === "tool_use").length;
 
+      // Limit total tool calls to prevent infinite search loops
+      if (totalToolCalls >= 3) {
+        const toolText = content.filter((b: any) => b.type === "text").map((b: any) => b.text || "").join("");
+        if (toolText) onEvent({ type: "text", text: toolText });
+        onEvent({ type: "result", text: toolText || "\u5de5\u5177\u8c03\u7528\u5b8c\u6210" });
+        break;
+      }
       if (data.stop_reason === "tool_use") continue;
     }
 
@@ -890,6 +897,10 @@ async function callGemini(
       }
 
       contents.push({ role: "user", parts: responseParts as typeof contents[0]["parts"] });
+      if (totalToolCalls >= 3) {
+        onEvent({ type: "result", text: "\u5de5\u5177\u8c03\u7528\u5b8c\u6210" });
+        break;
+      }
       continue;
     }
 
