@@ -264,7 +264,9 @@ export interface PromptParts {
 
 /** 构建 identity 部分 */
 function buildIdentityPart(): string {
-  return BASE_SYSTEM_PROMPT;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  return BASE_SYSTEM_PROMPT + `\n\n今天的日期是 ${dateStr}。当用户要求搜索新闻或最新信息时，不要在搜索词里加年份数字，直接搜索主题关键词即可。`;
 }
 
 /** 构建 tools 部分 — 从 tool-registry 动态获取 */
