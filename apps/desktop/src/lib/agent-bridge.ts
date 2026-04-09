@@ -1097,6 +1097,15 @@ async function _callOpenAINonStream(
         loop.messages.push({ role: "assistant", content: text });
         loop.messages.push({ role: "user", content: `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` });
       }
+      // Compatible: output result immediately, no 2nd API call
+      if (config.provider === "compatible") {
+        const toolMsgs = loop.messages.filter(m => m.role === "user" && m.content?.startsWith("工具结果:")).map(m => m.content?.replace("工具结果:\n", "").replace("\n\n继续执行。完成则总结。", "") || "");
+        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : "工具执行完成";
+        onEvent({ type: "text", text: summary });
+        onEvent({ type: "result", text: summary });
+        loop.transitionReason = "done";
+        break;
+      }
       loop.transitionReason = 'tool_executed';
       continue;
     }
