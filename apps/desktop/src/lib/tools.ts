@@ -922,49 +922,53 @@ export {
 async function executeWebSearch(args: Record<string, unknown>): Promise<string> {
   const query = String(args.query || "");
   if (!query) return "❌ 缺少 query 参数";
-  
-  // Use Tauri's execute_command to run curl with system proxy
+
   const tauriReady = isTauriAvailable();
   if (!tauriReady) return "⚠️ 搜索需要桌面 App 环境";
-  
+
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    // Try Bing with proper headers via curl (inherits system proxy)
-    const result = await invoke("execute_command", {
-      command: `curl -sL --connect-timeout 10 --max-time 15 -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" -H "Accept-Language: en-US,en;q=0.9" "https://www.bing.com/search?q=${encodeURIComponent(query)}&count=8"`,
-      cwd: null,
-      timeoutMs: 20000,
-    }) as { stdout: string; stderr: string; success: boolean };
-    
-    if (!result.success || !result.stdout) {
-      return `搜索 "${query}" 失败: ${result.stderr?.slice(0, 200) || "无输出"}`;
+    const proxy = "http://127.0.0.1:11088";
+    const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    const eq = encodeURIComponent(query);
+    const engines = [
+      `curl -x ${proxy} -sL --connect-timeout 8 --max-time 15 -H "User-Agent: ${ua}" "https://www.bing.com/search?q=${eq}&count=8"`,
+      `curl -sL --connect-timeout 8 --max-time 15 -H "User-Agent: ${ua}" "https://www.sogou.com/web?query=${eq}"`,
+    ];
+
+    for (const cmd of engines) {
+      try {
+        const result = await invoke("execute_command", {
+          command: cmd, cwd: null, timeoutMs: 20000,
+        }) as { stdout: string; stderr: string; success: boolean };
+
+        if (!result.success || !result.stdout || result.stdout.length < 500) continue;
+
+        const html = result.stdout;
+        const searchResults: string[] = [];
+        const linkPattern = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+        let match;
+        const seen = new Set<string>();
+        while ((match = linkPattern.exec(html)) !== null && searchResults.length < 5) {
+          const url = match[1];
+          const title = match[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim();
+          if (title.length > 10 && title.length < 200 && !seen.has(url)
+              && !url.includes("bing.com") && !url.includes("sogou.com")
+              && !url.includes("javascript:") && !url.includes("baidu.com/link")) {
+            seen.add(url);
+            const idx = searchResults.length + 1;
+            searchResults.push(idx + ". " + title + "\n   " + url);
+          }
+        }
+
+        if (searchResults.length > 0) {
+          return "🔍 搜索结果 (" + query + "):\n\n" + searchResults.join("\n\n");
+        }
+      } catch { /* try next engine */ }
     }
-    
-    const html = result.stdout;
-    const results: string[] = [];
-    const blocks = html.split('class="b_algo"');
-    for (let i = 1; i < blocks.length && results.length < 5; i++) {
-      const block = blocks[i];
-      const titleMatch = block.match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
-      const descMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-      if (titleMatch) {
-        const title = titleMatch[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim();
-        const desc = descMatch ? descMatch[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim().slice(0, 150) : "";
-        if (title) results.push(`${results.length + 1}. ${title}\n   ${desc}`);
-      }
-    }
-    
-    if (results.length > 0) {
-      return `🔍 搜索结果 (${query}):\n\n${results.join("\n\n")}`;
-    }
-    
-    // Bing might have returned JS-rendered page, return raw text summary
-    const textContent = html.replace(/<script[\s\S]*?<\/script>/g, "").replace(/<style[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    if (textContent.length > 100) {
-      return `🔍 搜索 "${query}" 的页面摘要:\n${textContent.slice(0, 2000)}`;
-    }
-    return `搜索 "${query}" 暂无可解析的结果`;
+
+    return "🔍 无法获取实时搜索结果（搜索引擎反爬限制）。\n\n请根据你的知识回答关于 \"" + query + "\" 的问题，并注明信息可能不是最新的。";
   } catch (e) {
-    return `搜索失败: ${e instanceof Error ? e.message : String(e)}`;
+    return "搜索失败: " + (e instanceof Error ? e.message : String(e));
   }
 }
