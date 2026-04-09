@@ -87,6 +87,11 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
     "增长", "获客", "裂变", "转化率", "漏斗", "ab测试", "拉新", "病毒",
     "growth", "acquisition", "funnel", "conversion", "viral", "a/b test",
   ],
+  researcher: [
+    "搜索", "查找", "调研", "研究", "新闻", "资讯", "动态", "最新", "热点",
+    "search", "find", "research", "news", "latest", "trending",
+    "竞品", "分析", "评估", "方案", "技术选型",
+  ],
   content_ops: [
     "内容", "文案", "公众号", "社媒", "seo", "推文", "素材", "排版",
     "content", "copywriting", "social media", "article", "editorial",

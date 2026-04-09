@@ -213,8 +213,9 @@ function App() {
       )
     : conversations;
 
-  // Group conversations by date (Today / This Week / Older)
-  const groupedConversations = groupConversationsByDate(filteredConversations);
+  // Sort by updatedAt (most recent first) then group by date
+  const sortedConversations = [...filteredConversations].sort((a, b) => b.updatedAt - a.updatedAt);
+  const groupedConversations = groupConversationsByDate(sortedConversations);
 
   // Auto-create a conversation if none exist
   useEffect(() => {

@@ -61,6 +61,8 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 
   // Sync local messages with conversation and clear stale state on switch
   useEffect(() => {
+    // Abort any running generation when switching conversations
+    import("../lib/agent-bridge").then(m => m.abortGeneration()).catch(() => {});
     setLocalMessages(conversation?.messages ?? []);
     setToolCalls([]);
     setIsThinking(false);
@@ -68,7 +70,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setAskPending(null);
     setAskInput("");
     setDroppedFiles([]);
-  }, [conversation?.id, conversation?.messages?.length]);
+  }, [conversation?.id]);
 
   useEffect(() => {
     viewport.current?.scrollTo({ top: viewport.current.scrollHeight, behavior: "smooth" });
@@ -126,9 +128,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
       const title = c.messages.length === 0 && msgs.length > 0
         ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || c.title)
         : c.title;
-      return { ...c, title, messages: msgs, updatedAt: Date.now() };
+      // Only update timestamp when there are new messages (not on auto-persist)
+      const hasNewMessages = msgs.length > c.messages.length;
+      return { ...c, title, messages: msgs, updatedAt: hasNewMessages ? Date.now() : c.updatedAt };
     });
-    onConversationsUpdate(updated.sort((a, b) => b.updatedAt - a.updatedAt));
+    onConversationsUpdate(updated);
   }, [conversation?.id, conversations, onConversationsUpdate]);
 
   // Auto-persist messages on change (debounced) to prevent data loss on conversation switch
