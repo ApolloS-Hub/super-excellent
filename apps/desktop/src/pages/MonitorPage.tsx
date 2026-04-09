@@ -408,15 +408,18 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
             </Stack>
           </Group>
           <Badge
-            color={w.status === "working" ? "green" : w.status === "error" ? "red" : "gray"}
+            color={w.status === "working" ? "green" : w.status === "done" ? "blue" : w.status === "error" ? "red" : "gray"}
             size="xs"
             mt={4}
             fullWidth
           >
-            {w.status === "working" ? "🟢 工作中" : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
+            {w.status === "working" ? "🟢 工作中" : w.status === "done" ? "🔵 完成" : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
           </Badge>
           {w.currentTask && (
             <Text size="xs" c="green" mt={2} truncate>📌 {w.currentTask}</Text>
+          )}
+          {w.lastResult && (
+            <Text size="xs" c="dimmed" mt={2} truncate>📄 {w.lastResult.slice(0, 60)}</Text>
           )}
         </Paper>
       ))}

@@ -1,9 +1,12 @@
 /**
  * Team — Multi-Agent coordination system
  * Secretary dispatches tasks to specialized Workers
+ *
+ * 对齐 ref-s15 Agent Teams：持久化命名角色 + 邮箱 + 状态机
  */
 
 import type { AgentConfig } from "./agent-bridge";
+import type { BusMessage } from "./message-bus";
 
 export interface Worker {
   id: string;
@@ -12,8 +15,10 @@ export interface Worker {
   emoji: string;
   systemPrompt: string;
   config: Partial<AgentConfig>;
-  status: "idle" | "working" | "error";
-  currentTask?: string;
+  status: "idle" | "working" | "done" | "error";
+  currentTask: string | null;
+  lastResult: string | null;
+  inbox: BusMessage[];
 }
 
 export interface TeamConfig {
@@ -133,6 +138,9 @@ const DEFAULT_WORKERS: Worker[] = [
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "architect",
@@ -151,6 +159,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_write, project_detect`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "developer",
@@ -188,6 +199,9 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fe
 \`\`\``,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "tester",
@@ -212,6 +226,9 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fe
 bash, file_write, file_read, file_edit, list_dir, grep, glob, todo_write, diff_view`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "devops",
@@ -236,6 +253,9 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, todo_write, diff_v
 bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_write, project_detect`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "writer",
@@ -262,6 +282,9 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fe
 file_write, file_read, list_dir, grep, web_search, web_fetch, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "frontend",
@@ -280,6 +303,9 @@ file_write, file_read, list_dir, grep, web_search, web_fetch, todo_write`,
 bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, browser_open, todo_write, diff_view`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "code_reviewer",
@@ -298,6 +324,9 @@ bash, file_write, file_read, file_edit, list_dir, grep, glob, web_search, web_fe
 file_read, file_edit, list_dir, grep, glob, todo_write, diff_view`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "security",
@@ -316,6 +345,9 @@ file_read, file_edit, list_dir, grep, glob, todo_write, diff_view`,
 bash, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "researcher",
@@ -334,6 +366,9 @@ bash, file_read, file_edit, list_dir, grep, glob, web_search, web_fetch, todo_wr
 web_search, web_fetch, file_write, file_read, bash, todo_write, memory_write, memory_read`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "ux_designer",
@@ -352,6 +387,9 @@ web_search, web_fetch, file_write, file_read, bash, todo_write, memory_write, me
 file_write, file_read, web_search, web_fetch, todo_write, memory_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "data_analyst",
@@ -370,6 +408,9 @@ file_write, file_read, web_search, web_fetch, todo_write, memory_write`,
 bash, file_write, file_read, web_search, web_fetch, todo_write, memory_read`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "ops_director",
@@ -394,6 +435,9 @@ bash, file_write, file_read, web_search, web_fetch, todo_write, memory_read`,
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "growth_hacker",
@@ -418,6 +462,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write, bash`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "content_ops",
@@ -442,6 +489,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "legal_compliance",
@@ -466,6 +516,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 web_search, web_fetch, file_write, file_read, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "financial_analyst",
@@ -491,6 +544,9 @@ web_search, web_fetch, file_write, file_read, memory_read, todo_write`,
 web_search, web_fetch, file_write, file_read, memory_read, todo_write, bash`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "project_manager",
@@ -516,6 +572,9 @@ web_search, web_fetch, file_write, file_read, memory_read, todo_write, bash`,
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "customer_support",
@@ -540,6 +599,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_write`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   {
     id: "risk_analyst",
@@ -564,6 +626,9 @@ web_search, web_fetch, file_write, file_read, memory_write, memory_read, todo_wr
 web_search, web_fetch, file_write, file_read, memory_read, todo_write, bash`,
     config: {},
     status: "idle",
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
 ];
 
@@ -575,7 +640,10 @@ let teamConfig: TeamConfig = {
     emoji: "🎯",
     systemPrompt: "",
     config: {},
-    status: "idle",
+    status: "idle" as const,
+    currentTask: null,
+    lastResult: null,
+    inbox: [],
   },
   workers: [...DEFAULT_WORKERS],
 };
@@ -615,13 +683,74 @@ export function assignTask(workerId: string, taskTitle: string): void {
   }
 }
 
-export function completeWorkerTask(workerId: string): void {
+export function completeWorkerTask(workerId: string, result?: string): void {
   const worker = getWorker(workerId);
   if (worker) {
     worker.status = "idle";
-    worker.currentTask = undefined;
+    worker.currentTask = null;
+    if (result !== undefined) {
+      worker.lastResult = result;
+    }
   }
 }
+
+// ═══════════ TeammateManager — 团队状态管理器 ═══════════
+
+export interface TeamStatus {
+  id: string;
+  name: string;
+  emoji: string;
+  role: string;
+  status: Worker["status"];
+  currentTask: string | null;
+  lastResult: string | null;
+}
+
+export class TeammateManager {
+  /** 获取所有角色的状态快照 */
+  getTeamStatus(): TeamStatus[] {
+    return teamConfig.workers.map(w => ({
+      id: w.id,
+      name: w.name,
+      emoji: w.emoji,
+      role: w.role,
+      status: w.status,
+      currentTask: w.currentTask,
+      lastResult: w.lastResult,
+    }));
+  }
+
+  /** 分配任务给指定 Worker */
+  assignWork(workerId: string, task: string): boolean {
+    const worker = getWorker(workerId);
+    if (!worker) return false;
+    worker.status = "working";
+    worker.currentTask = task;
+    return true;
+  }
+
+  /** 报告 Worker 完成任务 */
+  reportDone(workerId: string, result: string): boolean {
+    const worker = getWorker(workerId);
+    if (!worker) return false;
+    worker.status = "idle";
+    worker.currentTask = null;
+    worker.lastResult = result;
+    return true;
+  }
+
+  /** 报告 Worker 错误 */
+  reportError(workerId: string, error: string): boolean {
+    const worker = getWorker(workerId);
+    if (!worker) return false;
+    worker.status = "error";
+    worker.lastResult = `Error: ${error}`;
+    return true;
+  }
+}
+
+/** 全局单例 */
+export const teammateManager = new TeammateManager();
 
 export function saveTeamConfig(): void {
   localStorage.setItem("team-config", JSON.stringify(teamConfig));
