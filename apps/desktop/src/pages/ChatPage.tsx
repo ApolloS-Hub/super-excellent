@@ -61,8 +61,25 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   const activeConvIdRef = useRef(conversation?.id);
   activeConvIdRef.current = conversation?.id;
 
+  // Track localMessages in a ref so we can save before switching
+  const localMessagesRef = useRef<ChatMessage[]>([]);
+  localMessagesRef.current = localMessages;
+  const prevConvIdRef = useRef<string | undefined>(conversation?.id);
+
   // Sync local messages with conversation and clear stale state on switch
   useEffect(() => {
+    const prevId = prevConvIdRef.current;
+    // Save previous conversation's messages before switching
+    if (prevId && prevId !== conversation?.id && localMessagesRef.current.length > 0) {
+      const msgs = localMessagesRef.current;
+      const updated = conversations.map(c => {
+        if (c.id !== prevId) return c;
+        return { ...c, messages: msgs, updatedAt: Date.now() };
+      });
+      onConversationsUpdate(updated);
+    }
+    prevConvIdRef.current = conversation?.id;
+
     // Abort any running generation when switching conversations
     import("../lib/agent-bridge").then(m => m.abortGeneration()).catch(() => {});
     setLocalMessages(conversation?.messages ?? []);
