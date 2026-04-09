@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Stack, Text, Paper, Badge, Group, Button,
+  Stack, Text, Paper, Badge, Group, Button, Box,
   Notification, Code, Stepper, SimpleGrid, ScrollArea, Tabs,
 } from "@mantine/core";
 import { healthCheck, repairConfig, listenAgentStream, isTauriAvailable } from "../lib/tauri-bridge";
@@ -344,6 +344,37 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </Group>
       </Paper>
 
+      {/* Activity Timeline — last 20 events */}
+      <Paper p="md" radius="md" withBorder>
+        <Text fw={600} mb="sm">⏱️ 活动时间线 / Activity Timeline</Text>
+        <ScrollArea h={160}>
+          {eventLog.length === 0 ? (
+            <Text size="xs" c="dimmed" ta="center" py="md">暂无活动</Text>
+          ) : (
+            <Stack gap={4}>
+              {eventLog.slice(-20).reverse().map((entry: { time: string; type: string; detail: string }, i: number) => (
+                <Group key={i} gap="xs" wrap="nowrap" align="flex-start">
+                  <Box style={{ width: 2, minHeight: 20, background: "var(--mantine-color-blue-5)", borderRadius: 1, flexShrink: 0 }} />
+                  <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
+                    <Group gap={6} wrap="nowrap">
+                      <Text size="xs" c="dimmed" style={{ fontFamily: "monospace", flexShrink: 0 }}>{entry.time}</Text>
+                      <Badge size="xs" variant="light" color={
+                        entry.type === "worker_activate" || entry.type === "worker_dispatch" ? "blue" :
+                        entry.type === "worker_complete" || entry.type === "result" ? "green" :
+                        entry.type === "error" ? "red" :
+                        entry.type === "tool_use" || entry.type === "tool_result" ? "yellow" :
+                        "gray"
+                      }>{entry.type}</Badge>
+                    </Group>
+                    <Text size="xs" truncate>{entry.detail}</Text>
+                  </Stack>
+                </Group>
+              ))}
+            </Stack>
+          )}
+        </ScrollArea>
+      </Paper>
+
       {/* Real-time Event Log */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
@@ -389,40 +420,49 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
   return (
     <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
-      {workers.map(w => (
-        <Paper
-          key={w.id}
-          p="xs"
-          radius="sm"
-          withBorder
-          style={{
-            borderColor: w.status === "working" ? "var(--mantine-color-green-5)" : undefined,
-            borderWidth: w.status === "working" ? 2 : undefined,
-          }}
-        >
-          <Group gap={6} wrap="nowrap">
-            <Text size="lg">{w.emoji}</Text>
-            <Stack gap={0}>
-              <Text size="xs" fw={500} truncate>{w.name}</Text>
-              <Text size="xs" c="dimmed" truncate>{w.role}</Text>
-            </Stack>
-          </Group>
-          <Badge
-            color={w.status === "working" ? "green" : w.status === "done" ? "blue" : w.status === "error" ? "red" : "gray"}
-            size="xs"
-            mt={4}
-            fullWidth
+      {workers.map(w => {
+        const isWorking = w.status === "working";
+        const isDone = w.status === "done";
+        const isError = w.status === "error";
+        return (
+          <Paper
+            key={w.id}
+            p="xs"
+            radius="sm"
+            withBorder
+            style={{
+              borderColor: isWorking ? "var(--mantine-color-blue-5)"
+                : isDone ? "var(--mantine-color-green-5)"
+                : isError ? "var(--mantine-color-red-5)" : undefined,
+              borderWidth: isWorking ? 2 : undefined,
+              animation: isWorking ? "worker-pulse 2s ease-in-out infinite" : undefined,
+            }}
           >
-            {w.status === "working" ? "🟢 工作中" : w.status === "done" ? "🔵 完成" : w.status === "error" ? "🔴 异常" : "⚪ 空闲"}
-          </Badge>
-          {w.currentTask && (
-            <Text size="xs" c="green" mt={2} truncate>📌 {w.currentTask}</Text>
-          )}
-          {w.lastResult && (
-            <Text size="xs" c="dimmed" mt={2} truncate>📄 {w.lastResult.slice(0, 60)}</Text>
-          )}
-        </Paper>
-      ))}
+            <Group gap={6} wrap="nowrap">
+              <Text size="lg">{w.emoji}</Text>
+              <Stack gap={0}>
+                <Text size="xs" fw={500} truncate>{w.name}</Text>
+                <Text size="xs" c="dimmed" truncate>{w.role}</Text>
+              </Stack>
+            </Group>
+            <Badge
+              color={isWorking ? "blue" : isDone ? "green" : isError ? "red" : "gray"}
+              size="xs"
+              mt={4}
+              fullWidth
+              variant={isWorking ? "filled" : "light"}
+            >
+              {isWorking ? "🔵 工作中" : isDone ? "🟢 完成" : isError ? "🔴 异常" : "⚪ 空闲"}
+            </Badge>
+            {w.currentTask && (
+              <Text size="xs" c="blue" mt={2} truncate>📌 {w.currentTask}</Text>
+            )}
+            {w.lastResult && (
+              <Text size="xs" c="dimmed" mt={2} truncate>📄 {w.lastResult.slice(0, 60)}</Text>
+            )}
+          </Paper>
+        );
+      })}
     </SimpleGrid>
   );
 }
