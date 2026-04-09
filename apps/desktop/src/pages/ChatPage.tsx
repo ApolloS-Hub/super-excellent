@@ -716,7 +716,10 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setToolCalls([]);
     setIsThinking(true);
 
+    const targetConvId = conversation?.id;
     const onEvent = (event: AgentEvent) => {
+      // Ignore events from stale requests (user switched conversation)
+      if (conversation?.id !== targetConvId) return;
       emitAgentEvent(event as unknown as Record<string, unknown>);
       if (event.type === "text" && event.text) {
         setIsThinking(false);

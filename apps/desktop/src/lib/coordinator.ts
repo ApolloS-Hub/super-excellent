@@ -310,25 +310,49 @@ async function callWorkerLLM(
   while (iteration < MAX_WORKER_ITERATIONS) {
     iteration++;
 
+    const isAnthropic = config.provider === "anthropic";
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
     };
 
-    const body: Record<string, unknown> = {
-      model: config.model || "gpt-4o",
-      max_tokens: 4096,
-      messages: isolatedMessages,
-      stream: false,
-    };
+    let apiUrl: string;
+    let body: Record<string, unknown>;
 
-    // 只在有工具时挂载工具定义
-    if (filteredTools.length > 0) {
-      body.tools = filteredTools;
-      body.tool_choice = "auto";
+    if (isAnthropic) {
+      headers["x-api-key"] = config.apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      apiUrl = `${baseURL}/v1/messages`;
+      const anthropicMsgs = isolatedMessages.filter(m => m.role !== "system").map(m => ({
+        role: m.role, content: m.content || "",
+      }));
+      body = {
+        model: config.model || "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: worker.systemPrompt,
+        messages: anthropicMsgs,
+      };
+      if (filteredTools.length > 0 && config.provider !== "compatible") {
+        body.tools = filteredTools.map(t => ({
+          name: t.function.name, description: t.function.description,
+          input_schema: t.function.parameters,
+        }));
+      }
+    } else {
+      headers["Authorization"] = `Bearer ${config.apiKey}`;
+      apiUrl = `${baseURL}/v1/chat/completions`;
+      body = {
+        model: config.model || "gpt-4o",
+        max_tokens: 4096,
+        messages: isolatedMessages,
+        stream: false,
+      };
+      if (filteredTools.length > 0 && config.provider !== "compatible") {
+        body.tools = filteredTools;
+        body.tool_choice = "auto";
+      }
     }
 
-    const response = await fetchWithRetry(`${baseURL}/v1/chat/completions`, {
+    const response = await fetchWithRetry(apiUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
@@ -340,13 +364,27 @@ async function callWorkerLLM(
     }
 
     const data = await response.json();
-    const choice = data.choices?.[0];
-    if (!choice) throw new Error("Worker API 无响应");
 
-    const msg = choice.message;
+    // Normalize response format (Anthropic vs OpenAI)
+    let msg: { content: string | null; tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }> };
+    if (isAnthropic) {
+      const textBlocks = (data.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text);
+      const toolBlocks = (data.content || []).filter((b: any) => b.type === "tool_use");
+      msg = {
+        content: textBlocks.join("") || null,
+        tool_calls: toolBlocks.length > 0 ? toolBlocks.map((b: any) => ({
+          id: b.id,
+          function: { name: b.name, arguments: JSON.stringify(b.input || {}) },
+        })) : undefined,
+      };
+    } else {
+      const choice = data.choices?.[0];
+      if (!choice) throw new Error("Worker API \u65e0\u54cd\u5e94");
+      msg = choice.message;
+    }
 
     // 处理工具调用
-    if (msg.tool_calls?.length > 0) {
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
       if (msg.content) {
         onEvent({ type: "text", text: msg.content });
       }
@@ -356,7 +394,7 @@ async function callWorkerLLM(
         tool_calls: msg.tool_calls,
       });
 
-      for (const tc of msg.tool_calls) {
+      for (const tc of msg.tool_calls!) {
         const fn = tc.function;
         let args: Record<string, unknown> = {};
         try {
