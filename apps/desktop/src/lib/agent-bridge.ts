@@ -36,7 +36,7 @@ export interface ChatMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   timestamp: Date;
-  toolCalls?: Array<{ name: string; input: string }>;
+  toolCalls?: Array<{ name: string; input: string; output?: string; status?: "running" | "success" | "error" }>;
   isStreaming?: boolean;
 }
 

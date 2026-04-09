@@ -753,6 +753,19 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
           }
           return updated;
         });
+        // Update message toolCalls with result
+        setLocalMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === "assistant" && last.toolCalls?.length) {
+            const tc = [...last.toolCalls].reverse().find(c => !c.status || c.status === "running");
+            if (tc) {
+              tc.status = event.isError ? "error" : "success";
+              tc.output = event.toolOutput;
+            }
+          }
+          return updated;
+        });
       } else if (event.type === "error") {
         setIsThinking(false);
         setToolCalls(prev => prev.map(c =>
@@ -1059,13 +1072,11 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
       )}
 
       {message.toolCalls && message.toolCalls.length > 0 && (
-        <Group gap="xs" mb="xs" wrap="wrap">
+        <Stack gap={4} mb="xs">
           {message.toolCalls.map((tc, i) => (
-            <Badge key={i} size="sm" variant="light" color="yellow" leftSection="🔧">
-              {tc.name}
-            </Badge>
+            <ToolCallCard key={i} name={tc.name} input={tc.input || ""} output={tc.output} status={tc.status} />
           ))}
-        </Group>
+        </Stack>
       )}
       {isUser ? (
         <Text size="sm" c={isDark ? "white" : "dark"} style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.content}</Text>
@@ -1172,6 +1183,82 @@ function FileHistoryPanel() {
           </Box>
         );
       })}
+    </Paper>
+  );
+}
+
+/** Inline tool call card within message bubbles */
+function ToolCallCard({ name, input, output, status }: {
+  name: string;
+  input: string;
+  output?: string;
+  status?: "running" | "success" | "error";
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { colorScheme } = useMantineColorScheme();
+  const isDark = colorScheme === "dark";
+  const st = status || "success";
+  const color = st === "running" ? "blue" : st === "success" ? "green" : "red";
+  const icon = st === "running" ? "🔄" : st === "success" ? "✅" : "❌";
+
+  let paramPreview = "";
+  try {
+    const parsed = JSON.parse(input);
+    if (typeof parsed === "object" && parsed !== null) {
+      paramPreview = Object.entries(parsed)
+        .slice(0, 2)
+        .map(([k, v]) => {
+          const val = typeof v === "string" ? v : JSON.stringify(v);
+          return `${k}=${val.length > 30 ? val.slice(0, 27) + "..." : val}`;
+        })
+        .join(", ");
+    }
+  } catch {
+    paramPreview = input.length > 50 ? input.slice(0, 47) + "..." : input;
+  }
+
+  return (
+    <Paper
+      p="xs" radius="sm" withBorder
+      style={{
+        borderColor: `var(--mantine-color-${color}-${isDark ? "8" : "3"})`,
+        cursor: "pointer",
+      }}
+      bg={isDark ? "dark.7" : "gray.0"}
+      onClick={() => setExpanded(e => !e)}
+    >
+      <Group justify="space-between" wrap="nowrap" gap="xs">
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          <Badge size="xs" variant="light" color={color} leftSection={icon}>
+            {name}
+          </Badge>
+          {paramPreview && (
+            <Text size="xs" c="dimmed" truncate style={{ maxWidth: 200 }}>{paramPreview}</Text>
+          )}
+        </Group>
+        <Text size="xs" c="dimmed">{expanded ? "▼" : "▶"}</Text>
+      </Group>
+      {expanded && (
+        <Box mt="xs" p="xs" style={{ borderRadius: 4, fontSize: 11, fontFamily: "monospace" }}
+          bg={isDark ? "dark.8" : "gray.1"}>
+          {input && (
+            <>
+              <Text size="xs" fw={600} mb={2}>参数:</Text>
+              <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                {(() => { try { return JSON.stringify(JSON.parse(input), null, 2); } catch { return input; } })()}
+              </Text>
+            </>
+          )}
+          {output && (
+            <>
+              <Text size="xs" fw={600} mt="xs" mb={2}>结果:</Text>
+              <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                {output.length > 500 ? output.slice(0, 500) + "..." : output}
+              </Text>
+            </>
+          )}
+        </Box>
+      )}
     </Paper>
   );
 }
