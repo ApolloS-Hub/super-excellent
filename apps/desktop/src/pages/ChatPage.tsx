@@ -58,6 +58,8 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   } | null>(null);
   const [askInput, setAskInput] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
+  const activeConvIdRef = useRef(conversation?.id);
+  activeConvIdRef.current = conversation?.id;
 
   // Sync local messages with conversation and clear stale state on switch
   useEffect(() => {
@@ -716,10 +718,10 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setToolCalls([]);
     setIsThinking(true);
 
-    const targetConvId = conversation?.id;
+    const targetConvId = activeConvIdRef.current;
     const onEvent = (event: AgentEvent) => {
       // Ignore events from stale requests (user switched conversation)
-      if (conversation?.id !== targetConvId) return;
+      if (activeConvIdRef.current !== targetConvId) return;
       emitAgentEvent(event as unknown as Record<string, unknown>);
       if (event.type === "text" && event.text) {
         setIsThinking(false);

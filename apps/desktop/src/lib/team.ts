@@ -686,11 +686,18 @@ export function assignTask(workerId: string, taskTitle: string): void {
 export function completeWorkerTask(workerId: string, result?: string): void {
   const worker = getWorker(workerId);
   if (worker) {
-    worker.status = "idle";
-    worker.currentTask = null;
+    worker.status = "done";
     if (result !== undefined) {
       worker.lastResult = result;
     }
+    // Show "done" for 5 seconds before returning to idle
+    setTimeout(() => {
+      const w = getWorker(workerId);
+      if (w && w.status === "done") {
+        w.status = "idle";
+        w.currentTask = null;
+      }
+    }, 5000);
   }
 }
 

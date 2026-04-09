@@ -91,7 +91,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       setTeamWorkers([...getTeamConfig().workers]);
     };
     refreshAll();
-    const timer = setInterval(refreshAll, 2000);
+    const timer = setInterval(refreshAll, 500);
     return () => clearInterval(timer);
   }, []);
 
