@@ -373,6 +373,7 @@ async function buildSystemPrompt(options?: {
   isWorker?: boolean;
   workerSystemPrompt?: string;
   skipTools?: boolean;
+  userMessage?: string;
 }): Promise<string> {
   const parts: PromptParts = {
     identity: options?.isWorker && options.workerSystemPrompt
@@ -384,6 +385,15 @@ async function buildSystemPrompt(options?: {
     memory: await buildMemoryPart(),
   };
 
+  // Inject matched skills based on user message
+  let skillSection = "";
+  if (options?.userMessage) {
+    try {
+      const { buildSkillPrompt } = await import("./skills");
+      skillSection = buildSkillPrompt(options.userMessage);
+    } catch { /* skills not available */ }
+  }
+
   // 组装：过滤空 section
   const sections = [
     parts.identity,
@@ -391,6 +401,7 @@ async function buildSystemPrompt(options?: {
     parts.context,
     parts.constraints,
     parts.memory,
+    skillSection,
   ].filter(Boolean);
 
   return sections.join("\n\n");
@@ -572,7 +583,7 @@ async function callAnthropic(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const systemPrompt = await buildSystemPrompt();
+  const systemPrompt = await buildSystemPrompt({ userMessage: message });
   const systemBlocks = buildAnthropicSystemWithCache(systemPrompt);
 
   // Anthropic Messages API tool 格式：从 OpenAI 格式转换（registry 完整列表）
@@ -768,7 +779,7 @@ async function callGemini(
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
 
-  const systemPrompt = await buildSystemPrompt();
+  const systemPrompt = await buildSystemPrompt({ userMessage: message });
 
   // Gemini tool 格式（registry 完整列表）
   const geminiTools = [{
@@ -933,7 +944,7 @@ async function _callOpenAINonStream(
 
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
-    : await buildSystemPrompt({ skipTools: config.provider === "compatible" });
+    : await buildSystemPrompt({ skipTools: config.provider === "compatible", userMessage: message });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
@@ -1220,7 +1231,7 @@ async function callOpenAI(
 
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
-    : await buildSystemPrompt({ skipTools: config.provider === "compatible" });
+    : await buildSystemPrompt({ skipTools: config.provider === "compatible", userMessage: message });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
