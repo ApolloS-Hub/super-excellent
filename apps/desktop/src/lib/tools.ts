@@ -929,12 +929,15 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const results: string[] = [];
-    const eq = encodeURIComponent(query.replace(/[^\w\s\u4e00-\u9fff]/g, " ").trim());
+    // Extract English keywords for HN, use full query for Google News
+    const enOnly = query.replace(/[\u4e00-\u9fff]/g, " ").replace(/\d{4}/g, "").replace(/\s+/g, " ").trim() || "AI";
+    const eqEn = encodeURIComponent(enOnly);
+    const eqFull = encodeURIComponent(query.replace(/[^\w\s\u4e00-\u9fff]/g, " ").trim());
 
     // Source 1: HackerNews Algolia API (reliable, free, real-time tech news)
     try {
       const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
-        "\"https://hn.algolia.com/api/v1/search_by_date?query=" + eq + "&tags=story&hitsPerPage=8\"";
+        "\"https://hn.algolia.com/api/v1/search_by_date?query=" + eqEn + "&tags=story&hitsPerPage=8\"";
       const r = await invoke("execute_command", {
         command: cmd, cwd: null, timeoutMs: 20000,
       }) as { stdout: string; success: boolean };
@@ -955,7 +958,7 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
     if (results.length < 5) {
       try {
         const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
-          "\"https://news.google.com/rss/search?q=" + eq + "&hl=en-US&gl=US&ceid=US:en\"";
+          "\"https://news.google.com/rss/search?q=" + eqFull + "&hl=en-US&gl=US&ceid=US:en\"";
         const r = await invoke("execute_command", {
           command: cmd, cwd: null, timeoutMs: 20000,
         }) as { stdout: string; success: boolean };
