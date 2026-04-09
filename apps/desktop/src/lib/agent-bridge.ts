@@ -436,8 +436,10 @@ export async function sendMessage(
   onEvent: EventCallback,
   history?: Array<{ role: string; content: string }>,
 ): Promise<void> {
+  // Abort any previous request to prevent crosstalk
+  abortGeneration();
+
   // For MVP: direct API call from frontend
-  // In production: this will go through Tauri command → Rust → Node sidecar
   
   if (!config.apiKey) {
     onEvent({ type: "error", text: "请先在设置中配置 API Key" });

@@ -299,7 +299,7 @@ async function callWorkerLLM(
     tool_call_id?: string;
     tool_calls?: unknown[];
   }> = [
-    { role: "system", content: worker.systemPrompt },
+    { role: "system", content: worker.systemPrompt + `\n\n今天的日期是 ${new Date().toISOString().split("T")[0]}。搜索时不要在关键词里加年份数字。` },
     { role: "user", content: task },
   ];
 
@@ -328,7 +328,7 @@ async function callWorkerLLM(
       body = {
         model: config.model || "claude-sonnet-4-20250514",
         max_tokens: 4096,
-        system: worker.systemPrompt,
+        system: worker.systemPrompt + "\n\n今天的日期是 " + new Date().toISOString().split("T")[0] + "。搜索时不要在关键词里加年份数字。",
         messages: anthropicMsgs,
       };
       if (filteredTools.length > 0 && config.provider !== "compatible") {
