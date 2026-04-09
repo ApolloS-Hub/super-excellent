@@ -248,34 +248,45 @@ export async function refreshMidTermCache(): Promise<void> {
   }
 }
 
-/**
- * 动态组装 system prompt — 对齐 CC 的 fetchSystemPromptParts
- *
- * 组装顺序：
- *   基础 prompt → 可用工具列表（ToolRegistry 动态获取）
- *   → 项目上下文（workDir 中的 package.json / AGENTS.md）
- *   → 三层记忆摘要
- *   → 当前活跃任务上下文
- */
-async function buildSystemPrompt(): Promise<string> {
-  const config = loadConfig();
-  let prompt = BASE_SYSTEM_PROMPT;
+// ═══════════ PromptParts — System Prompt Pipeline ═══════════
 
-  // 可用工具列表 — 从 tool-registry 动态获取（包含 legacy + 新工具）
+/**
+ * 对齐 ref-s10 System Prompt Pipeline：
+ * 系统 prompt 是由独立 section 组装的管道，不是一个大字符串。
+ */
+export interface PromptParts {
+  identity: string;
+  tools: string;
+  context: string;
+  constraints: string;
+  memory: string;
+}
+
+/** 构建 identity 部分 */
+function buildIdentityPart(): string {
+  return BASE_SYSTEM_PROMPT;
+}
+
+/** 构建 tools 部分 — 从 tool-registry 动态获取 */
+async function buildToolsPart(): Promise<string> {
   try {
     const { getAllTools } = await import("./tool-registry");
     const toolNames = getAllTools().map(t => t.name);
-    prompt += `\n\n可用工具：${toolNames.join(", ")}`;
+    return `可用工具：${toolNames.join(", ")}`;
   } catch {
-    prompt += `\n\n可用工具：bash, file_write, file_read, file_edit, list_dir, web_search, web_fetch, grep, glob, browser_open, todo_write, memory_write, memory_read, diff_view, undo, project_detect`;
+    return `可用工具：bash, file_write, file_read, file_edit, list_dir, web_search, web_fetch, grep, glob, browser_open, todo_write, memory_write, memory_read, diff_view, undo, project_detect`;
   }
+}
 
-  // 工作目录
+/** 构建 context 部分 — 工作目录 + 项目信息 */
+async function buildContextPart(): Promise<string> {
+  const config = loadConfig();
+  const sections: string[] = [];
+
   if (config.workDir) {
-    prompt += `\n\n当前工作目录: ${config.workDir}\n所有文件操作和 bash 命令默认在此目录下执行。创建新项目时请在此目录下创建子目录。`;
+    sections.push(`当前工作目录: ${config.workDir}\n所有文件操作和 bash 命令默认在此目录下执行。创建新项目时请在此目录下创建子目录。`);
   }
 
-  // 项目上下文 — 读取 workDir 下的 package.json / AGENTS.md
   if (config.workDir) {
     try {
       const { executeTool } = await import("./tools");
@@ -287,31 +298,16 @@ async function buildSystemPrompt(): Promise<string> {
           if (pkg.name) parts.push(`项目: ${pkg.name}`);
           if (pkg.description) parts.push(`描述: ${pkg.description}`);
           if (pkg.scripts) parts.push(`可用脚本: ${Object.keys(pkg.scripts).join(", ")}`);
-          if (parts.length > 0) prompt += `\n\n## 项目上下文\n${parts.join("\n")}`;
+          if (parts.length > 0) sections.push(`## 项目上下文\n${parts.join("\n")}`);
         } catch { /* JSON 解析失败，跳过 */ }
       }
       const agentsResult = await executeTool("file_read", { path: `${config.workDir}/AGENTS.md` }).catch(() => "");
       if (agentsResult && agentsResult.length < 2000) {
-        prompt += `\n\n## 项目规范 (AGENTS.md)\n${agentsResult}`;
+        sections.push(`## 项目规范 (AGENTS.md)\n${agentsResult}`);
       } else if (agentsResult) {
-        prompt += `\n\n## 项目规范 (AGENTS.md, 摘要)\n${agentsResult.slice(0, 1500)}...`;
+        sections.push(`## 项目规范 (AGENTS.md, 摘要)\n${agentsResult.slice(0, 1500)}...`);
       }
     } catch { /* 文件读取失败，跳过 */ }
-  }
-
-  // 三层记忆摘要
-  const shortTerm = _getShortTermSummary();
-  if (shortTerm) {
-    prompt += `\n\n## 当前会话上下文（短期记忆）\n${shortTerm}`;
-  }
-
-  if (_cachedMidTermPrompt) {
-    prompt += `\n\n## 用户偏好与习惯（中期记忆）\n${_cachedMidTermPrompt}`;
-  }
-
-  const longTerm = _getLongTermMemory();
-  if (longTerm) {
-    prompt += `\n\n## 长期记忆\n${longTerm}`;
   }
 
   // 当前活跃任务上下文
@@ -320,15 +316,75 @@ async function buildSystemPrompt(): Promise<string> {
     if (todoRaw) {
       const todo = JSON.parse(todoRaw) as { title?: string; steps?: string[] };
       if (todo.title) {
-        prompt += `\n\n## 当前任务\n标题: ${todo.title}`;
+        let taskSection = `## 当前任务\n标题: ${todo.title}`;
         if (todo.steps?.length) {
-          prompt += `\n步骤:\n${todo.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}`;
+          taskSection += `\n步骤:\n${todo.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}`;
         }
+        sections.push(taskSection);
       }
     }
   } catch { /* 无活跃任务 */ }
 
-  return prompt;
+  return sections.join("\n\n");
+}
+
+/** 构建 memory 部分 — 三层记忆摘要 */
+function buildMemoryPart(): string {
+  const sections: string[] = [];
+
+  const shortTerm = _getShortTermSummary();
+  if (shortTerm) {
+    sections.push(`## 当前会话上下文（短期记忆）\n${shortTerm}`);
+  }
+
+  if (_cachedMidTermPrompt) {
+    sections.push(`## 用户偏好与习惯（中期记忆）\n${_cachedMidTermPrompt}`);
+  }
+
+  const longTerm = _getLongTermMemory();
+  if (longTerm) {
+    sections.push(`## 长期记忆\n${longTerm}`);
+  }
+
+  return sections.join("\n\n");
+}
+
+/**
+ * 组装 PromptParts 为完整 system prompt
+ *
+ * 组装顺序（对齐 ref-s10）：
+ *   identity → tools → context → constraints → memory
+ *
+ * 根据角色注入不同的 parts：
+ * - Worker: 使用 Worker 自己的 systemPrompt 作为 identity
+ * - 主秘书: 使用完整管道
+ * - compatible provider: 不包含 tools 部分
+ */
+async function buildSystemPrompt(options?: {
+  isWorker?: boolean;
+  workerSystemPrompt?: string;
+  skipTools?: boolean;
+}): Promise<string> {
+  const parts: PromptParts = {
+    identity: options?.isWorker && options.workerSystemPrompt
+      ? options.workerSystemPrompt
+      : buildIdentityPart(),
+    tools: (options?.skipTools) ? "" : await buildToolsPart(),
+    context: await buildContextPart(),
+    constraints: "",
+    memory: buildMemoryPart(),
+  };
+
+  // 组装：过滤空 section
+  const sections = [
+    parts.identity,
+    parts.tools,
+    parts.context,
+    parts.constraints,
+    parts.memory,
+  ].filter(Boolean);
+
+  return sections.join("\n\n");
 }
 
 function _getShortTermSummary(): string {
@@ -868,7 +924,7 @@ async function _callOpenAINonStream(
 
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
-    : await buildSystemPrompt();
+    : await buildSystemPrompt({ skipTools: config.provider === "compatible" });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
@@ -1150,7 +1206,7 @@ async function callOpenAI(
 
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
-    : await buildSystemPrompt();
+    : await buildSystemPrompt({ skipTools: config.provider === "compatible" });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
   ];
