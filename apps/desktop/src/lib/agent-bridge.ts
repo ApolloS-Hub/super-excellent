@@ -340,7 +340,7 @@ export async function sendMessage(
 
     // 兼容 provider（自定义端点）跳过 worker 编排，直接走 LLM 对话
     // 因为轻量/兼容模型通常不支持 function calling 和复杂 system prompt
-    const skipWorkerDispatch = config.enableTools === false;
+    const skipWorkerDispatch = config.enableTools === false || config.provider === "compatible";
 
     // Emit user_message event for event log
     emitBusEvent({ type: "user_message", text: message });
@@ -824,8 +824,9 @@ async function _callOpenAINonStream(
   const signal = currentAbortController.signal;
 
   const noTools = config.enableTools === false;
-  const systemPrompt = noTools
-    ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
+  const isCompatNoTools = config.provider === "compatible";
+  const systemPrompt = noTools || isCompatNoTools
+    ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
     : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
@@ -834,7 +835,7 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
+  const MAX_ITERATIONS = noTools ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
   let lastToolOutput = "";
@@ -875,7 +876,7 @@ async function _callOpenAINonStream(
       messages,
       stream: false,
     };
-    if (!noTools) {
+    if (!noTools && config.provider !== "compatible") {
       body.tools = TOOL_DEFINITIONS;
       body.tool_choice = "auto";
     }
@@ -1082,8 +1083,9 @@ async function callOpenAI(
   const signal = currentAbortController.signal;
 
   const noTools = config.enableTools === false;
-  const systemPrompt = noTools
-    ? "你是一个智能助手，直接回答用户的问题。不要输出 JSON 格式的工具调用，不要尝试调用任何工具，用自然语言回复。"
+  const isCompatNoTools = config.provider === "compatible";
+  const systemPrompt = noTools || isCompatNoTools
+    ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
     : await buildSystemPrompt();
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
@@ -1092,7 +1094,7 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : (config.provider === "compatible" ? 2 : 20);
+  const MAX_ITERATIONS = noTools ? 1 : 20;
   let iteration = 0;
   let totalToolCalls = 0;
   let lastToolOutput = "";
@@ -1134,7 +1136,7 @@ async function callOpenAI(
       stream: true,
       stream_options: { include_usage: true },
     };
-    if (!noTools) {
+    if (!noTools && config.provider !== "compatible") {
       body.tools = TOOL_DEFINITIONS;
       body.tool_choice = "auto";
     }
