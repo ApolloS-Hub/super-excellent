@@ -261,15 +261,20 @@ export async function dispatchToWorker(
 }
 
 /**
- * 用 Worker 的 system prompt 调用 LLM
- * 复用 agent-bridge 里的 callOpenAI 逻辑，但替换 system prompt
+ * 用 Worker 的 system prompt 调用 LLM — 上下文隔离模式
+ *
+ * 关键设计（对齐 ref-s04 Subagent 模式）：
+ * - Worker 拥有独立的 messages[]，不包含父 agent 的对话历史
+ * - messages 只包含：[system prompt (角色), user message (任务)]
+ * - 执行完后返回摘要（string），不返回完整 messages
+ * - 父 agent 只收到摘要，不污染自己的上下文
  */
 async function callWorkerLLM(
   worker: Worker,
   task: string,
   config: AgentConfig,
   onEvent: EventCallback,
-  history?: Array<{ role: string; content: string }>,
+  _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
   const rawBaseURL = config.baseURL || "https://api.openai.com";
   const baseURL = rawBaseURL.replace(/\/v1\/?$/, "");
@@ -282,19 +287,16 @@ async function callWorkerLLM(
     allowedTools.includes(t.function.name),
   );
 
-  const messages: Array<{
+  // ── 上下文隔离：独立 messages，不包含父 agent 历史 ──
+  const isolatedMessages: Array<{
     role: string;
     content: string | null;
     tool_call_id?: string;
     tool_calls?: unknown[];
   }> = [
     { role: "system", content: worker.systemPrompt },
+    { role: "user", content: task },
   ];
-
-  if (history) {
-    messages.push(...history.map(m => ({ role: m.role, content: m.content })));
-  }
-  messages.push({ role: "user", content: task });
 
   const MAX_WORKER_ITERATIONS = config.provider === "compatible" ? 2 : 15;
   let iteration = 0;
@@ -311,7 +313,7 @@ async function callWorkerLLM(
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
-      messages,
+      messages: isolatedMessages,
       stream: false,
     };
 
@@ -343,7 +345,7 @@ async function callWorkerLLM(
       if (msg.content) {
         onEvent({ type: "text", text: msg.content });
       }
-      messages.push({
+      isolatedMessages.push({
         role: "assistant",
         content: msg.content || null,
         tool_calls: msg.tool_calls,
@@ -358,7 +360,7 @@ async function callWorkerLLM(
 
         // 安全检查：Worker 只能调用白名单内的工具
         if (!allowedTools.includes(fn.name)) {
-          messages.push({
+          isolatedMessages.push({
             role: "tool",
             content: `⛔ Worker ${worker.name} 无权使用工具: ${fn.name}`,
             tool_call_id: tc.id,
@@ -378,14 +380,14 @@ async function callWorkerLLM(
             type: "thinking",
             text: `✅ ${worker.emoji} ${fn.name}: ${result.slice(0, 100)}\n`,
           });
-          messages.push({
+          isolatedMessages.push({
             role: "tool",
             content: result.slice(0, 15000),
             tool_call_id: tc.id,
           });
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
-          messages.push({
+          isolatedMessages.push({
             role: "tool",
             content: `Error: ${errMsg}`,
             tool_call_id: tc.id,
@@ -394,7 +396,7 @@ async function callWorkerLLM(
       }
       // Compatible provider: emit tool results directly and stop
       if (config.provider === "compatible") {
-        const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+        const toolMsgs = isolatedMessages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
         const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : "工具执行完成，但无返回结果";
         onEvent({ type: "text", text: summary });
         fullOutput = summary;
@@ -409,6 +411,7 @@ async function callWorkerLLM(
     break;
   }
 
+  // ── 只返回摘要，隔离上下文被丢弃 ──
   return fullOutput;
 }
 
