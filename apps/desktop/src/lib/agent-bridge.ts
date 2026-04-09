@@ -51,6 +51,47 @@ export interface AgentEvent {
 
 type EventCallback = (event: AgentEvent) => void;
 
+// ═══════════ LoopState — Agent Loop 的显式状态机 ═══════════
+
+export type TransitionReason =
+  | 'continue'       // 初始 / 继续循环
+  | 'tool_executed'  // 工具已执行，需决定下一步
+  | 'done'           // 正常结束
+  | 'api_error'      // API 调用失败
+  | 'error'          // 其他错误
+  | 'aborted';       // 用户取消
+
+export interface LoopState {
+  messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }>;
+  turnCount: number;
+  maxTurns: number;
+  toolCallCount: number;
+  lastToolOutput: string;
+  transitionReason: TransitionReason;
+}
+
+function createLoopState(
+  messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }>,
+  maxTurns: number,
+): LoopState {
+  return {
+    messages,
+    turnCount: 0,
+    maxTurns,
+    toolCallCount: 0,
+    lastToolOutput: '',
+    transitionReason: 'continue',
+  };
+}
+
+/** 循环是否应该继续 */
+function shouldContinueLoop(state: LoopState): boolean {
+  return (
+    state.transitionReason === 'continue' ||
+    state.transitionReason === 'tool_executed'
+  ) && state.turnCount < state.maxTurns;
+}
+
 /** 基础 system prompt — AI 自主执行引擎 */
 const BASE_SYSTEM_PROMPT = `你是一个自主执行任务的 AI Agent。
 
@@ -824,7 +865,7 @@ async function _callOpenAINonStream(
   const signal = currentAbortController.signal;
 
   const noTools = config.enableTools === false;
-  
+
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
     : await buildSystemPrompt();
@@ -835,35 +876,33 @@ async function _callOpenAINonStream(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : 20;
-  let iteration = 0;
-  let totalToolCalls = 0;
-  let lastToolOutput = "";
+  const loop = createLoopState(messages, noTools ? 1 : 20);
 
-  while (iteration < MAX_ITERATIONS) {
-    if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
-    iteration++;
+  // ── LoopState-driven agent loop ──
+  while (shouldContinueLoop(loop)) {
+    if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
+    loop.turnCount++;
 
-    // Compatible provider: after first tool call, emit results and stop
-    if (config.provider === "compatible" && totalToolCalls > 0) {
-      const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+    // Compatible provider: tool_executed → done (直接输出结果)
+    if (config.provider === "compatible" && loop.transitionReason === 'tool_executed') {
+      const toolMsgs = loop.messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
       if (toolMsgs.length > 0) {
         const summary = toolMsgs.join("\n\n---\n\n").slice(0, 5000);
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        currentAbortController = null;
-        return;
+        loop.transitionReason = 'done';
+        break;
       }
     }
 
     // 智能 auto-compact：基于 token 使用量
     if (shouldAutoCompact(tokenState, config.model)) {
       onEvent({ type: "thinking", text: "⚠️ Token 接近上限，自动压缩中...\n" });
-      autoCompactMessages(messages, tokenState);
-      onEvent({ type: "thinking", text: `📦 已压缩，当前 ${messages.length} 条消息\n` });
+      autoCompactMessages(loop.messages, tokenState);
+      onEvent({ type: "thinking", text: `📦 已压缩，当前 ${loop.messages.length} 条消息\n` });
     }
 
-    if (iteration > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${iteration}/${MAX_ITERATIONS} 轮\n` });
+    if (loop.turnCount > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -873,7 +912,7 @@ async function _callOpenAINonStream(
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
-      messages,
+      messages: loop.messages,
       stream: false,
     };
     if (!noTools) {
@@ -887,15 +926,16 @@ async function _callOpenAINonStream(
         method: "POST", headers, body: JSON.stringify(body), signal,
       });
     } catch (e) {
-      if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
-      if (lastToolOutput) break;
+      if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
+      if (loop.lastToolOutput) { loop.transitionReason = 'api_error'; break; }
       throw e;
     }
 
     if (!response.ok) {
       const err = await response.text();
-      if (lastToolOutput) {
-        onEvent({ type: "thinking", text: `\u26a0\ufe0f API ${response.status}\uff0c\u4f46\u5de5\u5177\u5df2\u6267\u884c\n` });
+      if (loop.lastToolOutput) {
+        onEvent({ type: "thinking", text: `⚠️ API ${response.status}，但工具已执行\n` });
+        loop.transitionReason = 'api_error';
         break;
       }
       throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
@@ -914,12 +954,13 @@ async function _callOpenAINonStream(
     if (!choice) throw new Error("API 无响应");
     const msg = choice.message;
 
+    // ── 处理 tool_calls ──
     if (msg.tool_calls?.length > 0) {
       if (msg.content) {
         onEvent({ type: "text", text: msg.content });
         onEvent({ type: "text", text: "\n\n" });
       }
-      messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
+      loop.messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
 
       const toolResults: string[] = [];
       for (const tc of msg.tool_calls) {
@@ -927,69 +968,80 @@ async function _callOpenAINonStream(
         const fn = tc.function;
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(fn.arguments || "{}"); } catch { /* 忽略 */ }
-        totalToolCalls++;
+        loop.toolCallCount++;
         onEvent({ type: "tool_use", toolName: fn.name, toolInput: fn.arguments });
         try {
           const result = await executeTool(fn.name, args);
           onEvent({ type: "thinking", text: `✅ ${fn.name}: ${result.slice(0, 120)}\n` });
-          messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
+          loop.messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
           toolResults.push(`**${fn.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
-          lastToolOutput = result.slice(0, 5000);
+          loop.lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${fn.name}: ${err}\n` });
-          messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
+          loop.messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
           toolResults.push(`**${fn.name}** 执行失败：${err}`);
         }
       }
-      const summary = toolResults.join("\n\n");
-      if (config.provider === "compatible" || iteration >= MAX_ITERATIONS - 1) {
+
+      // 设置 transitionReason = 'tool_executed'
+      loop.transitionReason = 'tool_executed';
+
+      // Compatible provider → done after tool execution
+      if (config.provider === "compatible") {
+        const summary = toolResults.join("\n\n");
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        currentAbortController = null;
-        return;
+        loop.transitionReason = 'done';
+        break;
       }
+      // 非 compatible: tool_executed 继续循环让模型总结
       continue;
     }
 
+    // ── 纯文本回复处理 ──
     const text = msg.content || "";
     const parsed = noTools ? null : parseTextToolCall(text);
     if (parsed) {
-      totalToolCalls++;
+      loop.toolCallCount++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });
       try {
         const result = await executeTool(parsed.name, parsed.args);
         onEvent({ type: "thinking", text: `✅ ${parsed.name}: ${result.slice(0, 120)}\n` });
-        messages.push({ role: "assistant", content: text });
-        messages.push({ role: "user", content: `工具结果:\n${result.slice(0, 15000)}\n\n继续执行。完成则总结。` });
+        loop.messages.push({ role: "assistant", content: text });
+        loop.messages.push({ role: "user", content: `工具结果:\n${result.slice(0, 15000)}\n\n继续执行。完成则总结。` });
       } catch (e) {
-        messages.push({ role: "assistant", content: text });
-        messages.push({ role: "user", content: `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` });
+        loop.messages.push({ role: "assistant", content: text });
+        loop.messages.push({ role: "user", content: `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` });
       }
+      loop.transitionReason = 'tool_executed';
       continue;
     }
 
     const autoSave = detectAutoSaveContent(text, message);
     if (autoSave) {
-      totalToolCalls++;
+      loop.toolCallCount++;
       onEvent({ type: "tool_use", toolName: "file_write", toolInput: autoSave.path });
       try {
         await executeTool("file_write", { path: autoSave.path, content: autoSave.content });
         onEvent({ type: "thinking", text: `✅ 自动保存: ${autoSave.path}\n` });
-        messages.push({ role: "assistant", content: text });
-        messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.messages.push({ role: "assistant", content: text });
+        loop.messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.transitionReason = 'tool_executed';
         continue;
       } catch { /* 忽略 */ }
     }
 
     const planning = /让我创建|我应该|接下来|我将|让我|我来|我需要|下一步|首先.*然后|步骤/;
-    if (text && planning.test(text) && !text.includes("已完成") && !text.includes("已创建") && iteration < MAX_ITERATIONS - 1) {
+    if (text && planning.test(text) && !text.includes("已完成") && !text.includes("已创建") && loop.turnCount < loop.maxTurns - 1) {
       onEvent({ type: "thinking", text: "🔄 推动执行...\n" });
-      messages.push({ role: "assistant", content: text });
-      messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.messages.push({ role: "assistant", content: text });
+      loop.messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.transitionReason = 'continue';
       continue;
     }
 
+    // 最终文本输出
     if (text) {
       for (let i = 0; i < text.length; i += 6) {
         if (signal.aborted) break;
@@ -998,15 +1050,27 @@ async function _callOpenAINonStream(
       }
     }
     if (msg.reasoning_content) onEvent({ type: "thinking", text: msg.reasoning_content });
-    if (totalToolCalls > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${totalToolCalls} 次工具调用，${iteration} 轮` });
+    if (loop.toolCallCount > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
     onEvent({ type: "result", text });
+    loop.transitionReason = 'done';
+    break;
+  }
+
+  // ── 循环结束后处理 ──
+  if (loop.transitionReason === 'aborted') {
+    onEvent({ type: "result", text: "⏹ 已停止" });
     currentAbortController = null;
     return;
   }
 
-  // Loop exhausted: emit tool results if any
-  if (totalToolCalls > 0) {
-    const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+  if (loop.transitionReason === 'done') {
+    currentAbortController = null;
+    return;
+  }
+
+  // api_error / tool_executed exhausted: 展示已有工具结果
+  if (loop.lastToolOutput || loop.toolCallCount > 0) {
+    const toolMsgs = loop.messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
     if (toolMsgs.length > 0) {
       const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
       onEvent({ type: "text", text: summary });
@@ -1015,7 +1079,7 @@ async function _callOpenAINonStream(
       return;
     }
   }
-  onEvent({ type: "error", text: `⚠️ 达到 ${MAX_ITERATIONS} 轮上限。${totalToolCalls} 次工具调用。` });
+  onEvent({ type: "error", text: `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` });
   currentAbortController = null;
 }
 
@@ -1083,7 +1147,7 @@ async function callOpenAI(
   const signal = currentAbortController.signal;
 
   const noTools = config.enableTools === false;
-  
+
   const systemPrompt = noTools
     ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
     : await buildSystemPrompt();
@@ -1094,35 +1158,33 @@ async function callOpenAI(
   messages.push({ role: "user", content: message });
 
   const tokenState = createTokenUsageState();
-  const MAX_ITERATIONS = noTools ? 1 : 20;
-  let iteration = 0;
-  let totalToolCalls = 0;
-  let lastToolOutput = "";
+  const loop = createLoopState(messages, noTools ? 1 : 20);
 
-  while (iteration < MAX_ITERATIONS) {
-    if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
-    iteration++;
+  // ── LoopState-driven streaming agent loop ──
+  while (shouldContinueLoop(loop)) {
+    if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
+    loop.turnCount++;
 
-    // Compatible provider: after first tool call, emit results and stop
-    if (config.provider === "compatible" && totalToolCalls > 0) {
-      const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+    // Compatible provider: tool_executed → done
+    if (config.provider === "compatible" && loop.transitionReason === 'tool_executed') {
+      const toolMsgs = loop.messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
       if (toolMsgs.length > 0) {
         const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        currentAbortController = null;
-        return;
+        loop.transitionReason = 'done';
+        break;
       }
     }
 
-    // 智能 auto-compact — 对齐 CC reactiveCompact
+    // 智能 auto-compact
     if (shouldAutoCompact(tokenState, config.model)) {
       onEvent({ type: "thinking", text: "⚠️ Token 接近上限，自动压缩中..." });
-      autoCompactMessages(messages, tokenState);
-      onEvent({ type: "thinking", text: `📦 第 ${tokenState.compactCount} 次压缩完成，保留 ${messages.length} 条消息\n` });
+      autoCompactMessages(loop.messages, tokenState);
+      onEvent({ type: "thinking", text: `📦 第 ${tokenState.compactCount} 次压缩完成，保留 ${loop.messages.length} 条消息\n` });
     }
 
-    if (iteration > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${iteration}/${MAX_ITERATIONS} 轮\n` });
+    if (loop.turnCount > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -1132,7 +1194,7 @@ async function callOpenAI(
     const body: Record<string, unknown> = {
       model: config.model || "gpt-4o",
       max_tokens: 4096,
-      messages,
+      messages: loop.messages,
       stream: true,
       stream_options: { include_usage: true },
     };
@@ -1147,8 +1209,8 @@ async function callOpenAI(
         method: "POST", headers, body: JSON.stringify(body), signal,
       });
     } catch (e) {
-      if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
-      // 流式失败时降级到非流式
+      if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
+      // 流式失败 → 降级到非流式
       onEvent({ type: "thinking", text: "⚠️ SSE 流式连接失败，降级为非流式\n" });
       await _callOpenAINonStream(message, config, onEvent, conversationHistory);
       return;
@@ -1156,16 +1218,16 @@ async function callOpenAI(
 
     if (!response.ok) {
       const err = await response.text();
-      // If tools already ran, break to display results instead of throwing
-      if (lastToolOutput) {
+      if (loop.lastToolOutput) {
         onEvent({ type: "thinking", text: `⚠️ API ${response.status}，但工具已执行\n` });
+        loop.transitionReason = 'api_error';
         break;
       }
       throw new Error(`API ${response.status}: ${err.slice(0, 300)}`);
     }
 
     if (!response.body) {
-      if (lastToolOutput) break;
+      if (loop.lastToolOutput) { loop.transitionReason = 'api_error'; break; }
       onEvent({ type: "thinking", text: "⚠️ 无 ReadableStream，降级为非流式\n" });
       await _callOpenAINonStream(message, config, onEvent, conversationHistory);
       return;
@@ -1203,7 +1265,6 @@ async function callOpenAI(
           continue;
         }
 
-        // usage 字段 — 流式结束时 OpenAI 会在最后一个 chunk 返回
         if (chunk.usage) {
           updateTokenUsage(tokenState, chunk.usage);
           const { recordUsage } = await import("./cost-tracker");
@@ -1216,7 +1277,6 @@ async function callOpenAI(
             onEvent({ type: "thinking", text: `💰 ${record.inputTokens}+${record.outputTokens} tokens ≈ $${record.estimatedCost.toFixed(4)}\n` });
           }
 
-          // token warning — 接近上限时预警
           const limit = getModelTokenLimit(config.model);
           const used = tokenState.lastPromptTokens + (chunk.usage.completion_tokens ?? 0);
           if (used > limit * 0.7 && used <= limit * COMPACT_THRESHOLD_RATIO) {
@@ -1227,7 +1287,6 @@ async function callOpenAI(
         const choice = chunk.choices?.[0];
         if (!choice) continue;
 
-        // finish_reason
         if (choice.finish_reason) {
           finishReason = choice.finish_reason;
         }
@@ -1235,18 +1294,15 @@ async function callOpenAI(
         const delta = choice.delta;
         if (!delta) continue;
 
-        // 文本 chunk → 立即输出
         if (delta.content) {
           fullText += delta.content;
           onEvent({ type: "text", text: delta.content });
         }
 
-        // reasoning_content（DeepSeek / o-series）
         if (delta.reasoning_content) {
           reasoningContent += delta.reasoning_content;
         }
 
-        // tool_calls chunk → 累积参数
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
             let pending = pendingToolCalls.get(tc.index);
@@ -1264,11 +1320,7 @@ async function callOpenAI(
       reader.releaseLock();
     }
 
-    if (signal.aborted) {
-      onEvent({ type: "result", text: "⏹ 已停止" });
-      currentAbortController = null;
-      return;
-    }
+    if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
 
     // ── 处理 tool_calls ──
     if (finishReason === "tool_calls" || pendingToolCalls.size > 0) {
@@ -1284,7 +1336,7 @@ async function callOpenAI(
         onEvent({ type: "text", text: "\n\n" });
       }
 
-      messages.push({
+      loop.messages.push({
         role: "assistant",
         content: fullText || null,
         tool_calls: toolCallsArray,
@@ -1295,37 +1347,41 @@ async function callOpenAI(
         if (signal.aborted) break;
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* 忽略 */ }
-        totalToolCalls++;
+        loop.toolCallCount++;
         onEvent({ type: "tool_use", toolName: tc.function.name, toolInput: tc.function.arguments });
         try {
           const result = await executeTool(tc.function.name, args);
           onEvent({ type: "thinking", text: `✅ ${tc.function.name}: ${result.slice(0, 120)}\n` });
-          messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
+          loop.messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
           streamToolResults.push(`**${tc.function.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
-          lastToolOutput = result.slice(0, 5000);
+          loop.lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${tc.function.name}: ${err}\n` });
-          messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
+          loop.messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
           streamToolResults.push(`**${tc.function.name}** 执行失败：${err}`);
         }
       }
-      // Always emit results and stop for compatible provider
-      const summary = streamToolResults.join("\n\n");
-      if (config.provider === "compatible" || iteration >= MAX_ITERATIONS - 1) {
+
+      // transitionReason = 'tool_executed'
+      loop.transitionReason = 'tool_executed';
+
+      // Compatible provider → done
+      if (config.provider === "compatible") {
+        const summary = streamToolResults.join("\n\n");
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        currentAbortController = null;
-        return;
+        loop.transitionReason = 'done';
+        break;
       }
+      // 非 compatible: tool_executed 继续循环
       continue;
     }
 
     // ── 纯文本响应 ──
-    // 检查文本中的工具调用（compatible 模式跳过）
     const parsed = noTools ? null : parseTextToolCall(fullText);
     if (parsed) {
-      totalToolCalls++;
+      loop.toolCallCount++;
       onEvent({ type: "tool_use", toolName: parsed.name, toolInput: JSON.stringify(parsed.args) });
       try {
         const result = await executeTool(parsed.name, parsed.args);
@@ -1339,43 +1395,58 @@ async function callOpenAI(
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
       }
+      loop.transitionReason = 'done';
       break;
     }
 
     // 自动保存检测
     const autoSave = detectAutoSaveContent(fullText, message);
     if (autoSave) {
-      totalToolCalls++;
+      loop.toolCallCount++;
       onEvent({ type: "tool_use", toolName: "file_write", toolInput: autoSave.path });
       try {
         await executeTool("file_write", { path: autoSave.path, content: autoSave.content });
         onEvent({ type: "thinking", text: `✅ 自动保存: ${autoSave.path}\n` });
-        messages.push({ role: "assistant", content: fullText });
-        messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.messages.push({ role: "assistant", content: fullText });
+        loop.messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.transitionReason = 'tool_executed';
         continue;
       } catch { /* 忽略 */ }
     }
 
     // 规划推动
     const planning = /让我创建|我应该|接下来|我将|让我|我来|我需要|下一步|首先.*然后|步骤/;
-    if (fullText && planning.test(fullText) && !fullText.includes("已完成") && !fullText.includes("已创建") && iteration < MAX_ITERATIONS - 1) {
+    if (fullText && planning.test(fullText) && !fullText.includes("已完成") && !fullText.includes("已创建") && loop.turnCount < loop.maxTurns - 1) {
       onEvent({ type: "thinking", text: "🔄 推动执行...\n" });
-      messages.push({ role: "assistant", content: fullText });
-      messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.messages.push({ role: "assistant", content: fullText });
+      loop.messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.transitionReason = 'continue';
       continue;
     }
 
-    // 最终输出（文本已在流式中输出，此处只处理 reasoning 和统计）
+    // 最终输出
     if (reasoningContent) onEvent({ type: "thinking", text: reasoningContent });
-    if (totalToolCalls > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${totalToolCalls} 次工具调用，${iteration} 轮` });
+    if (loop.toolCallCount > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
     onEvent({ type: "result", text: fullText });
+    loop.transitionReason = 'done';
+    break;
+  }
+
+  // ── 循环结束后处理 ──
+  if (loop.transitionReason === 'aborted') {
+    onEvent({ type: "result", text: "⏹ 已停止" });
     currentAbortController = null;
     return;
   }
 
-  // Loop exhausted: emit tool results if any
-  if (totalToolCalls > 0) {
-    const toolMsgs = messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+  if (loop.transitionReason === 'done') {
+    currentAbortController = null;
+    return;
+  }
+
+  // api_error / exhausted: 展示已有工具结果
+  if (loop.lastToolOutput || loop.toolCallCount > 0) {
+    const toolMsgs = loop.messages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
     if (toolMsgs.length > 0) {
       const summary = (toolMsgs as string[]).join("\n\n---\n\n").slice(0, 5000);
       onEvent({ type: "text", text: summary });
@@ -1383,14 +1454,14 @@ async function callOpenAI(
       currentAbortController = null;
       return;
     }
+    if (loop.lastToolOutput) {
+      onEvent({ type: "text", text: loop.lastToolOutput });
+      onEvent({ type: "result", text: loop.lastToolOutput });
+      currentAbortController = null;
+      return;
+    }
   }
-  if (lastToolOutput) {
-    onEvent({ type: "text", text: lastToolOutput });
-    onEvent({ type: "result", text: lastToolOutput });
-    currentAbortController = null;
-    return;
-  }
-  onEvent({ type: "error", text: `⚠️ 达到 ${MAX_ITERATIONS} 轮上限。${totalToolCalls} 次工具调用。` });
+  onEvent({ type: "error", text: `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` });
   currentAbortController = null;
 }
 
