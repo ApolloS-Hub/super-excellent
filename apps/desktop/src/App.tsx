@@ -50,6 +50,23 @@ function App() {
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
   }, []);
 
+  // Auto health check + repair on startup
+  useEffect(() => {
+    import("./lib/tauri-bridge").then(async ({ healthCheck, repairConfig, isTauriAvailable }) => {
+      if (!isTauriAvailable()) return;
+      try {
+        const status = await healthCheck();
+        if (!status.config_valid) {
+          console.warn("Config invalid on startup, auto-repairing:", status.config_error);
+          const result = await repairConfig();
+          console.log("Auto-repair result:", result);
+        }
+      } catch (e) {
+        console.warn("Startup health check failed:", e);
+      }
+    }).catch(() => { /* tauri-bridge not available */ });
+  }, []);
+
   // Check for updates on mount
   useEffect(() => {
     check().then(async (update) => {
