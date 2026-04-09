@@ -287,13 +287,13 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                 />
               )}
 
-              {(isCompatible || config.provider === "kimi") && (
+              {(true) && (
                 <TextInput
                   label="API 端点 / Base URL"
-                  placeholder={config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "https://api.example.com/v1"}
+                  placeholder={config.provider === "anthropic" ? "https://api.anthropic.com" : config.provider === "openai" ? "https://api.openai.com" : config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "https://api.example.com/v1"}
                   value={config.baseURL || (config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "")}
                   onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
-                  description={isCompatible ? "兼容 OpenAI 协议的 API 地址" : undefined}
+                  description="留空使用默认地址，填写自定义地址覆盖（支持内网网关）"
                 />
               )}
 
