@@ -929,56 +929,52 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const results: string[] = [];
+    const eq = encodeURIComponent(query.replace(/[^\w\s\u4e00-\u9fff]/g, " ").trim());
 
-    // Source 1: Google News RSS (free, no key, real-time news)
+    // Source 1: HackerNews Algolia API (reliable, free, real-time tech news)
     try {
-      const eq = encodeURIComponent(query);
-      const cmd = 'curl -sL --connect-timeout 10 --max-time 15 ' +
-        '"https://news.google.com/rss/search?q=' + eq + '&hl=en-US&gl=US&ceid=US:en"';
+      const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
+        "\"https://hn.algolia.com/api/v1/search_by_date?query=" + eq + "&tags=story&hitsPerPage=8\"";
       const r = await invoke("execute_command", {
         command: cmd, cwd: null, timeoutMs: 20000,
       }) as { stdout: string; success: boolean };
-
       if (r.success && r.stdout) {
-        const titleMatches = r.stdout.match(/<item>[\s\S]*?<\/item>/g) || [];
-        for (const item of titleMatches.slice(0, 5)) {
-          const titleM = item.match(/<title>([\s\S]*?)<\/title>/);
-          const pubM = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-          const sourceM = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
-          const linkM = item.match(/<link>([\s\S]*?)<\/link>/) || item.match(/<link\/>([\s\S]*?)(?:<|$)/);
-          if (titleM) {
+        try {
+          const data = JSON.parse(r.stdout);
+          for (const hit of (data.hits || []).slice(0, 5)) {
             const idx = results.length + 1;
-            let entry = idx + ". " + titleM[1].trim();
-            if (sourceM) entry += "\n   来源: " + sourceM[1].trim();
-            if (pubM) entry += "\n   时间: " + pubM[1].trim();
-            if (linkM) entry += "\n   链接: " + linkM[1].trim();
-            results.push(entry);
+            const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
+            const date = hit.created_at ? hit.created_at.split("T")[0] : "";
+            results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   日期: " + date : ""));
           }
-        }
+        } catch { /* JSON parse error */ }
       }
-    } catch { /* Google News failed */ }
+    } catch { /* HN failed */ }
 
-    // Source 2: HackerNews Algolia API (free, no key, tech news)
-    if (results.length < 3) {
+    // Source 2: Google News RSS (supplement)
+    if (results.length < 5) {
       try {
-        const eq = encodeURIComponent(query);
-        const cmd = 'curl -sL --connect-timeout 10 --max-time 15 ' +
-          '"https://hn.algolia.com/api/v1/search_by_date?query=' + eq + '&tags=story&hitsPerPage=5"';
+        const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
+          "\"https://news.google.com/rss/search?q=" + eq + "&hl=en-US&gl=US&ceid=US:en\"";
         const r = await invoke("execute_command", {
           command: cmd, cwd: null, timeoutMs: 20000,
         }) as { stdout: string; success: boolean };
-
         if (r.success && r.stdout) {
-          try {
-            const data = JSON.parse(r.stdout);
-            for (const hit of (data.hits || []).slice(0, 3)) {
+          const items = r.stdout.match(/<item>[\s\S]*?<\/item>/g) || [];
+          for (const item of items.slice(0, 5 - results.length)) {
+            const titleM = item.match(/<title>([\s\S]*?)<\/title>/);
+            const sourceM = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+            const pubM = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+            if (titleM) {
               const idx = results.length + 1;
-              const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
-              results.push(idx + ". " + hit.title + "\n   " + url + "\n   Points: " + (hit.points || 0) + " | Comments: " + (hit.num_comments || 0));
+              let entry = idx + ". " + titleM[1].trim();
+              if (sourceM) entry += " - " + sourceM[1].trim();
+              if (pubM) entry += "\n   " + pubM[1].trim();
+              results.push(entry);
             }
-          } catch { /* parse error */ }
+          }
         }
-      } catch { /* HN failed */ }
+      } catch { /* Google News failed */ }
     }
 
     if (results.length > 0) {
