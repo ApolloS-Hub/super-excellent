@@ -131,6 +131,15 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     onConversationsUpdate(updated.sort((a, b) => b.updatedAt - a.updatedAt));
   }, [conversation?.id, conversations, onConversationsUpdate]);
 
+  // Auto-persist messages on change (debounced) to prevent data loss on conversation switch
+  useEffect(() => {
+    if (!conversation?.id || localMessages.length === 0) return;
+    const timer = setTimeout(() => {
+      persistMessages(localMessages);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localMessages, conversation?.id, persistMessages]);
+
   // ═══════════ ask_user answer submission ═══════════
   const handleAskAnswer = useCallback((answer: string) => {
     if (!askPending) return;
