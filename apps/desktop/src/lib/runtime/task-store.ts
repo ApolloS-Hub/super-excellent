@@ -35,11 +35,15 @@ export interface ProjectTask {
   owner: string;
   roomId?: string;
   dueAt?: string;
+  parentId?: string;
+  children: string[];
   definitionOfDone: string[];
   artifacts: TaskArtifact[];
   rollback: RollbackPlan;
   sessionKeys: string[];
   budget: BudgetThresholds;
+  createdAt: string;
+  completedAt?: string;
   updatedAt: string;
 }
 
@@ -62,6 +66,7 @@ export interface CreateTaskInput {
   owner?: string;
   roomId?: string;
   dueAt?: string;
+  parentId?: string;
   definitionOfDone?: string[];
 }
 
@@ -150,16 +155,30 @@ export function createTask(input: CreateTaskInput): ProjectTask {
     owner: input.owner ?? "unassigned",
     roomId: input.roomId,
     dueAt: input.dueAt,
+    parentId: input.parentId,
+    children: [],
     definitionOfDone: input.definitionOfDone ?? [],
     artifacts: [],
     rollback: defaultRollback(),
     sessionKeys: [],
     budget: defaultBudget(),
+    createdAt: now,
     updatedAt: now,
   };
 
   tasks.push(task);
+
+  // Link to parent
+  if (input.parentId) {
+    const parent = getTask(input.parentId, input.projectId);
+    if (parent && !parent.children.includes(task.taskId)) {
+      parent.children.push(task.taskId);
+      parent.updatedAt = now;
+    }
+  }
+
   notifyChange();
+  persistToIDB();
   return task;
 }
 
@@ -173,7 +192,11 @@ export function updateTaskStatus(taskId: string, status: TaskState, projectId?: 
 
   task.status = status;
   task.updatedAt = new Date().toISOString();
+  if (status === "done") {
+    task.completedAt = task.updatedAt;
+  }
   notifyChange();
+  persistToIDB();
   return task;
 }
 
@@ -219,4 +242,78 @@ export function getAllTasks(): ProjectTask[] {
 export function resetTaskStore(): void {
   tasks = [];
   notifyChange();
+  persistToIDB();
+}
+
+/** Get children of a task */
+export function getChildren(taskId: string, projectId?: string): ProjectTask[] {
+  const task = getTask(taskId, projectId);
+  if (!task || task.children.length === 0) return [];
+  return task.children
+    .map(childId => getTask(childId, task.projectId))
+    .filter((t): t is ProjectTask => t !== undefined);
+}
+
+/** Get parent of a task */
+export function getParent(taskId: string, projectId?: string): ProjectTask | undefined {
+  const task = getTask(taskId, projectId);
+  if (!task?.parentId) return undefined;
+  return getTask(task.parentId, task.projectId);
+}
+
+// ═══════════ IndexedDB Persistence ═══════════
+
+const TASK_IDB_NAME = "super-excellent-tasks";
+const TASK_IDB_VERSION = 1;
+const TASK_IDB_STORE = "tasks";
+
+function openTaskDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB not available"));
+      return;
+    }
+    const req = indexedDB.open(TASK_IDB_NAME, TASK_IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(TASK_IDB_STORE)) {
+        db.createObjectStore(TASK_IDB_STORE, { keyPath: "taskId" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function persistToIDB(): void {
+  openTaskDB().then(db => {
+    const tx = db.transaction(TASK_IDB_STORE, "readwrite");
+    const store = tx.objectStore(TASK_IDB_STORE);
+    store.clear();
+    for (const task of tasks) {
+      store.put(task);
+    }
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+  }).catch(() => { /* IndexedDB not available */ });
+}
+
+export function loadTasksFromIDB(): Promise<void> {
+  return openTaskDB().then(db => {
+    return new Promise<void>((resolve) => {
+      const tx = db.transaction(TASK_IDB_STORE, "readonly");
+      const store = tx.objectStore(TASK_IDB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const loaded = req.result as ProjectTask[];
+        if (loaded.length > 0) {
+          tasks = loaded;
+          notifyChange();
+        }
+        db.close();
+        resolve();
+      };
+      req.onerror = () => { db.close(); resolve(); };
+    });
+  }).catch(() => { /* IndexedDB not available */ });
 }
