@@ -641,11 +641,33 @@ function MCPConfigPanel() {
 
   const handleAdd = async () => {
     if (!newName.trim() || !newUrl.trim()) return;
-    const { connectServer, setServerAuth } = await import("../lib/mcp-client");
+    const { connectServer, setServerAuth, callMCPTool } = await import("../lib/mcp-client");
+    const { registerTool } = await import("../lib/tool-registry");
     if (newToken.trim()) {
       setServerAuth(newName, { type: "bearer", token: newToken.trim() });
     }
     const server = await connectServer({ name: newName, transport: "sse", url: newUrl });
+
+    // Register MCP tools into tool-registry
+    for (const tool of server.tools) {
+      const sName = server.name;
+      registerTool({
+        name: `mcp_${tool.name}`,
+        description: `[MCP:${sName}] ${tool.description}`,
+        inputSchema: tool.inputSchema,
+        category: "web",
+        execute: async (args) => callMCPTool(sName, tool.name, args),
+      });
+    }
+
+    // Persist MCP config to localStorage
+    const existing = JSON.parse(localStorage.getItem("mcp-config") || '{"servers":[]}');
+    const entry = { name: newName, transport: "sse" as const, url: newUrl };
+    if (!existing.servers.some((s: { name: string }) => s.name === newName)) {
+      existing.servers.push(entry);
+      localStorage.setItem("mcp-config", JSON.stringify(existing));
+    }
+
     setServers(prev => [...prev, {
       name: server.name, url: newUrl, status: server.status,
       toolCount: server.tools.length, resourceCount: server.resources.length,

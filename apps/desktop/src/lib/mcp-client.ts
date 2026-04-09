@@ -265,7 +265,23 @@ export async function loadMCPConfig(): Promise<void> {
     if (!raw) return;
     const config = JSON.parse(raw) as MCPConfig;
     for (const sc of config.servers) {
-      await connectServer(sc);
+      const server = await connectServer(sc);
+      // Register connected MCP tools into tool-registry
+      if (server.status === "connected") {
+        try {
+          const { registerTool } = await import("./tool-registry");
+          for (const tool of server.tools) {
+            const sName = server.name;
+            registerTool({
+              name: `mcp_${tool.name}`,
+              description: `[MCP:${sName}] ${tool.description}`,
+              inputSchema: tool.inputSchema,
+              category: "web",
+              execute: async (args) => callMCPTool(sName, tool.name, args),
+            });
+          }
+        } catch { /* tool-registry not available */ }
+      }
     }
   } catch (e) {
     console.error("MCP config load failed:", e);

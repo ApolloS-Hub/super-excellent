@@ -44,6 +44,8 @@ function App() {
       registerAgent({ agentId: id, displayName: id });
     });
     startMonitor();
+    // Load MCP config and connect servers on startup
+    import("./lib/mcp-client").then(m => m.loadMCPConfig()).catch(console.warn);
   }, []);
 
   // Check for updates on mount
