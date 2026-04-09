@@ -942,12 +942,12 @@ async function _callOpenAINonStream(
           toolResults.push(`**${fn.name}** 执行失败：${err}`);
         }
       }
-      // Try one more round to let model summarize; if it fails or loops, emit results directly
-      if (iteration >= MAX_ITERATIONS - 1 || config.provider === "compatible") {
-        const summary = toolResults.join("\n\n");
+      const summary = toolResults.join("\n\n");
+      if (config.provider === "compatible" || iteration >= MAX_ITERATIONS - 1) {
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        break;
+        currentAbortController = null;
+        return;
       }
       continue;
     }
@@ -1310,11 +1310,13 @@ async function callOpenAI(
           streamToolResults.push(`**${tc.function.name}** 执行失败：${err}`);
         }
       }
-      if (iteration >= MAX_ITERATIONS - 1 || config.provider === "compatible") {
-        const summary = streamToolResults.join("\n\n");
+      // Always emit results and stop for compatible provider
+      const summary = streamToolResults.join("\n\n");
+      if (config.provider === "compatible" || iteration >= MAX_ITERATIONS - 1) {
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
-        break;
+        currentAbortController = null;
+        return;
       }
       continue;
     }

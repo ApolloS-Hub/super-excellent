@@ -1039,7 +1039,7 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
       ml={isUser ? "auto" : 0}
       mr={isUser ? 0 : "auto"}
       maw="85%"
-      style={{ position: "relative" }}
+      style={{ position: "relative", overflowWrap: "break-word", wordBreak: "break-word", overflow: "hidden" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
