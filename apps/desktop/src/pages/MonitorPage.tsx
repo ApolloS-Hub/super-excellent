@@ -10,6 +10,10 @@ import { getTeamConfig, type Worker as TeamWorker } from "../lib/team";
 import type { HealthStatus } from "../lib/tauri-bridge";
 import { startMonitor, stopMonitor, isMonitorRunning, getAllTasks } from "../lib/runtime";
 import { permissionEngine, PERMISSION_LEVEL_META } from "../lib/permission-engine";
+import { getAllBackgroundTasks, type BackgroundTask } from "../lib/background-tasks";
+import { getPendingRequests, type ProtocolRequest } from "../lib/team-protocols";
+import { getTemplates, getAllWorkflowInstances, type WorkflowTemplate, type WorkflowInstance } from "../lib/workflows";
+import { cronScheduler } from "../lib/cron-scheduler";
 
 interface MonitorPageProps {
   onBack: () => void;
@@ -281,6 +285,15 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <Tabs.Tab value="tasks">
               📋 任务
             </Tabs.Tab>
+            <Tabs.Tab value="background">
+              ⏳ 后台
+            </Tabs.Tab>
+            <Tabs.Tab value="protocols">
+              🤝 协议
+            </Tabs.Tab>
+            <Tabs.Tab value="workflows">
+              🔄 工作流
+            </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="engineering" pt="sm">
             <WorkerGrid workers={teamWorkers.filter(w => ENGINEERING_IDS.has(w.id))} />
@@ -293,6 +306,15 @@ function MonitorPage({ onBack }: MonitorPageProps) {
           </Tabs.Panel>
           <Tabs.Panel value="tasks" pt="sm">
             <TaskPanel tasks={runtimeTasks} />
+          </Tabs.Panel>
+          <Tabs.Panel value="background" pt="sm">
+            <BackgroundTaskPanel />
+          </Tabs.Panel>
+          <Tabs.Panel value="protocols" pt="sm">
+            <ProtocolPanel />
+          </Tabs.Panel>
+          <Tabs.Panel value="workflows" pt="sm">
+            <WorkflowPanel />
           </Tabs.Panel>
         </Tabs>
       </Paper>
@@ -641,6 +663,130 @@ function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
                 <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{t.title}</Text>
                 <Badge size="xs" variant="outline">{t.owner}</Badge>
               </Group>
+            ))}
+          </Stack>
+        </ScrollArea>
+      )}
+    </Stack>
+  );
+}
+
+function BackgroundTaskPanel() {
+  const [tasks, setTasks] = useState<BackgroundTask[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setTasks(getAllBackgroundTasks());
+    refresh();
+    const timer = setInterval(refresh, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const statusIcon: Record<string, string> = {
+    pending: "⬜", running: "🔄", completed: "✅", error: "🔴",
+  };
+
+  return (
+    <Stack gap="xs">
+      <Group gap="xs">
+        <Badge variant="light" color="blue">{tasks.length} 个后台任务</Badge>
+        <Badge variant="light" color="green">{tasks.filter(t => t.status === "completed").length} 已完成</Badge>
+        <Badge variant="light" color="orange">{tasks.filter(t => t.status === "running").length} 运行中</Badge>
+      </Group>
+      {tasks.length === 0 ? (
+        <Text size="xs" c="dimmed">暂无后台任务。</Text>
+      ) : (
+        <ScrollArea h={200}>
+          <Stack gap={4}>
+            {tasks.map(t => (
+              <Group key={t.id} gap="xs" wrap="nowrap">
+                <Text size="xs">{statusIcon[t.status] || "❓"}</Text>
+                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{t.title}</Text>
+                <Text size="xs" c="dimmed">{t.completedAt ? `${((t.completedAt - t.startedAt) / 1000).toFixed(1)}s` : "..."}</Text>
+              </Group>
+            ))}
+          </Stack>
+        </ScrollArea>
+      )}
+    </Stack>
+  );
+}
+
+function ProtocolPanel() {
+  const [pending, setPending] = useState<ProtocolRequest[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setPending(getPendingRequests());
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const typeLabel: Record<string, string> = {
+    plan_approval: "📋 计划审批",
+    code_review: "🔍 代码审查",
+    task_handoff: "🤝 任务交接",
+  };
+
+  return (
+    <Stack gap="xs">
+      <Group gap="xs">
+        <Badge variant="light" color="orange">{pending.length} 待处理</Badge>
+        <Badge variant="light" color="blue">{cronScheduler.getAllSchedules().length} 定时任务</Badge>
+      </Group>
+      {pending.length === 0 ? (
+        <Text size="xs" c="dimmed">暂无待处理的协议请求。</Text>
+      ) : (
+        <ScrollArea h={200}>
+          <Stack gap={4}>
+            {pending.map(r => (
+              <Paper key={r.id} p="xs" radius="sm" withBorder>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="xs">{typeLabel[r.type] || r.type}</Text>
+                  <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{r.content.slice(0, 60)}</Text>
+                  <Badge size="xs" variant="outline">{r.from} → {r.to}</Badge>
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        </ScrollArea>
+      )}
+    </Stack>
+  );
+}
+
+function WorkflowPanel() {
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
+  const [instances, setInstances] = useState<WorkflowInstance[]>([]);
+
+  useEffect(() => {
+    const refresh = () => {
+      setTemplates(getTemplates());
+      setInstances(getAllWorkflowInstances());
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Stack gap="xs">
+      <Group gap="xs">
+        <Badge variant="light" color="violet">{templates.length} 模板</Badge>
+        <Badge variant="light" color="blue">{instances.length} 实例</Badge>
+      </Group>
+      {templates.length === 0 ? (
+        <Text size="xs" c="dimmed">暂无工作流模板。启动时自动加载内置模板。</Text>
+      ) : (
+        <ScrollArea h={200}>
+          <Stack gap={4}>
+            {templates.map(t => (
+              <Paper key={t.id} p="xs" radius="sm" withBorder>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="xs" fw={500}>{t.name}</Text>
+                  <Badge size="xs" variant="light">{t.steps.length} 步骤</Badge>
+                </Group>
+                <Text size="xs" c="dimmed" mt={2}>{t.steps.map(s => s.role).join(" → ")}</Text>
+              </Paper>
             ))}
           </Stack>
         </ScrollArea>
