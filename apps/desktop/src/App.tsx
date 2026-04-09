@@ -410,9 +410,24 @@ function ConversationItem({
 
   const msgCount = conv.messages.filter(m => m.role === "user").length;
   const lastMsg = conv.messages.filter(m => m.role === "assistant").pop();
-  const preview = lastMsg
+  const defaultPreview = lastMsg
     ? lastMsg.content.slice(0, 40) + (lastMsg.content.length > 40 ? "..." : "")
     : t("nav.noMessages");
+
+  // When searching, show matching message snippet instead of last message
+  let preview = defaultPreview;
+  let matchInContent = false;
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    const matchingMsg = conv.messages.find(m => m.content.toLowerCase().includes(q));
+    if (matchingMsg) {
+      matchInContent = true;
+      const idx = matchingMsg.content.toLowerCase().indexOf(q);
+      const start = Math.max(0, idx - 15);
+      const end = Math.min(matchingMsg.content.length, idx + searchQuery.length + 25);
+      preview = (start > 0 ? "..." : "") + matchingMsg.content.slice(start, end) + (end < matchingMsg.content.length ? "..." : "");
+    }
+  }
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
@@ -488,7 +503,9 @@ function ConversationItem({
           )}
         </Group>
         <Group justify="space-between" wrap="nowrap">
-          <Text size="xs" c="dimmed" truncate>{preview}</Text>
+          <Text size="xs" c={matchInContent ? "blue" : "dimmed"} truncate>
+            {searchQuery ? <HighlightText text={preview} query={searchQuery} /> : preview}
+          </Text>
           {msgCount > 0 && (
             <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>{msgCount}条</Text>
           )}
