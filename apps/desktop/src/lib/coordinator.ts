@@ -316,7 +316,7 @@ async function callWorkerLLM(
     };
 
     // 只在有工具时挂载工具定义
-    if (filteredTools.length > 0 && config.provider !== "compatible") {
+    if (filteredTools.length > 0) {
       body.tools = filteredTools;
       body.tool_choice = "auto";
     }

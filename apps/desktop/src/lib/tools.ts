@@ -928,46 +928,63 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
 
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const proxy = "http://127.0.0.1:11088";
-    const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-    const eq = encodeURIComponent(query);
-    const engines = [
-      `curl -x ${proxy} -sL --connect-timeout 8 --max-time 15 -H "User-Agent: ${ua}" "https://www.bing.com/search?q=${eq}&count=8"`,
-      `curl -sL --connect-timeout 8 --max-time 15 -H "User-Agent: ${ua}" "https://www.sogou.com/web?query=${eq}"`,
-    ];
+    const results: string[] = [];
 
-    for (const cmd of engines) {
-      try {
-        const result = await invoke("execute_command", {
-          command: cmd, cwd: null, timeoutMs: 20000,
-        }) as { stdout: string; stderr: string; success: boolean };
+    // Source 1: Google News RSS (free, no key, real-time news)
+    try {
+      const eq = encodeURIComponent(query);
+      const cmd = 'curl -sL --connect-timeout 10 --max-time 15 ' +
+        '"https://news.google.com/rss/search?q=' + eq + '&hl=en-US&gl=US&ceid=US:en"';
+      const r = await invoke("execute_command", {
+        command: cmd, cwd: null, timeoutMs: 20000,
+      }) as { stdout: string; success: boolean };
 
-        if (!result.success || !result.stdout || result.stdout.length < 500) continue;
-
-        const html = result.stdout;
-        const searchResults: string[] = [];
-        const linkPattern = /<a[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-        let match;
-        const seen = new Set<string>();
-        while ((match = linkPattern.exec(html)) !== null && searchResults.length < 5) {
-          const url = match[1];
-          const title = match[2].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&#\d+;/g, " ").trim();
-          if (title.length > 10 && title.length < 200 && !seen.has(url)
-              && !url.includes("bing.com") && !url.includes("sogou.com")
-              && !url.includes("javascript:") && !url.includes("baidu.com/link")) {
-            seen.add(url);
-            const idx = searchResults.length + 1;
-            searchResults.push(idx + ". " + title + "\n   " + url);
+      if (r.success && r.stdout) {
+        const titleMatches = r.stdout.match(/<item>[\s\S]*?<\/item>/g) || [];
+        for (const item of titleMatches.slice(0, 5)) {
+          const titleM = item.match(/<title>([\s\S]*?)<\/title>/);
+          const pubM = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+          const sourceM = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+          const linkM = item.match(/<link>([\s\S]*?)<\/link>/) || item.match(/<link\/>([\s\S]*?)(?:<|$)/);
+          if (titleM) {
+            const idx = results.length + 1;
+            let entry = idx + ". " + titleM[1].trim();
+            if (sourceM) entry += "\n   来源: " + sourceM[1].trim();
+            if (pubM) entry += "\n   时间: " + pubM[1].trim();
+            if (linkM) entry += "\n   链接: " + linkM[1].trim();
+            results.push(entry);
           }
         }
+      }
+    } catch { /* Google News failed */ }
 
-        if (searchResults.length > 0) {
-          return "🔍 搜索结果 (" + query + "):\n\n" + searchResults.join("\n\n");
+    // Source 2: HackerNews Algolia API (free, no key, tech news)
+    if (results.length < 3) {
+      try {
+        const eq = encodeURIComponent(query);
+        const cmd = 'curl -sL --connect-timeout 10 --max-time 15 ' +
+          '"https://hn.algolia.com/api/v1/search_by_date?query=' + eq + '&tags=story&hitsPerPage=5"';
+        const r = await invoke("execute_command", {
+          command: cmd, cwd: null, timeoutMs: 20000,
+        }) as { stdout: string; success: boolean };
+
+        if (r.success && r.stdout) {
+          try {
+            const data = JSON.parse(r.stdout);
+            for (const hit of (data.hits || []).slice(0, 3)) {
+              const idx = results.length + 1;
+              const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
+              results.push(idx + ". " + hit.title + "\n   " + url + "\n   Points: " + (hit.points || 0) + " | Comments: " + (hit.num_comments || 0));
+            }
+          } catch { /* parse error */ }
         }
-      } catch { /* try next engine */ }
+      } catch { /* HN failed */ }
     }
 
-    return "🔍 无法获取实时搜索结果（搜索引擎反爬限制）。\n\n请根据你的知识回答关于 \"" + query + "\" 的问题，并注明信息可能不是最新的。";
+    if (results.length > 0) {
+      return "🔍 搜索结果 (" + query + "):\n\n" + results.join("\n\n");
+    }
+    return "搜索 \"" + query + "\" 暂无结果。";
   } catch (e) {
     return "搜索失败: " + (e instanceof Error ? e.message : String(e));
   }
