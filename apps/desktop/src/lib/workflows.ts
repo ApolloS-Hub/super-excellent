@@ -87,6 +87,28 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
       { role: "product", action: "make_decision", input: "analysis_report", output: "action_plan" },
     ],
   },
+  {
+    id: "requirement_analysis",
+    name: "需求分析 / Requirement Analysis",
+    description: "需求收集→竞品分析→方案评估→PRD输出",
+    steps: [
+      { role: "product", action: "gather_requirements", input: "stakeholder_input", output: "requirement_list" },
+      { role: "researcher", action: "competitive_analysis", input: "requirement_list", output: "market_report" },
+      { role: "architect", action: "technical_assessment", input: "market_report", output: "feasibility_report" },
+      { role: "product", action: "write_prd", input: "feasibility_report", output: "prd_document" },
+    ],
+  },
+  {
+    id: "data_report",
+    name: "数据报告 / Data Report",
+    description: "数据采集→清洗分析→可视化→报告生成",
+    steps: [
+      { role: "data_analyst", action: "collect_data", input: "data_source", output: "raw_data" },
+      { role: "data_analyst", action: "clean_and_analyze", input: "raw_data", output: "analysis_result" },
+      { role: "ux_designer", action: "create_visualization", input: "analysis_result", output: "charts" },
+      { role: "writer", action: "generate_report", input: "charts", output: "final_report" },
+    ],
+  },
 ];
 
 const _templates = new Map<string, WorkflowTemplate>();

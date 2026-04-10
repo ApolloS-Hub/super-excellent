@@ -12,8 +12,9 @@ import { startMonitor, stopMonitor, isMonitorRunning, getAllTasks } from "../lib
 import { permissionEngine, PERMISSION_LEVEL_META } from "../lib/permission-engine";
 import { getAllBackgroundTasks, type BackgroundTask } from "../lib/background-tasks";
 import { getPendingRequests, type ProtocolRequest } from "../lib/team-protocols";
-import { getTemplates, getAllWorkflowInstances, type WorkflowTemplate, type WorkflowInstance } from "../lib/workflows";
+import "../lib/workflows";
 import { cronScheduler } from "../lib/cron-scheduler";
+import WorkflowViewer from "../components/WorkflowViewer";
 
 interface MonitorPageProps {
   onBack: () => void;
@@ -314,7 +315,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <ProtocolPanel />
           </Tabs.Panel>
           <Tabs.Panel value="workflows" pt="sm">
-            <WorkflowPanel />
+            <WorkflowViewer />
           </Tabs.Panel>
         </Tabs>
       </Paper>
@@ -755,46 +756,6 @@ function ProtocolPanel() {
   );
 }
 
-function WorkflowPanel() {
-  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
-  const [instances, setInstances] = useState<WorkflowInstance[]>([]);
-
-  useEffect(() => {
-    const refresh = () => {
-      setTemplates(getTemplates());
-      setInstances(getAllWorkflowInstances());
-    };
-    refresh();
-    const timer = setInterval(refresh, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <Stack gap="xs">
-      <Group gap="xs">
-        <Badge variant="light" color="violet">{templates.length} 模板</Badge>
-        <Badge variant="light" color="blue">{instances.length} 实例</Badge>
-      </Group>
-      {templates.length === 0 ? (
-        <Text size="xs" c="dimmed">暂无工作流模板。启动时自动加载内置模板。</Text>
-      ) : (
-        <ScrollArea h={200}>
-          <Stack gap={4}>
-            {templates.map(t => (
-              <Paper key={t.id} p="xs" radius="sm" withBorder>
-                <Group gap="xs" wrap="nowrap">
-                  <Text size="xs" fw={500}>{t.name}</Text>
-                  <Badge size="xs" variant="light">{t.steps.length} 步骤</Badge>
-                </Group>
-                <Text size="xs" c="dimmed" mt={2}>{t.steps.map(s => s.role).join(" → ")}</Text>
-              </Paper>
-            ))}
-          </Stack>
-        </ScrollArea>
-      )}
-    </Stack>
-  );
-}
 
 /** SVG Bar Chart — simple bar chart drawn with pure SVG, no chart libraries */
 function SvgBarChart({ data, width = 400, height = 160, barColor = "var(--mantine-color-blue-5)" }: {
