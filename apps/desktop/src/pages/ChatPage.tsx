@@ -8,7 +8,7 @@ import {
 import { sendMessage, loadConfig } from "../lib/agent-bridge";
 import type { ChatMessage } from "../lib/agent-bridge";
 import {
-  startStream, getSnapshot, subscribe, abortStream,
+  startStream, getSnapshot, subscribe, abortStream, pauseStream, resumeStream, isPaused,
 } from "../lib/stream-manager";
 import type { StreamEvent } from "../lib/stream-manager";
 import {
@@ -294,12 +294,30 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setExportNotice("✅ 已导出为 JSON");
   }, [conversation, localMessages]);
 
-  // ═══════════ Stop ═══════════
+  // ═══════════ Pause / Resume / Stop ═══════════
+  const [isPausedState, setIsPausedState] = useState(false);
+
+  const handlePause = useCallback(() => {
+    if (conversation?.id) {
+      pauseStream(conversation.id);
+      setIsPausedState(true);
+    }
+  }, [conversation?.id]);
+
+  const handleResume = useCallback(() => {
+    if (conversation?.id) {
+      resumeStream(conversation.id, sendMessage);
+      setIsPausedState(false);
+      setIsLoading(true);
+    }
+  }, [conversation?.id]);
+
   const handleStop = useCallback(() => {
     if (conversation?.id) {
       abortStream(conversation.id);
     }
     setIsLoading(false);
+    setIsPausedState(false);
     setLocalMessages(prev => {
       const updated = [...prev];
       const last = updated[updated.length - 1];
@@ -1027,10 +1045,24 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
           maxRows={6}
           autosize
         />
-        {isLoading ? (
-          <Button onClick={handleStop} color="red" variant="filled" size="md">
-            ⏹ 停止
-          </Button>
+        {isLoading && !isPausedState ? (
+          <Group gap={4}>
+            <Button onClick={handlePause} color="yellow" variant="filled" size="md">
+              ⏸ 暂停
+            </Button>
+            <Button onClick={handleStop} color="red" variant="filled" size="md">
+              ⏹ 停止
+            </Button>
+          </Group>
+        ) : isPausedState ? (
+          <Group gap={4}>
+            <Button onClick={handleResume} color="green" variant="filled" size="md">
+              ▶ 恢复
+            </Button>
+            <Button onClick={handleStop} color="red" variant="filled" size="md">
+              ⏹ 停止
+            </Button>
+          </Group>
         ) : (
           <Button onClick={handleSend} size="md">
             {t("chat.send")}

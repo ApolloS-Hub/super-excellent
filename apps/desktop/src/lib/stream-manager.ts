@@ -24,7 +24,7 @@ export interface ToolCallInfo {
   status: "running" | "success" | "error";
 }
 
-export type StreamStatus = "idle" | "active" | "completed" | "error" | "stopped";
+export type StreamStatus = "idle" | "active" | "paused" | "completed" | "error" | "stopped";
 
 export interface StreamSnapshot {
   sessionId: string;
@@ -57,6 +57,13 @@ interface SessionStream {
   idleCheckTimer: ReturnType<typeof setInterval> | null;
   lastEventTime: number;
   gcTimer: ReturnType<typeof setTimeout> | null;
+  /** Saved context for resume after pause */
+  pausedContext: {
+    message: string;
+    config: AgentConfig;
+    history: Array<{ role: string; content: string }>;
+    partialText: string;
+  } | null;
 }
 
 export interface StartStreamParams {
@@ -183,6 +190,12 @@ export function startStream(params: StartStreamParams, apiCallFn: ApiCallFn): vo
     idleCheckTimer: null,
     lastEventTime: Date.now(),
     gcTimer: null,
+    pausedContext: {
+      message: params.message,
+      config: params.config,
+      history: params.history || [],
+      partialText: "",
+    },
   };
 
   map.set(params.sessionId, stream);
@@ -402,7 +415,7 @@ export function unsubscribe(
 
 export function abortStream(sessionId: string): void {
   const stream = getStreamsMap().get(sessionId);
-  if (stream && stream.snapshot.status === "active") {
+  if (stream && (stream.snapshot.status === "active" || stream.snapshot.status === "paused")) {
     // Also abort through agent-bridge's global controller
     import("./agent-bridge")
       .then((m) => m.abortGeneration())
@@ -421,4 +434,90 @@ export function abortStream(sessionId: string): void {
     emit(stream, "completed");
     scheduleGC(stream);
   }
+}
+
+// ==========================================
+// Pause / Resume
+// ==========================================
+
+export function pauseStream(sessionId: string): void {
+  const stream = getStreamsMap().get(sessionId);
+  if (stream && stream.snapshot.status === "active") {
+    // Save partial text for resume context
+    if (stream.pausedContext) {
+      stream.pausedContext.partialText = stream.accumulatedText;
+    }
+    // Abort the API call
+    import("./agent-bridge")
+      .then((m) => m.abortGeneration())
+      .catch(() => {});
+    stream.abortController.abort();
+    cleanupTimers(stream);
+    stream.snapshot = {
+      ...buildSnapshot(stream),
+      status: "paused",
+    };
+    stream.accumulatedText += "\n\n*(generation paused)*";
+    stream.snapshot = buildSnapshot(stream);
+    emit(stream, "snapshot-updated");
+  }
+}
+
+export function resumeStream(sessionId: string, apiCallFn: ApiCallFn): void {
+  const stream = getStreamsMap().get(sessionId);
+  if (stream && stream.snapshot.status === "paused" && stream.pausedContext) {
+    const ctx = stream.pausedContext;
+
+    // Remove the paused marker
+    stream.accumulatedText = stream.accumulatedText.replace(/\n\n\*\(generation paused\)\*$/, "");
+
+    // Create new abort controller
+    stream.abortController = new AbortController();
+    stream.snapshot = {
+      ...buildSnapshot(stream),
+      status: "active",
+    };
+    stream.lastEventTime = Date.now();
+    emit(stream, "snapshot-updated");
+
+    // Build continuation history: original history + user message + partial assistant response
+    const resumeHistory = [
+      ...ctx.history,
+      { role: "user", content: ctx.message },
+    ];
+    if (stream.accumulatedText.trim()) {
+      resumeHistory.push({ role: "assistant", content: stream.accumulatedText });
+    }
+
+    const resumeParams: StartStreamParams = {
+      sessionId,
+      message: "请继续刚才未完成的回答。",
+      config: ctx.config,
+      history: resumeHistory,
+    };
+
+    // Set up idle timeout again
+    stream.idleCheckTimer = setInterval(() => {
+      if (Date.now() - stream.lastEventTime >= STREAM_IDLE_TIMEOUT_MS) {
+        cleanupTimers(stream);
+        stream.abortController.abort();
+        stream.snapshot = {
+          ...buildSnapshot(stream),
+          status: "error",
+          error: `Stream idle timeout (${Math.round(STREAM_IDLE_TIMEOUT_MS / 1000)}s)`,
+          completedAt: Date.now(),
+        };
+        emit(stream, "error");
+        scheduleGC(stream);
+      }
+    }, 10_000);
+
+    // Run resumed stream
+    runStream(stream, resumeParams, apiCallFn).catch(() => {});
+  }
+}
+
+export function isPaused(sessionId: string): boolean {
+  const stream = getStreamsMap().get(sessionId);
+  return stream?.snapshot.status === "paused" || false;
 }
