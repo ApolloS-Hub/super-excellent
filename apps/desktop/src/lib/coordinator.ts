@@ -12,6 +12,7 @@ import {
   type Worker,
 } from "./team";
 import { emitAgentEvent } from "./event-bus";
+import { isClaudeCLIAvailable, invokeClaudeCLI } from "./claude-cli";
 
 /** Worker 所属团队映射 */
 const ENGINEERING_IDS = new Set([
@@ -296,6 +297,25 @@ async function callWorkerLLMInner(
   onEvent: EventCallback,
   _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
+  // ── Claude CLI 快速路径：CLI 自带 agent loop，不需要手动工具调用 ──
+  if (config.provider === "anthropic" && await isClaudeCLIAvailable()) {
+    onEvent({ type: "thinking", text: `⚡ ${worker.emoji} 使用 Claude CLI 执行...\n` });
+    const systemPrompt = worker.systemPrompt + `\n\n今天的日期是 ${new Date().toISOString().split("T")[0]}。搜索时不要在关键词里加年份数字。`;
+    const result = await invokeClaudeCLI(task, {
+      model: config.model || "claude-sonnet-4-20250514",
+      systemPrompt,
+      maxTurns: 3,
+      apiKey: config.apiKey,
+      baseURL: config.baseURL,
+    });
+    if (result.success) {
+      onEvent({ type: "text", text: result.output });
+      return result.output;
+    }
+    // CLI 失败 → fallback 到 HTTP API
+    onEvent({ type: "thinking", text: `⚠️ CLI 失败 (${result.error})，回退到 HTTP API\n` });
+  }
+
   const rawBaseURL = config.baseURL || "https://api.openai.com";
   const baseURL = rawBaseURL.replace(/\/v1\/?$/, "");
   const { getAllToolDefinitions, executeTool } = await import("./tools");
