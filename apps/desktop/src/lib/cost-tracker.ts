@@ -31,8 +31,21 @@ const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "claude-3-haiku": { input: 0.25, output: 1.25 },
   "deepseek-chat": { input: 0.14, output: 0.28 },
   "deepseek-reasoner": { input: 0.55, output: 2.19 },
+  "deepseek-coder": { input: 0.14, output: 0.28 },
   "moonshot-v1-8k": { input: 1, output: 2 },
   "moonshot-v1-32k": { input: 2, output: 4 },
+  "moonshot-v1-128k": { input: 6, output: 12 },
+  "qwen-max": { input: 2, output: 6 },
+  "qwen-plus": { input: 0.8, output: 2 },
+  "qwen-turbo": { input: 0.3, output: 0.6 },
+  "qwen-long": { input: 0.5, output: 2 },
+  "glm-4": { input: 1, output: 1 },
+  "glm-4-flash": { input: 0.1, output: 0.1 },
+  "glm-4-long": { input: 1, output: 1 },
+  "abab7-chat": { input: 1, output: 1 },
+  "abab6.5s-chat": { input: 0.5, output: 0.5 },
+  "llama3": { input: 0, output: 0 },
+  "mistral": { input: 0, output: 0 },
 };
 
 function getPrice(model: string): { input: number; output: number } {

@@ -20,6 +20,11 @@ const PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI (GPT)" },
   { value: "google", label: "Google (Gemini)" },
   { value: "kimi", label: "Kimi (Moonshot)" },
+  { value: "ollama", label: "Ollama (本地模型)" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "qwen", label: "通义千问 (Qwen)" },
+  { value: "minimax", label: "MiniMax" },
+  { value: "zhipu", label: "智谱 (Zhipu)" },
   { value: "compatible", label: "自定义 / Custom" },
 ];
 
@@ -47,6 +52,36 @@ const MODEL_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
     { value: "moonshot-v1-32k", label: "Moonshot v1 32K" },
     { value: "moonshot-v1-8k", label: "Moonshot v1 8K" },
   ],
+  ollama: [
+    { value: "llama3.1", label: "Llama 3.1" },
+    { value: "llama3", label: "Llama 3" },
+    { value: "qwen2.5", label: "Qwen 2.5" },
+    { value: "mistral", label: "Mistral" },
+    { value: "codestral", label: "Codestral" },
+    { value: "deepseek-coder-v2", label: "DeepSeek Coder V2" },
+    { value: "gemma2", label: "Gemma 2" },
+  ],
+  deepseek: [
+    { value: "deepseek-chat", label: "DeepSeek Chat (V3)" },
+    { value: "deepseek-reasoner", label: "DeepSeek Reasoner (R1)" },
+    { value: "deepseek-coder", label: "DeepSeek Coder" },
+  ],
+  qwen: [
+    { value: "qwen-max", label: "Qwen Max" },
+    { value: "qwen-plus", label: "Qwen Plus" },
+    { value: "qwen-turbo", label: "Qwen Turbo" },
+    { value: "qwen-long", label: "Qwen Long" },
+  ],
+  minimax: [
+    { value: "abab7-chat", label: "ABAB 7 Chat" },
+    { value: "abab6.5s-chat", label: "ABAB 6.5s Chat" },
+  ],
+  zhipu: [
+    { value: "glm-4", label: "GLM-4" },
+    { value: "glm-4-flash", label: "GLM-4 Flash" },
+    { value: "glm-4-long", label: "GLM-4 Long" },
+    { value: "glm-4-alltools", label: "GLM-4 AllTools" },
+  ],
   compatible: [],
 };
 
@@ -55,6 +90,11 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI (GPT)",
   google: "Google (Gemini)",
   kimi: "Kimi (Moonshot)",
+  ollama: "Ollama (本地)",
+  deepseek: "DeepSeek",
+  qwen: "通义千问 (Qwen)",
+  minimax: "MiniMax",
+  zhipu: "智谱 (Zhipu)",
   compatible: "自定义",
 };
 
@@ -290,10 +330,12 @@ function SettingsPage({ onBack }: SettingsPageProps) {
               {(true) && (
                 <TextInput
                   label="API 端点 / Base URL"
-                  placeholder={config.provider === "anthropic" ? "https://api.anthropic.com" : config.provider === "openai" ? "https://api.openai.com" : config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "https://api.example.com/v1"}
-                  value={config.baseURL || (config.provider === "kimi" ? "https://api.moonshot.cn/v1" : "")}
+                  placeholder={
+                    ({ anthropic: "https://api.anthropic.com", openai: "https://api.openai.com/v1", google: "https://generativelanguage.googleapis.com/v1beta", kimi: "https://api.moonshot.cn/v1", ollama: "http://localhost:11434/v1", deepseek: "https://api.deepseek.com/v1", qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1", minimax: "https://api.minimax.chat/v1", zhipu: "https://open.bigmodel.cn/api/paas/v4" } as Record<string, string>)[config.provider] || "https://api.example.com/v1"
+                  }
+                  value={config.baseURL || ""}
                   onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
-                  description="留空使用默认地址，填写自定义地址覆盖（支持内网网关）"
+                  description={config.provider === "ollama" ? "Ollama 默认本地端口 11434，无需 API Key" : "留空使用默认地址，填写自定义地址覆盖（支持内网网关）"}
                 />
               )}
 

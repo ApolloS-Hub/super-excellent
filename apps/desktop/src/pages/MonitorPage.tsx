@@ -370,7 +370,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         <Text fw={600} mb="sm">工具与集成 / Tools</Text>
         <Group gap="xs">
           <Badge variant="light" color="blue">11 内置工具</Badge>
-          <Badge variant="light" color="green">5 LLM 提供商</Badge>
+          <Badge variant="light" color="green">10 LLM 提供商</Badge>
           <Badge variant="light" color="violet">MCP 扩展协议</Badge>
           <Badge variant="light" color="orange">浏览器控制</Badge>
           <Badge variant="light" color="cyan">持续学习引擎</Badge>

@@ -466,7 +466,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 
         lines.push("", "### 工具");
         lines.push(`- **已注册工具**: ${toolCount} 个`);
-        lines.push("- **LLM 提供商**: OpenAI / Anthropic / Kimi / Google / 本地");
+        lines.push("- **LLM 提供商**: Anthropic / OpenAI / Google / Kimi / Ollama / DeepSeek / Qwen / MiniMax / Zhipu / Custom");
         lines.push("- **MCP**: 扩展协议就绪");
 
         return lines.join("\n");
@@ -746,6 +746,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
         "claude": { provider: "anthropic", model: "claude-sonnet-4-6" },
         "gpt": { provider: "openai", model: "gpt-5.4" },
         "gemini": { provider: "google", model: "gemini-3.1-flash" },
+        "ollama": { provider: "ollama", model: "llama3.1", baseURL: "http://localhost:11434/v1" },
+        "deepseek": { provider: "deepseek", model: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" },
+        "qwen": { provider: "qwen", model: "qwen-plus", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+        "minimax": { provider: "minimax", model: "abab7-chat", baseURL: "https://api.minimax.chat/v1" },
+        "zhipu": { provider: "zhipu", model: "glm-4", baseURL: "https://open.bigmodel.cn/api/paas/v4" },
       };
       const target = modelMap[modelName.toLowerCase()];
       if (target) {
@@ -899,6 +904,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
                 <Badge variant="light" color="green">OpenAI</Badge>
                 <Badge variant="light" color="cyan">Gemini</Badge>
                 <Badge variant="light" color="grape">Kimi</Badge>
+                <Badge variant="light" color="teal">Ollama</Badge>
+                <Badge variant="light" color="indigo">DeepSeek</Badge>
+                <Badge variant="light" color="orange">Qwen</Badge>
+                <Badge variant="light" color="pink">MiniMax</Badge>
+                <Badge variant="light" color="lime">Zhipu</Badge>
                 <Badge variant="light" color="violet">自定义</Badge>
               </Group>
               <Stack mt="xl" gap="xs" align="center">

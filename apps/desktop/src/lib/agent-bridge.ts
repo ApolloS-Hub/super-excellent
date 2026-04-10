@@ -22,7 +22,7 @@ import {
 import { fetchWithRetry } from "./api-retry";
 
 export interface AgentConfig {
-  provider: "anthropic" | "openai" | "google" | "kimi" | "compatible";
+  provider: "anthropic" | "openai" | "google" | "kimi" | "ollama" | "deepseek" | "qwen" | "minimax" | "zhipu" | "compatible";
   apiKey: string;
   baseURL?: string;
   model: string;
@@ -30,6 +30,20 @@ export interface AgentConfig {
   workDir?: string;
   enableTools?: boolean;
 }
+
+/** Default base URLs for each provider */
+export const PROVIDER_DEFAULT_BASE_URLS: Record<string, string> = {
+  anthropic: "https://api.anthropic.com",
+  openai: "https://api.openai.com/v1",
+  google: "https://generativelanguage.googleapis.com/v1beta",
+  kimi: "https://api.moonshot.cn/v1",
+  ollama: "http://localhost:11434/v1",
+  deepseek: "https://api.deepseek.com/v1",
+  qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  minimax: "https://api.minimax.chat/v1",
+  zhipu: "https://open.bigmodel.cn/api/paas/v4",
+  compatible: "",
+};
 
 export interface ChatMessage {
   id: string;
@@ -116,11 +130,25 @@ const MODEL_TOKEN_LIMITS: Record<string, number> = {
   "gpt-3.5-turbo": 16385,
   "deepseek-chat": 64000,
   "deepseek-reasoner": 64000,
+  "deepseek-v3": 128000,
   "moonshot-v1-8k": 8000,
   "moonshot-v1-32k": 32000,
   "moonshot-v1-128k": 128000,
   "qwen-turbo": 131072,
   "qwen-plus": 131072,
+  "qwen-max": 32768,
+  "qwen-long": 1000000,
+  "glm-4": 128000,
+  "glm-4-flash": 128000,
+  "glm-4-long": 1000000,
+  "abab6.5s-chat": 245760,
+  "abab7-chat": 131072,
+  "llama3": 8192,
+  "llama3.1": 131072,
+  "mistral": 32768,
+  "codestral": 32768,
+  "qwen2.5": 131072,
+  "deepseek-coder-v2": 128000,
 };
 
 /** auto-compact 触发阈值：80% 模型上限 */
