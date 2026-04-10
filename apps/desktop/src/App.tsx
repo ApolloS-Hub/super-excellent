@@ -37,6 +37,10 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sessionCost, setSessionCost] = useState(0);
 
+  // Split-screen state
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitConvId, setSplitConvId] = useState<string | null>(null);
+
   // Initialize runtime
   useEffect(() => {
     // Register built-in agents
@@ -245,6 +249,34 @@ function App() {
             <Title order={3}>🌟 {t("app.title")}</Title>
           </Group>
           <Group gap="xs">
+            <Tooltip label={splitMode ? "单屏模式" : "双屏模式"} position="bottom">
+              <ActionIcon
+                variant={splitMode ? "filled" : "subtle"}
+                size="lg"
+                color={splitMode ? "blue" : undefined}
+                onClick={() => {
+                  if (!splitMode) {
+                    // Enter split mode: pick the second conversation
+                    const otherConvs = conversations.filter(c => c.id !== activeConvId);
+                    if (otherConvs.length > 0) {
+                      setSplitConvId(otherConvs[0].id);
+                      setSplitMode(true);
+                    } else {
+                      // Create a new conversation for the right pane
+                      const newConv = createConversation();
+                      setConversations(prev => [newConv, ...prev]);
+                      setSplitConvId(newConv.id);
+                      setSplitMode(true);
+                    }
+                  } else {
+                    setSplitMode(false);
+                    setSplitConvId(null);
+                  }
+                }}
+              >
+                <Text size="sm">{splitMode ? "◻" : "◫"}</Text>
+              </ActionIcon>
+            </Tooltip>
             <ActionIcon variant="subtle" size="lg" onClick={() => toggleColorScheme()}>
               <Text size="sm">{colorScheme === "dark" ? "🌙" : "☀️"}</Text>
             </ActionIcon>
@@ -342,13 +374,53 @@ function App() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        {currentPage === "chat" && (
+        {currentPage === "chat" && !splitMode && (
           <ChatPage
             conversation={activeConversation}
             conversations={conversations}
             onConversationsUpdate={handleConversationsUpdate}
             onNewConversation={handleNewConversation}
           />
+        )}
+        {currentPage === "chat" && splitMode && (
+          <div style={{ display: "flex", gap: 4, height: "calc(100vh - 100px)" }}>
+            {/* Left panel */}
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <SplitPanelHeader
+                conversations={conversations}
+                selectedId={activeConvId}
+                onSelect={setActiveConvId}
+                label="左"
+              />
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <ChatPage
+                  conversation={activeConversation}
+                  conversations={conversations}
+                  onConversationsUpdate={handleConversationsUpdate}
+                  onNewConversation={handleNewConversation}
+                />
+              </div>
+            </div>
+            {/* Divider */}
+            <div style={{ width: 2, background: "var(--mantine-color-dark-4)", flexShrink: 0 }} />
+            {/* Right panel */}
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <SplitPanelHeader
+                conversations={conversations}
+                selectedId={splitConvId}
+                onSelect={setSplitConvId}
+                label="右"
+              />
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <ChatPage
+                  conversation={conversations.find(c => c.id === splitConvId) || null}
+                  conversations={conversations}
+                  onConversationsUpdate={handleConversationsUpdate}
+                  onNewConversation={handleNewConversation}
+                />
+              </div>
+            </div>
+          </div>
         )}
         {currentPage === "settings" && (
           <SettingsPage onBack={() => setCurrentPage("chat")} />
@@ -365,6 +437,40 @@ function App() {
         onClose={() => setPermRequest(null)}
       />
     </AppShell>
+  );
+}
+
+/** Split-panel conversation selector header */
+function SplitPanelHeader({
+  conversations,
+  selectedId,
+  onSelect,
+  label,
+}: {
+  conversations: Conversation[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  label: string;
+}) {
+  const current = conversations.find(c => c.id === selectedId);
+  return (
+    <Group gap="xs" px="xs" py={4} style={{ borderBottom: "1px solid var(--mantine-color-dark-4)", flexShrink: 0 }}>
+      <Badge size="xs" variant="light" color="blue">{label}</Badge>
+      <Menu>
+        <Menu.Target>
+          <Button variant="subtle" size="xs" compact style={{ fontWeight: 500, maxWidth: 200 }}>
+            <Text size="xs" truncate>{current?.title || "选择对话"}</Text>
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          {conversations.map(c => (
+            <Menu.Item key={c.id} onClick={() => onSelect(c.id)}>
+              <Text size="xs" truncate style={{ maxWidth: 250 }}>{c.title}</Text>
+            </Menu.Item>
+          ))}
+        </Menu.Dropdown>
+      </Menu>
+    </Group>
   );
 }
 
