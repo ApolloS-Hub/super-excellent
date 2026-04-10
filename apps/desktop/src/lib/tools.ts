@@ -948,31 +948,32 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   if (!query) return "❌ 缺少 query 参数";
 
   try {
-    const { fetch: tFetch } = await import("@tauri-apps/plugin-http");
-    const results: string[] = [];
+    // Use fetchWithRetry from api-retry.ts — proven to work (same as chat API calls)
+    const { fetchWithRetry } = await import("./api-retry");
     const enOnly = query.replace(/[一-鿿]/g, " ").replace(/\d{4}/g, "")
-      .replace(/\b(news|latest|search|find|today|recent)\b/gi, "")
+      .replace(/(news|latest|search|find|today|recent)/gi, "")
       .replace(/\s+/g, " ").trim() || "AI";
 
-    // HackerNews Algolia API — always works, no auth needed
-    const hnResp = await tFetch(
+    const resp = await fetchWithRetry(
       "https://hn.algolia.com/api/v1/search_by_date?query=" + encodeURIComponent(enOnly) + "&tags=story&hitsPerPage=8",
-      { method: "GET", connectTimeout: 15000 },
+      { method: "GET" },
+      { maxRetries: 1, baseDelayMs: 500, maxDelayMs: 3000, retryableStatuses: [500, 502, 503] },
     );
-    if (hnResp.ok) {
-      const data = await hnResp.json() as { hits?: Array<{ title: string; url?: string; objectID: string; created_at?: string }> };
-      for (const hit of (data.hits || []).slice(0, 5)) {
-        const idx = results.length + 1;
-        const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
-        const date = hit.created_at ? hit.created_at.split("T")[0] : "";
-        results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   " + date : ""));
-      }
+
+    if (!resp.ok) return "搜索失败: HTTP " + resp.status;
+
+    const data = await resp.json() as { hits?: Array<{ title: string; url?: string; objectID: string; created_at?: string }> };
+    const results: string[] = [];
+    for (const hit of (data.hits || []).slice(0, 5)) {
+      const idx = results.length + 1;
+      const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
+      const date = hit.created_at ? hit.created_at.split("T")[0] : "";
+      results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   " + date : ""));
     }
 
-    if (results.length > 0) {
-      return "\ud83d\udd0d 搜索结果 (" + query + "):\n\n" + results.join("\n\n");
-    }
-    return "搜索 \"" + query + "\" 暂无结果。";
+    return results.length > 0
+      ? "\ud83d\udd0d 搜索结果 (" + query + "):\n\n" + results.join("\n\n")
+      : "搜索 \"" + query + "\" 暂无结果。";
   } catch (e) {
     return "搜索失败: " + (e instanceof Error ? e.message : String(e));
   }
