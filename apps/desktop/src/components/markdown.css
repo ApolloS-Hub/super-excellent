@@ -94,3 +94,9 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
+
+/* Tool progress bar animation — CodePilot-inspired indeterminate shimmer */
+@keyframes tool-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
