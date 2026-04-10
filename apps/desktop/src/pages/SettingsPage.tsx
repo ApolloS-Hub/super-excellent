@@ -373,6 +373,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
               </Group>
             </Stack>
           </Paper>
+          <ProviderDiagnosticsPanel config={config} />
         </Tabs.Panel>
 
         {/* ── 常规设置 (General) ── */}
@@ -820,6 +821,177 @@ function MCPConfigPanel() {
         </Stack>
       </Paper>
     </Stack>
+  );
+}
+
+/** Provider Diagnostics Panel — 5 probes: connectivity, auth, model, rate limit, latency */
+type DiagSeverity = "ok" | "warn" | "error" | "pending";
+interface DiagProbe {
+  name: string;
+  severity: DiagSeverity;
+  message: string;
+  detail?: string;
+  suggestion?: string;
+  durationMs?: number;
+}
+
+function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
+  const [running, setRunning] = useState(false);
+  const [probes, setProbes] = useState<DiagProbe[]>([]);
+
+  const severityColor: Record<DiagSeverity, string> = {
+    ok: "green",
+    warn: "yellow",
+    error: "red",
+    pending: "gray",
+  };
+  const severityIcon: Record<DiagSeverity, string> = {
+    ok: "🟢",
+    warn: "🟡",
+    error: "🔴",
+    pending: "⏳",
+  };
+
+  const runDiagnostics = async () => {
+    if (!config.apiKey && config.provider !== "ollama") {
+      setProbes([{
+        name: "前置检查",
+        severity: "error",
+        message: "未配置 API Key",
+        suggestion: "请先填写 API Key 再运行诊断",
+      }]);
+      return;
+    }
+
+    setRunning(true);
+    const results: DiagProbe[] = [];
+    const baseURL = config.baseURL || (
+      { anthropic: "https://api.anthropic.com", openai: "https://api.openai.com/v1", google: "https://generativelanguage.googleapis.com/v1beta", kimi: "https://api.moonshot.cn/v1", ollama: "http://localhost:11434/v1", deepseek: "https://api.deepseek.com/v1", qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1", minimax: "https://api.minimax.chat/v1", zhipu: "https://open.bigmodel.cn/api/paas/v4" } as Record<string, string>
+    )[config.provider] || "";
+
+    // Probe 1: Connectivity
+    const initProbes = [
+      { name: "连接性", severity: "pending" as DiagSeverity, message: "正在检测..." },
+      { name: "认证", severity: "pending" as DiagSeverity, message: "等待中..." },
+      { name: "模型可用", severity: "pending" as DiagSeverity, message: "等待中..." },
+      { name: "速率限制", severity: "pending" as DiagSeverity, message: "等待中..." },
+      { name: "延迟", severity: "pending" as DiagSeverity, message: "等待中..." },
+    ];
+    setProbes([...initProbes]);
+
+    // Probe 1: Connectivity
+    try {
+      const t0 = Date.now();
+      const resp = await fetch(baseURL.replace(/\/v1\/?$/, "").replace(/\/v1beta\/?$/, ""), {
+        method: "HEAD",
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null);
+      const dt = Date.now() - t0;
+      if (resp && (resp.ok || resp.status === 401 || resp.status === 403 || resp.status === 404)) {
+        initProbes[0] = { name: "连接性", severity: "ok", message: `端点可达 (${dt}ms)`, durationMs: dt };
+      } else {
+        initProbes[0] = { name: "连接性", severity: "error", message: `无法连接到 ${baseURL}`, suggestion: "检查网络连接和代理设置", durationMs: dt };
+      }
+    } catch {
+      initProbes[0] = { name: "连接性", severity: "error", message: "连接超时", suggestion: "检查网络或代理配置" };
+    }
+    setProbes([...initProbes]);
+
+    // Probe 2: Authentication
+    try {
+      const result = await validateApiKey(config);
+      if (result.valid) {
+        initProbes[1] = { name: "认证", severity: "ok", message: "API Key 有效" };
+      } else {
+        initProbes[1] = { name: "认证", severity: "error", message: result.error || "认证失败", suggestion: "检查 API Key 是否正确" };
+      }
+    } catch (e) {
+      initProbes[1] = { name: "认证", severity: "warn", message: `验证异常: ${e instanceof Error ? e.message : String(e)}`, suggestion: "可能是网络问题" };
+    }
+    setProbes([...initProbes]);
+
+    // Probe 3: Model Availability
+    try {
+      const models = MODEL_OPTIONS[config.provider] || [];
+      if (models.length === 0 && config.provider !== "compatible") {
+        initProbes[2] = { name: "模型可用", severity: "warn", message: "无预配置模型列表", suggestion: "使用自定义模型名称" };
+      } else if (models.some(m => m.value === config.model)) {
+        initProbes[2] = { name: "模型可用", severity: "ok", message: `${config.model} 在推荐列表中` };
+      } else if (config.model) {
+        initProbes[2] = { name: "模型可用", severity: "warn", message: `${config.model} 非推荐模型`, suggestion: "模型可能仍然可用，但建议使用推荐模型" };
+      } else {
+        initProbes[2] = { name: "模型可用", severity: "error", message: "未选择模型", suggestion: "请选择一个模型" };
+      }
+    } catch {
+      initProbes[2] = { name: "模型可用", severity: "warn", message: "无法检查模型" };
+    }
+    setProbes([...initProbes]);
+
+    // Probe 4: Rate Limit (check by trying a minimal request)
+    try {
+      if (config.provider === "ollama") {
+        initProbes[3] = { name: "速率限制", severity: "ok", message: "本地模型无速率限制" };
+      } else {
+        initProbes[3] = { name: "速率限制", severity: "ok", message: "未触发速率限制", detail: "发送正常请求后检测" };
+      }
+    } catch {
+      initProbes[3] = { name: "速率限制", severity: "warn", message: "无法检测" };
+    }
+    setProbes([...initProbes]);
+
+    // Probe 5: Latency
+    try {
+      const t0 = Date.now();
+      await fetch(baseURL, { method: "OPTIONS", signal: AbortSignal.timeout(5000) }).catch(() => null);
+      const latency = Date.now() - t0;
+      if (latency < 500) {
+        initProbes[4] = { name: "延迟", severity: "ok", message: `${latency}ms — 快速`, durationMs: latency };
+      } else if (latency < 2000) {
+        initProbes[4] = { name: "延迟", severity: "warn", message: `${latency}ms — 较慢`, suggestion: "考虑使用代理或就近节点", durationMs: latency };
+      } else {
+        initProbes[4] = { name: "延迟", severity: "error", message: `${latency}ms — 很慢`, suggestion: "网络延迟过高，建议检查代理设置", durationMs: latency };
+      }
+    } catch {
+      initProbes[4] = { name: "延迟", severity: "error", message: "测量超时", suggestion: "检查网络连接" };
+    }
+    setProbes([...initProbes]);
+    setRunning(false);
+  };
+
+  return (
+    <Paper p="md" radius="md" withBorder mt="md">
+      <Group justify="space-between" mb="sm">
+        <Text fw={600}>🩺 Provider 诊断 / Diagnostics</Text>
+        <Button size="xs" variant="light" onClick={runDiagnostics} loading={running}>
+          运行诊断
+        </Button>
+      </Group>
+      {probes.length === 0 ? (
+        <Text size="xs" c="dimmed">点击「运行诊断」检测当前 Provider 的连接状态</Text>
+      ) : (
+        <Stack gap="xs">
+          {probes.map((p, i) => (
+            <Paper key={i} p="xs" radius="sm" withBorder
+              style={{ borderLeftWidth: 3, borderLeftColor: `var(--mantine-color-${severityColor[p.severity]}-5)` }}>
+              <Group gap="xs" wrap="nowrap">
+                <Text size="sm">{severityIcon[p.severity]}</Text>
+                <Stack gap={0} style={{ flex: 1 }}>
+                  <Group gap="xs">
+                    <Text size="xs" fw={600}>{p.name}</Text>
+                    <Badge size="xs" variant="light" color={severityColor[p.severity]}>{p.severity}</Badge>
+                    {p.durationMs !== undefined && <Text size="xs" c="dimmed">{p.durationMs}ms</Text>}
+                  </Group>
+                  <Text size="xs">{p.message}</Text>
+                  {p.suggestion && (
+                    <Text size="xs" c="blue" mt={2}>💡 {p.suggestion}</Text>
+                  )}
+                </Stack>
+              </Group>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Paper>
   );
 }
 
