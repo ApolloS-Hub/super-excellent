@@ -482,29 +482,45 @@ async fn web_search(query: String) -> Result<String, String> {
         encoded
     );
     
-    // 直接用 curl + proxy，失败就报错
-    let output = std::process::Command::new("/usr/bin/curl")
-        .args(["-x", "http://127.0.0.1:11088", "-sL", "--connect-timeout", "10", "--max-time", "15", &url])
-        .output()
-        .map_err(|e| format!("无法启动 curl: {}", e))?;
+    // Use tokio::process (async) with timeout to avoid blocking the runtime
+    use tokio::process::Command as AsyncCommand;
+    
+    let child = AsyncCommand::new("/usr/bin/curl")
+        .args(["-x", "http://127.0.0.1:11088", "-sL", "--connect-timeout", "8", "--max-time", "12", &url])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("curl 启动失败: {}", e))?;
+    
+    // Hard 15s timeout
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        child.wait_with_output()
+    ).await;
+    
+    let output = match result {
+        Ok(Ok(o)) => o,
+        Ok(Err(e)) => return Err(format!("curl 执行错误: {}", e)),
+        Err(_) => return Err("搜索超时 (15s) — 网络或代理不可用".to_string()),
+    };
     
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("网络请求失败 (exit {}): {}", output.status.code().unwrap_or(-1), stderr.trim()));
+        return Err(format!("curl 失败 (exit {}): {}", output.status.code().unwrap_or(-1), stderr.trim()));
     }
     
     let body = String::from_utf8_lossy(&output.stdout);
     if body.is_empty() {
-        return Err("网络请求返回空内容 — 代理可能不可用".to_string());
+        return Err("搜索返回空 — 代理可能不可用".to_string());
     }
     
     let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| format!("返回内容不是 JSON: {} | 原始内容前100字: {}", e, &body[..body.len().min(100)]))?;
+        .map_err(|_| format!("非 JSON 响应: {}", &body[..body.len().min(200)]))?;
     
     let empty = vec![];
     let hits = json["hits"].as_array().unwrap_or(&empty);
     if hits.is_empty() {
-        return Ok(format!("搜索 \"{}\" 无结果（API 正常但无匹配）", query));
+        return Ok(format!("搜索 \"{}\" 无匹配结果", query));
     }
     
     let mut results = Vec::new();
