@@ -23,7 +23,7 @@ export interface AgentTask {
 
 export interface AppState {
   // UI
-  currentPage: "chat" | "settings" | "monitor";
+  currentPage: "chat" | "settings" | "monitor" | "media" | "skills";
   sidebarOpen: boolean;
   theme: "light" | "dark" | "auto";
   language: string;

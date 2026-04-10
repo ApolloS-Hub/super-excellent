@@ -9,6 +9,7 @@ import { useDisclosure } from "@mantine/hooks";
 import ChatPage from "./pages/ChatPage";
 import SettingsPage from "./pages/SettingsPage";
 import MonitorPage from "./pages/MonitorPage";
+import MediaStudioPage from "./pages/MediaStudioPage";
 import { PermissionDialog, permissionManager } from "./components/PermissionDialog";
 import type { PermissionRequest } from "./components/PermissionDialog";
 import {
@@ -21,7 +22,7 @@ import type { Conversation } from "./lib/conversations";
 import { setState as setAppState } from "./lib/app-state";
 import { check } from "@tauri-apps/plugin-updater";
 
-type Page = "chat" | "settings" | "monitor";
+type Page = "chat" | "settings" | "monitor" | "media" | "skills";
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -419,6 +420,13 @@ function App() {
             onClick={() => { setCurrentPage("monitor"); close(); }}
             py={6}
           />
+          <NavLink
+            label="Media Studio"
+            leftSection={<Text size="sm">🎨</Text>}
+            active={currentPage === "media"}
+            onClick={() => { setCurrentPage("media"); close(); }}
+            py={6}
+          />
         </Stack>
       </AppShell.Navbar>
 
@@ -476,6 +484,9 @@ function App() {
         )}
         {currentPage === "monitor" && (
           <MonitorPage onBack={() => setCurrentPage("chat")} />
+        )}
+        {currentPage === "media" && (
+          <MediaStudioPage onBack={() => setCurrentPage("chat")} />
         )}
       </AppShell.Main>
 
