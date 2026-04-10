@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Stack, Textarea, Button, Group, Paper, Text,
   ScrollArea, Box, Badge, ActionIcon, Menu, Tooltip,
-  Notification, useMantineColorScheme,
+  Notification, Collapse, useMantineColorScheme,
 } from "@mantine/core";
 import { sendMessage, loadConfig } from "../lib/agent-bridge";
 import type { ChatMessage } from "../lib/agent-bridge";
@@ -1023,9 +1023,11 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
 
+  // Separate thinking content (emoji-prefixed lines) from main model output
   const thinkingMatch = message.content.match(/^([\s\S]*?)((?:\n?(?:🔄|📦|✅|❌|💭|💰)[\s\S]*?)*)$/);
   const mainContent = thinkingMatch?.[1]?.trim() || message.content;
   const thinkingContent = thinkingMatch?.[2]?.trim() || "";
+  const thinkingLines = thinkingContent ? thinkingContent.split("\n").filter(Boolean) : [];
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mainContent || message.content).then(() => {
@@ -1033,6 +1035,12 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
       setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  // Count tool call statuses for summary
+  const toolCalls = message.toolCalls || [];
+  const runningCount = toolCalls.filter(tc => tc.status === "running").length;
+  const successCount = toolCalls.filter(tc => tc.status === "success").length;
+  const errorCount = toolCalls.filter(tc => tc.status === "error").length;
 
   return (
     <Paper
@@ -1048,47 +1056,66 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Streaming indicator */}
-      {message.isStreaming && !mainContent && (
+      {/* Streaming indicator — animated pulse when waiting for first token */}
+      {message.isStreaming && !mainContent && toolCalls.length === 0 && (
         <Group gap="xs" py="xs">
           <Box style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", animation: "pulse 1.5s infinite" }} />
           <Text size="xs" c="dimmed">思考中...</Text>
         </Group>
       )}
 
-      {message.toolCalls && message.toolCalls.length > 0 && (
-        <Stack gap={4} mb="xs">
-          {message.toolCalls.map((tc, i) => (
-            <ToolCallCard key={i} name={tc.name} input={tc.input || ""} output={tc.output} status={tc.status} />
-          ))}
-        </Stack>
-      )}
       {isUser ? (
         <Text size="sm" c={isDark ? "white" : "dark"} style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.content}</Text>
       ) : (
-        <>
-          {mainContent && <MarkdownContent content={mainContent} />}
-          {thinkingContent && (
-            <Box mt="xs">
-              <Text
-                size="xs" c="dimmed" style={{ cursor: "pointer" }}
+        <Stack gap="xs">
+          {/* Thinking section — collapsible, separate from main text */}
+          {thinkingLines.length > 0 && (
+            <Paper
+              p="xs" radius="sm" withBorder
+              style={{ borderColor: isDark ? "var(--mantine-color-dark-4)" : "var(--mantine-color-gray-3)" }}
+              bg={isDark ? "dark.7" : "gray.0"}
+            >
+              <Group
+                gap="xs" style={{ cursor: "pointer" }}
                 onClick={() => setShowThinking(!showThinking)}
               >
-                {showThinking ? "▼" : "▶"} 执行过程 ({thinkingContent.split("\n").filter(Boolean).length} 步)
-              </Text>
-              {showThinking && (
-                <Box mt={4} p="xs" style={{ borderRadius: 4, fontSize: 12, opacity: 0.7 }}
-                  bg={isDark ? "dark.7" : "gray.0"}>
-                  <Text size="xs" style={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
+                <Badge size="xs" variant="light" color="violet">Reasoning</Badge>
+                <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                  {thinkingLines.length} 步
+                </Text>
+                <Text size="xs" c="dimmed">{showThinking ? "▼" : "▶"}</Text>
+              </Group>
+              <Collapse in={showThinking}>
+                <Box mt={4} p="xs" style={{ borderRadius: 4, maxHeight: 300, overflow: "auto" }}
+                  bg={isDark ? "dark.8" : "white"}>
+                  <Text size="xs" style={{ whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", lineHeight: 1.6, opacity: 0.85 }}>
                     {thinkingContent}
                   </Text>
                 </Box>
-              )}
-            </Box>
+              </Collapse>
+            </Paper>
           )}
-        </>
+
+          {/* Tool calls section — each tool as an independent collapsible card */}
+          {toolCalls.length > 0 && (
+            <Stack gap={4}>
+              <Group gap="xs">
+                <Text size="xs" fw={600} c="dimmed">工具调用</Text>
+                {runningCount > 0 && <Badge size="xs" variant="dot" color="blue">{runningCount} 运行中</Badge>}
+                {successCount > 0 && <Badge size="xs" variant="dot" color="green">{successCount} 完成</Badge>}
+                {errorCount > 0 && <Badge size="xs" variant="dot" color="red">{errorCount} 失败</Badge>}
+              </Group>
+              {toolCalls.map((tc, i) => (
+                <ToolCallCard key={i} name={tc.name} input={tc.input || ""} output={tc.output} status={tc.status} />
+              ))}
+            </Stack>
+          )}
+
+          {/* Main content — Markdown rendered */}
+          {mainContent && <MarkdownContent content={mainContent} />}
+          {message.isStreaming && mainContent && <span className="cursor-blink">▊</span>}
+        </Stack>
       )}
-      {message.isStreaming && mainContent && <span className="cursor-blink">▊</span>}
 
       {/* Action buttons on hover */}
       {hovered && !message.isStreaming && (
@@ -1172,7 +1199,24 @@ function FileHistoryPanel() {
   );
 }
 
-/** Inline tool call card within message bubbles */
+/** Status config for tool call cards — inspired by CodePilot tool.tsx status mapping */
+const TOOL_STATUS_CONFIG: Record<string, { color: string; label: string; borderColor: string }> = {
+  running: { color: "blue", label: "Running", borderColor: "blue" },
+  success: { color: "green", label: "Completed", borderColor: "green" },
+  error: { color: "red", label: "Error", borderColor: "red" },
+};
+
+/** Tool icon lookup — maps tool names to category icons */
+function getToolIcon(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("bash") || n.includes("execute") || n.includes("shell")) return ">";
+  if (n.includes("write") || n.includes("edit") || n.includes("file_write")) return "W";
+  if (n.includes("read") || n.includes("file_read")) return "R";
+  if (n.includes("search") || n.includes("glob") || n.includes("grep") || n.includes("find")) return "?";
+  return "T";
+}
+
+/** Inline tool call card within message bubbles — CodePilot-inspired Collapsible with status Badge */
 function ToolCallCard({ name, input, output, status }: {
   name: string;
   input: string;
@@ -1183,8 +1227,8 @@ function ToolCallCard({ name, input, output, status }: {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
   const st = status || "success";
-  const color = st === "running" ? "blue" : st === "success" ? "green" : "red";
-  const icon = st === "running" ? "🔄" : st === "success" ? "✅" : "❌";
+  const cfg = TOOL_STATUS_CONFIG[st] || TOOL_STATUS_CONFIG.success;
+  const toolIcon = getToolIcon(name);
 
   let paramPreview = "";
   try {
@@ -1206,29 +1250,54 @@ function ToolCallCard({ name, input, output, status }: {
     <Paper
       p="xs" radius="sm" withBorder
       style={{
-        borderColor: `var(--mantine-color-${color}-${isDark ? "8" : "3"})`,
+        borderColor: `var(--mantine-color-${cfg.borderColor}-${isDark ? "8" : "3"})`,
+        borderLeftWidth: 3,
         cursor: "pointer",
+        transition: "background 0.15s",
       }}
       bg={isDark ? "dark.7" : "gray.0"}
       onClick={() => setExpanded(e => !e)}
     >
       <Group justify="space-between" wrap="nowrap" gap="xs">
         <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-          <Badge size="xs" variant="light" color={color} leftSection={icon}>
-            {name}
+          <Badge size="xs" variant="filled" color={isDark ? "dark.5" : "gray.3"} c={isDark ? "gray.3" : "dark.6"}
+            style={{ fontFamily: "monospace", minWidth: 20, textAlign: "center" }}>
+            {toolIcon}
           </Badge>
+          <Text size="xs" fw={600} truncate>{name}</Text>
           {paramPreview && (
             <Text size="xs" c="dimmed" truncate style={{ maxWidth: 200 }}>{paramPreview}</Text>
           )}
         </Group>
-        <Text size="xs" c="dimmed">{expanded ? "▼" : "▶"}</Text>
+        <Group gap={6} wrap="nowrap">
+          <Badge
+            size="xs"
+            variant={st === "running" ? "dot" : "light"}
+            color={cfg.color}
+          >
+            {cfg.label}
+          </Badge>
+          <Text size="xs" c="dimmed">{expanded ? "▼" : "▶"}</Text>
+        </Group>
       </Group>
-      {expanded && (
-        <Box mt="xs" p="xs" style={{ borderRadius: 4, fontSize: 11, fontFamily: "monospace" }}
+
+      {/* Running progress indicator */}
+      {st === "running" && (
+        <Box mt={4} style={{ height: 2, borderRadius: 1, overflow: "hidden", background: isDark ? "var(--mantine-color-dark-5)" : "var(--mantine-color-gray-3)" }}>
+          <Box style={{
+            height: "100%", width: "40%", borderRadius: 1,
+            background: "var(--mantine-color-blue-5)",
+            animation: "tool-progress 1.5s ease-in-out infinite",
+          }} />
+        </Box>
+      )}
+
+      <Collapse in={expanded}>
+        <Box mt="xs" p="xs" style={{ borderRadius: 4, fontSize: 11, fontFamily: "'JetBrains Mono', 'Fira Code', monospace", overflowX: "auto", maxHeight: 300, overflow: "auto" }}
           bg={isDark ? "dark.8" : "gray.1"}>
           {input && (
             <>
-              <Text size="xs" fw={600} mb={2}>参数:</Text>
+              <Text size="xs" fw={600} mb={2} c="dimmed">Parameters</Text>
               <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                 {(() => { try { return JSON.stringify(JSON.parse(input), null, 2); } catch { return input; } })()}
               </Text>
@@ -1236,14 +1305,17 @@ function ToolCallCard({ name, input, output, status }: {
           )}
           {output && (
             <>
-              <Text size="xs" fw={600} mt="xs" mb={2}>结果:</Text>
-              <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                {output.length > 500 ? output.slice(0, 500) + "..." : output}
+              <Text size="xs" fw={600} mt="xs" mb={2} c={st === "error" ? "red" : "dimmed"}>
+                {st === "error" ? "Error" : "Result"}
+              </Text>
+              <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+                c={st === "error" ? "red.4" : undefined}>
+                {output.length > 800 ? output.slice(0, 800) + "\n... (truncated)" : output}
               </Text>
             </>
           )}
         </Box>
-      )}
+      </Collapse>
     </Paper>
   );
 }
