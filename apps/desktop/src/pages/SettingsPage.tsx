@@ -447,7 +447,10 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
         {/* ── 飞书配置 (Lark/Feishu) ── */}
         <Tabs.Panel value="lark" pt="md">
-          <LarkConfigPanel />
+          <Stack gap="md">
+            <LarkConfigPanel />
+            <RemoteBridgePanel />
+          </Stack>
         </Tabs.Panel>
 
         {/* ── 高级设置 (Advanced) ── */}
@@ -1110,6 +1113,91 @@ function LarkConfigPanel() {
         </Stack>
       </Paper>
     </Stack>
+  );
+}
+
+/** Remote Bridge Configuration Panel */
+function RemoteBridgePanel() {
+  const [bridgeCfg, setBridgeCfg] = useState(() => {
+    try {
+      const raw = localStorage.getItem("remote-bridge-config");
+      return raw ? JSON.parse(raw) : { enabled: false, allowedChatIds: [], pollIntervalMs: 3000, maxMessageLength: 4000 };
+    } catch { return { enabled: false, allowedChatIds: [], pollIntervalMs: 3000, maxMessageLength: 4000 }; }
+  });
+  const [running, setRunning] = useState(false);
+  const [chatIdsInput, setChatIdsInput] = useState(() =>
+    (bridgeCfg.allowedChatIds || []).join(", ") as string
+  );
+
+  useEffect(() => {
+    import("../lib/remote-bridge").then(m => {
+      setRunning(m.isRemoteBridgeRunning());
+    });
+    const timer = setInterval(() => {
+      import("../lib/remote-bridge").then(m => {
+        setRunning(m.isRemoteBridgeRunning());
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleToggle = async () => {
+    const m = await import("../lib/remote-bridge");
+    if (running) {
+      m.stopRemoteBridge();
+      setRunning(false);
+      const updated = { ...bridgeCfg, enabled: false };
+      setBridgeCfg(updated);
+      m.setBridgeConfig(updated);
+    } else {
+      const chatIds = chatIdsInput.split(",").map((s: string) => s.trim()).filter(Boolean);
+      const updated = { ...bridgeCfg, enabled: true, allowedChatIds: chatIds };
+      setBridgeCfg(updated);
+      m.setBridgeConfig(updated);
+      m.startRemoteBridge();
+      setRunning(true);
+    }
+  };
+
+  return (
+    <Paper p="md" radius="md" withBorder>
+      <Group justify="space-between" mb="sm">
+        <Text fw={600}>🌐 远程控制 / Remote Bridge</Text>
+        <Badge color={running ? "green" : "gray"} variant="light">
+          {running ? "🟢 运行中" : "⚪ 未启动"}
+        </Badge>
+      </Group>
+      <Text size="sm" c="dimmed" mb="md">
+        通过飞书消息远程控制 AI 助手。发送消息到指定群聊，AI 自动回复。
+      </Text>
+
+      <Stack gap="md">
+        <TextInput
+          label="允许的聊天 ID"
+          placeholder="oc_xxx, oc_yyy（留空允许所有）"
+          value={chatIdsInput}
+          onChange={(e) => setChatIdsInput(e.currentTarget.value)}
+          description="限制 AI 只响应这些群聊的消息（逗号分隔）"
+        />
+
+        <TextInput
+          label="轮询间隔 (ms)"
+          placeholder="3000"
+          value={String(bridgeCfg.pollIntervalMs || 3000)}
+          onChange={(e) => setBridgeCfg({ ...bridgeCfg, pollIntervalMs: parseInt(e.currentTarget.value) || 3000 })}
+          description="检查新消息的频率（毫秒）"
+        />
+
+        <Button
+          onClick={handleToggle}
+          color={running ? "red" : "green"}
+          variant="light"
+          fullWidth
+        >
+          {running ? "⏹ 停止远程控制" : "▶ 启动远程控制"}
+        </Button>
+      </Stack>
+    </Paper>
   );
 }
 
