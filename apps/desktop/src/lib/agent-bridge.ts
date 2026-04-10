@@ -20,7 +20,6 @@ import {
   type AnthropicCacheBlock,
 } from "./prompt-cache";
 import { fetchWithRetry } from "./api-retry";
-import { isClaudeCLIAvailable, invokeClaudeCLI } from "./claude-cli";
 
 export interface AgentConfig {
   provider: "anthropic" | "openai" | "google" | "kimi" | "compatible";
@@ -523,24 +522,7 @@ export async function sendMessage(
       await watchdogWrap(
         async (provider, model) => {
           const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          if (effectiveConfig.provider === "anthropic" && await isClaudeCLIAvailable()) {
-            // Claude CLI 快速路径 — CLI 自带 agent loop
-            onEvent({ type: "thinking", text: "⚡ 使用 Claude CLI 对话...\n" });
-            const cliResult = await invokeClaudeCLI(message, {
-              model: effectiveConfig.model,
-              maxTurns: 3,
-              apiKey: effectiveConfig.apiKey,
-              baseURL: effectiveConfig.baseURL,
-            });
-            if (cliResult.success) {
-              onEvent({ type: "text", text: cliResult.output });
-              onEvent({ type: "result", text: cliResult.output });
-              return;
-            }
-            // CLI 失败 → fallback 到 HTTP API
-            onEvent({ type: "thinking", text: `⚠️ CLI 失败 (${cliResult.error})，回退到 HTTP API\n` });
-            await callAnthropic(message, effectiveConfig, onEvent, history);
-          } else if (effectiveConfig.provider === "anthropic") {
+          if (effectiveConfig.provider === "anthropic") {
             await callAnthropic(message, effectiveConfig, onEvent, history);
           } else if (effectiveConfig.provider === "google") {
             await callGemini(message, effectiveConfig, onEvent, history);
