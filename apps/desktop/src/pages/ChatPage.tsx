@@ -8,7 +8,7 @@ import {
 import { sendMessage, loadConfig } from "../lib/agent-bridge";
 import type { ChatMessage } from "../lib/agent-bridge";
 import {
-  startStream, getSnapshot, subscribe, abortStream, pauseStream, resumeStream, isPaused,
+  startStream, getSnapshot, subscribe, abortStream, pauseStream, resumeStream,
 } from "../lib/stream-manager";
 import type { StreamEvent } from "../lib/stream-manager";
 import {
@@ -384,7 +384,6 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     }
 
     // Use a printable text approach — create a hidden iframe, print to PDF
-    const printContent = textLines.join("\n");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:20px;font-size:13px;line-height:1.6}
 h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:8px}

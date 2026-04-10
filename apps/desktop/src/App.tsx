@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   AppShell, Burger, Group, Title, ActionIcon, Menu, Text, Box, Mark,
   NavLink, Divider, Button, Stack, ScrollArea, TextInput,
-  CloseButton, Tooltip, useMantineColorScheme,
+  CloseButton, Tooltip, useMantineColorScheme, Badge,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import ChatPage from "./pages/ChatPage";
@@ -505,7 +505,7 @@ function SplitPanelHeader({
       <Badge size="xs" variant="light" color="blue">{label}</Badge>
       <Menu>
         <Menu.Target>
-          <Button variant="subtle" size="xs" compact style={{ fontWeight: 500, maxWidth: 200 }}>
+          <Button variant="subtle" size="xs" style={{ fontWeight: 500, maxWidth: 200 }}>
             <Text size="xs" truncate>{current?.title || "选择对话"}</Text>
           </Button>
         </Menu.Target>

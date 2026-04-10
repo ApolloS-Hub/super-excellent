@@ -880,13 +880,12 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
     }
 
     setRunning(true);
-    const results: DiagProbe[] = [];
     const baseURL = config.baseURL || (
       { anthropic: "https://api.anthropic.com", openai: "https://api.openai.com/v1", google: "https://generativelanguage.googleapis.com/v1beta", kimi: "https://api.moonshot.cn/v1", ollama: "http://localhost:11434/v1", deepseek: "https://api.deepseek.com/v1", qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1", minimax: "https://api.minimax.chat/v1", zhipu: "https://open.bigmodel.cn/api/paas/v4" } as Record<string, string>
     )[config.provider] || "";
 
     // Probe 1: Connectivity
-    const initProbes = [
+    const initProbes: DiagProbe[] = [
       { name: "连接性", severity: "pending" as DiagSeverity, message: "正在检测..." },
       { name: "认证", severity: "pending" as DiagSeverity, message: "等待中..." },
       { name: "模型可用", severity: "pending" as DiagSeverity, message: "等待中..." },
