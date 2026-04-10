@@ -303,9 +303,10 @@ async function callWorkerLLM(
     { role: "user", content: task },
   ];
 
-  const MAX_WORKER_ITERATIONS = config.provider === "compatible" ? 2 : 15;
+  const MAX_WORKER_ITERATIONS = config.provider === "compatible" ? 2 : 3;
   let iteration = 0;
   let fullOutput = "";
+  let workerToolCalls = 0;
 
   while (iteration < MAX_WORKER_ITERATIONS) {
     iteration++;
@@ -436,6 +437,15 @@ async function callWorkerLLM(
             tool_call_id: tc.id,
           });
         }
+      }
+      workerToolCalls += msg.tool_calls!.length;
+      // Force stop after 3 total tool calls
+      if (workerToolCalls >= 3) {
+        const toolMsgs = isolatedMessages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
+        const summary = toolMsgs.length > 0 ? (toolMsgs as string[]).join("\n\n").slice(0, 5000) : "工具调用完成";
+        onEvent({ type: "text", text: summary });
+        fullOutput = summary;
+        break;
       }
       // Compatible provider: emit tool results directly and stop
       if (config.provider === "compatible") {

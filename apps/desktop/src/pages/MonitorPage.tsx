@@ -105,7 +105,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       const type = (event.type as string) || "unknown";
 
       // Real-time worker status updates (P0-2)
-      if (type === "worker_activate" || type === "worker_complete") {
+      if (type === "worker_activate" || type === "worker_complete" || type === "worker_status_change") {
         setTeamWorkers([...getTeamConfig().workers]);
       }
 

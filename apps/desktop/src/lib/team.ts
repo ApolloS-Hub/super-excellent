@@ -7,6 +7,7 @@
 
 import type { AgentConfig } from "./agent-bridge";
 import type { BusMessage } from "./message-bus";
+import { emitAgentEvent } from "./event-bus";
 
 export interface Worker {
   id: string;
@@ -680,6 +681,7 @@ export function assignTask(workerId: string, taskTitle: string): void {
   if (worker) {
     worker.status = "working";
     worker.currentTask = taskTitle;
+    emitAgentEvent({ type: "worker_status_change", workerId, status: "working", task: taskTitle });
   }
 }
 
@@ -687,6 +689,7 @@ export function completeWorkerTask(workerId: string, result?: string): void {
   const worker = getWorker(workerId);
   if (worker) {
     worker.status = "done";
+    emitAgentEvent({ type: "worker_status_change", workerId, status: "done" });
     if (result !== undefined) {
       worker.lastResult = result;
     }
