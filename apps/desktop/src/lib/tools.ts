@@ -947,65 +947,30 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   const query = String(args.query || "");
   if (!query) return "❌ 缺少 query 参数";
 
-  const tauriReady = isTauriAvailable();
-  if (!tauriReady) return "⚠️ 搜索需要桌面 App 环境";
-
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
+    const { fetch: tFetch } = await import("@tauri-apps/plugin-http");
     const results: string[] = [];
-    // Extract English keywords for HN, use full query for Google News
-    const enOnly = query.replace(/[\u4e00-\u9fff]/g, " ").replace(/\d{4}/g, "").replace(/\b(news|latest|最新|新闻|搜索|search|find|today|recent|breakthroughs?)\b/gi, "").replace(/\s+/g, " ").trim() || "AI";
-    const eqEn = encodeURIComponent(enOnly);
-    const eqFull = encodeURIComponent(query.replace(/[^\w\s\u4e00-\u9fff]/g, " ").trim());
+    const enOnly = query.replace(/[一-鿿]/g, " ").replace(/\d{4}/g, "")
+      .replace(/\b(news|latest|search|find|today|recent)\b/gi, "")
+      .replace(/\s+/g, " ").trim() || "AI";
 
-    // Source 1: HackerNews Algolia API (reliable, free, real-time tech news)
-    try {
-      const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
-        "\"https://hn.algolia.com/api/v1/search_by_date?query=" + eqEn + "&tags=story&hitsPerPage=8\"";
-      const r = await invoke("execute_command", {
-        command: cmd, cwd: null, timeoutMs: 20000,
-      }) as { stdout: string; success: boolean };
-      if (r.success && r.stdout) {
-        try {
-          const data = JSON.parse(r.stdout);
-          for (const hit of (data.hits || []).slice(0, 5)) {
-            const idx = results.length + 1;
-            const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
-            const date = hit.created_at ? hit.created_at.split("T")[0] : "";
-            results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   日期: " + date : ""));
-          }
-        } catch { /* JSON parse error */ }
+    // HackerNews Algolia API — always works, no auth needed
+    const hnResp = await tFetch(
+      "https://hn.algolia.com/api/v1/search_by_date?query=" + encodeURIComponent(enOnly) + "&tags=story&hitsPerPage=8",
+      { method: "GET", connectTimeout: 15000 },
+    );
+    if (hnResp.ok) {
+      const data = await hnResp.json() as { hits?: Array<{ title: string; url?: string; objectID: string; created_at?: string }> };
+      for (const hit of (data.hits || []).slice(0, 5)) {
+        const idx = results.length + 1;
+        const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
+        const date = hit.created_at ? hit.created_at.split("T")[0] : "";
+        results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   " + date : ""));
       }
-    } catch { /* HN failed */ }
-
-    // Source 2: Google News RSS (supplement)
-    if (results.length < 5) {
-      try {
-        const cmd = "curl -sL --connect-timeout 10 --max-time 15 " +
-          "\"https://news.google.com/rss/search?q=" + eqFull + "&hl=en-US&gl=US&ceid=US:en\"";
-        const r = await invoke("execute_command", {
-          command: cmd, cwd: null, timeoutMs: 20000,
-        }) as { stdout: string; success: boolean };
-        if (r.success && r.stdout) {
-          const items = r.stdout.match(/<item>[\s\S]*?<\/item>/g) || [];
-          for (const item of items.slice(0, 5 - results.length)) {
-            const titleM = item.match(/<title>([\s\S]*?)<\/title>/);
-            const sourceM = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
-            const pubM = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-            if (titleM) {
-              const idx = results.length + 1;
-              let entry = idx + ". " + titleM[1].trim();
-              if (sourceM) entry += " - " + sourceM[1].trim();
-              if (pubM) entry += "\n   " + pubM[1].trim();
-              results.push(entry);
-            }
-          }
-        }
-      } catch { /* Google News failed */ }
     }
 
     if (results.length > 0) {
-      return "🔍 搜索结果 (" + query + "):\n\n" + results.join("\n\n");
+      return "\ud83d\udd0d 搜索结果 (" + query + "):\n\n" + results.join("\n\n");
     }
     return "搜索 \"" + query + "\" 暂无结果。";
   } catch (e) {
