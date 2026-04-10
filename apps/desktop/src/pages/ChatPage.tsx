@@ -61,11 +61,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   } | null>(null);
   const [askInput, setAskInput] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
-  // Sync local messages with conversation on switch; recover from stream-manager snapshot
+  // Sync local messages with conversation on switch; recover from stream-manager snapshot.
+  // Loads from DB first (centralized persistence), falls back to React state.
   useEffect(() => {
     const convId = conversation?.id;
 
-    // Recover state from stream-manager if there's an active/completed stream
     if (convId) {
       const snapshot = getSnapshot(convId);
       if (snapshot && snapshot.status === "active") {
@@ -80,7 +80,18 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
         setIsLoading(true);
         setIsThinking(snapshot.isThinking);
       } else {
-        setLocalMessages(conversation?.messages ?? []);
+        // Load from DB, fallback to conversation prop
+        import("../lib/session-store").then(({ loadMessagesForConversation }) => {
+          loadMessagesForConversation(convId).then(dbMsgs => {
+            if (dbMsgs.length > 0) {
+              setLocalMessages(dbMsgs as ChatMessage[]);
+            } else {
+              setLocalMessages(conversation?.messages ?? []);
+            }
+          }).catch(() => {
+            setLocalMessages(conversation?.messages ?? []);
+          });
+        });
         setIsLoading(false);
         setIsThinking(false);
       }
@@ -99,17 +110,22 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   const persistMessages = useCallback((msgs: ChatMessage[]) => {
     const convId = conversation?.id;
     if (!convId) return;
+    const title = (conversation?.messages?.length === 0 && msgs.length > 0)
+      ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || conversation?.title || "新对话")
+      : undefined;
+    // Save directly to DB (centralized persistence)
+    import("../lib/session-store").then(({ saveMessagesForConversation }) => {
+      saveMessagesForConversation(convId, msgs, title).catch(() => {});
+    });
+    // Also update parent state for sidebar display
     const updated = conversations.map(c => {
       if (c.id !== convId) return c;
-      const title = c.messages.length === 0 && msgs.length > 0
-        ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || c.title)
-        : c.title;
-      // Only update timestamp when there are new messages (not on auto-persist)
+      const displayTitle = title || c.title;
       const hasNewMessages = msgs.length > c.messages.length;
-      return { ...c, title, messages: msgs, updatedAt: hasNewMessages ? Date.now() : c.updatedAt };
+      return { ...c, title: displayTitle, messages: msgs, updatedAt: hasNewMessages ? Date.now() : c.updatedAt };
     });
     onConversationsUpdate(updated);
-  }, [conversation?.id, conversations, onConversationsUpdate]);
+  }, [conversation?.id, conversation?.messages?.length, conversation?.title, conversations, onConversationsUpdate]);
 
     // Subscribe to stream-manager events for current session
   useEffect(() => {
