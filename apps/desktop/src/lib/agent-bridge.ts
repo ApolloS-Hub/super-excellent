@@ -572,6 +572,31 @@ export async function sendMessage(
  * Non-streaming for now — Rust handles the full API call
  */
 
+// Anthropic content block 类型
+interface AnthropicTextBlock { type: "text"; text: string }
+interface AnthropicToolUseBlock { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+interface AnthropicThinkingBlock { type: "thinking"; thinking: string }
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock | { type: string };
+
+/** Tool categories for loop control — search tools get 1 round, coding tools up to 5 */
+const SEARCH_TOOLS = new Set(["bash_search", "file_search", "grep", "glob", "find_files", "search", "web_search"]);
+const TURN_TIMEOUT_MS = 30_000;
+const MAX_SEARCH_ROUNDS = 1;
+const MAX_CODING_ROUNDS = 5;
+
+/** Anthropic LoopState — explicit state machine inspired by learn-claude-code s01 */
+type AnthropicLoopPhase = 'continue' | 'tool_executed' | 'done' | 'error';
+
+interface AnthropicLoopState {
+  messages: Array<{ role: string; content: string | AnthropicCacheBlock[] | AnthropicContentBlock[] }>;
+  turnCount: number;
+  toolCallCount: number;
+  searchToolRounds: number;
+  codingToolRounds: number;
+  phase: AnthropicLoopPhase;
+  lastText: string;
+}
+
 async function callAnthropic(
   message: string,
   config: AgentConfig,
@@ -589,30 +614,37 @@ async function callAnthropic(
   const systemPrompt = await buildSystemPrompt({ userMessage: message });
   const systemBlocks = buildAnthropicSystemWithCache(systemPrompt);
 
-  // Anthropic Messages API tool 格式：从 OpenAI 格式转换（registry 完整列表）
   const anthropicTools = TOOL_DEFINITIONS.map((td: { function: { name: string; description: string; parameters: unknown } }) => ({
     name: td.function.name,
     description: td.function.description,
     input_schema: td.function.parameters as Record<string, unknown>,
   }));
 
-  const messages: Array<{ role: string; content: string | AnthropicCacheBlock[] }> = [
-    ...(history || []).map(m => ({ role: m.role as string, content: m.content })),
-    { role: "user", content: message },
-  ];
+  // Initialize LoopState
+  const loop: AnthropicLoopState = {
+    messages: [
+      ...(history || []).map(m => ({ role: m.role as string, content: m.content })),
+      { role: "user", content: message },
+    ],
+    turnCount: 0,
+    toolCallCount: 0,
+    searchToolRounds: 0,
+    codingToolRounds: 0,
+    phase: 'continue',
+    lastText: '',
+  };
 
-  const MAX_ITERATIONS = 20;
-  let iteration = 0;
-  let totalToolCalls = 0;
+  // ── Main loop: run until phase != continue/tool_executed ──
+  while (loop.phase === 'continue' || loop.phase === 'tool_executed') {
+    if (signal.aborted) { loop.phase = 'done'; onEvent({ type: "result", text: "⏹ 已停止" }); break; }
+    loop.turnCount++;
 
-  while (iteration < MAX_ITERATIONS) {
-    if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
-    iteration++;
+    if (loop.turnCount > 1) {
+      onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount} 轮\n` });
+    }
 
-    if (iteration > 1) onEvent({ type: "thinking", text: `\n🔄 Anthropic 第 ${iteration}/${MAX_ITERATIONS} 轮\n` });
-
-    // 非流式工具调用轮可以用缓存
-    const cacheKey = buildCacheKey(systemPrompt, messages.map(m => ({
+    // ── Check cache ──
+    const cacheKey = buildCacheKey(systemPrompt, loop.messages.map(m => ({
       role: m.role,
       content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
     })));
@@ -621,40 +653,59 @@ async function callAnthropic(
       onEvent({ type: "thinking", text: "📦 命中缓存\n" });
       const hasToolUse = cached.content.some(b => b.type === "tool_use");
       if (hasToolUse) {
-        await processAnthropicToolBlocks(cached.content, messages, executeTool, onEvent, signal);
-        totalToolCalls += cached.content.filter(b => b.type === "tool_use").length;
+        const toolNames = await processAnthropicToolBlocks(cached.content, loop.messages, executeTool, onEvent, signal);
+        loop.toolCallCount += toolNames.length;
+        updateLoopPhaseFromTools(loop, toolNames);
         continue;
       }
-      const textContent = cached.content
-        .filter((b): b is AnthropicTextBlock => b.type === "text")
-        .map(b => b.text)
-        .join("");
-      if (textContent) onEvent({ type: "text", text: textContent });
-      onEvent({ type: "result", text: textContent });
-      currentAbortController = null;
-      return;
+      loop.lastText = extractTextFromBlocks(cached.content);
+      loop.phase = 'done';
+      break;
     }
 
+    // ── API call with per-turn timeout ──
     const body: Record<string, unknown> = {
       model: config.model || "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: systemBlocks,
-      messages,
+      messages: loop.messages,
       tools: anthropicTools,
       stream: false,
     };
 
-    const response = await fetchWithRetry(`${baseURL}/v1/messages`, {
-      method: "POST",
-      signal,
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": config.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(body),
-    });
+    const turnAbort = new AbortController();
+    const turnTimer = setTimeout(() => turnAbort.abort(), TURN_TIMEOUT_MS);
+
+    // Combine user abort + turn timeout
+    const combinedSignal = signal.aborted ? signal : turnAbort.signal;
+    signal.addEventListener("abort", () => turnAbort.abort(), { once: true });
+
+    let response: Response;
+    try {
+      response = await fetchWithRetry(`${baseURL}/v1/messages`, {
+        method: "POST",
+        signal: combinedSignal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": config.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (fetchErr) {
+      clearTimeout(turnTimer);
+      if (turnAbort.signal.aborted && !signal.aborted) {
+        // Turn timeout (not user abort)
+        const { classifyError, formatClassifiedError } = await import("./error-classifier");
+        const classified = classifyError({ error: new Error("Request timeout"), providerName: "anthropic", baseUrl: baseURL, model: config.model });
+        onEvent({ type: "error", text: formatClassifiedError(classified) });
+        loop.phase = 'error';
+        break;
+      }
+      throw fetchErr; // Re-throw for outer handler
+    }
+    clearTimeout(turnTimer);
 
     if (!response.ok) {
       const err = await response.text();
@@ -665,6 +716,12 @@ async function callAnthropic(
         baseUrl: baseURL,
         model: config.model,
       });
+      // Retryable errors: attempt one more time
+      if (classified.retryable && loop.turnCount <= 2) {
+        onEvent({ type: "thinking", text: `⚠️ ${classified.userMessage}，正在重试...\n` });
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
       throw new Error(formatClassifiedError(classified));
     }
 
@@ -674,6 +731,7 @@ async function callAnthropic(
       usage?: { input_tokens?: number; output_tokens?: number };
     };
 
+    // ── Usage tracking ──
     if (data.usage) {
       const { recordUsage } = await import("./cost-tracker");
       const record = recordUsage(config.model || "unknown", config.model || "unknown", {
@@ -686,70 +744,83 @@ async function callAnthropic(
     const content = data.content;
     const hasToolUse = content.some(b => b.type === "tool_use");
 
-    // 缓存工具调用轮的响应
-    if (hasToolUse) {
-      setCache(cacheKey, { content, usage: data.usage });
-    }
+    // Cache tool call rounds
+    if (hasToolUse) setCache(cacheKey, { content, usage: data.usage });
 
-    // thinking blocks
+    // ── Emit thinking blocks ──
     for (const block of content) {
       if (block.type === "thinking" && "thinking" in block) {
         onEvent({ type: "thinking", text: (block as AnthropicThinkingBlock).thinking });
       }
     }
 
-    if (hasToolUse) {
-      await processAnthropicToolBlocks(content, messages, executeTool, onEvent, signal);
-      totalToolCalls += content.filter(b => b.type === "tool_use").length;
-
-      // Limit total tool calls to prevent infinite search loops
-      if (totalToolCalls >= 3) {
-        const toolText = content.filter((b: any) => b.type === "text").map((b: any) => b.text || "").join("");
-        if (toolText) onEvent({ type: "text", text: toolText });
-        onEvent({ type: "result", text: toolText || "\u5de5\u5177\u8c03\u7528\u5b8c\u6210" });
-        break;
-      }
-      if (data.stop_reason === "tool_use") continue;
+    // ── Handle tool use: execute tools, then decide loop continuation ──
+    if (hasToolUse && data.stop_reason === "tool_use") {
+      const toolNames = await processAnthropicToolBlocks(content, loop.messages, executeTool, onEvent, signal);
+      loop.toolCallCount += toolNames.length;
+      updateLoopPhaseFromTools(loop, toolNames);
+      continue;
     }
 
-    // 文本输出
-    const textContent = content
-      .filter((b): b is AnthropicTextBlock => b.type === "text")
-      .map(b => b.text)
-      .join("");
-
-    if (textContent) {
-      for (let i = 0; i < textContent.length; i += 6) {
-        if (signal.aborted) break;
-        onEvent({ type: "text", text: textContent.slice(i, i + 6) });
-        await new Promise(r => setTimeout(r, 8));
-      }
-    }
-
-    if (totalToolCalls > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${totalToolCalls} 次工具调用，${iteration} 轮` });
-    onEvent({ type: "result", text: textContent });
-    currentAbortController = null;
-    return;
+    // ── Text output (final response) ──
+    loop.lastText = extractTextFromBlocks(content);
+    loop.phase = 'done';
   }
 
-  onEvent({ type: "error", text: `⚠️ Anthropic 达到 ${MAX_ITERATIONS} 轮上限` });
+  // ── Emit final result ──
+  if (loop.phase === 'done' && loop.lastText) {
+    for (let i = 0; i < loop.lastText.length; i += 6) {
+      if (signal.aborted) break;
+      onEvent({ type: "text", text: loop.lastText.slice(i, i + 6) });
+      await new Promise(r => setTimeout(r, 8));
+    }
+    if (loop.toolCallCount > 0) {
+      onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
+    }
+    onEvent({ type: "result", text: loop.lastText });
+  } else if (loop.phase === 'done') {
+    onEvent({ type: "result", text: "工具调用完成" });
+  }
+
   currentAbortController = null;
 }
 
-// Anthropic content block 类型
-interface AnthropicTextBlock { type: "text"; text: string }
-interface AnthropicToolUseBlock { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
-interface AnthropicThinkingBlock { type: "thinking"; thinking: string }
-type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock | { type: string };
+/** Determine loop continuation based on which tools were called */
+function updateLoopPhaseFromTools(loop: AnthropicLoopState, toolNames: string[]): void {
+  const hasSearchOnly = toolNames.every(n => SEARCH_TOOLS.has(n));
+  if (hasSearchOnly) {
+    loop.searchToolRounds++;
+    if (loop.searchToolRounds >= MAX_SEARCH_ROUNDS) {
+      loop.phase = 'done';
+      return;
+    }
+  } else {
+    loop.codingToolRounds++;
+    if (loop.codingToolRounds >= MAX_CODING_ROUNDS) {
+      loop.phase = 'done';
+      return;
+    }
+  }
+  loop.phase = 'tool_executed';
+}
 
+/** Extract text content from Anthropic content blocks */
+function extractTextFromBlocks(content: AnthropicContentBlock[]): string {
+  return content
+    .filter((b): b is AnthropicTextBlock => b.type === "text")
+    .map(b => b.text)
+    .join("");
+}
+
+/** Process tool_use blocks, execute tools, append results to messages. Returns tool names. */
 async function processAnthropicToolBlocks(
   content: AnthropicContentBlock[],
   messages: Array<{ role: string; content: string | AnthropicCacheBlock[] | AnthropicContentBlock[] }>,
   executeTool: (name: string, args: Record<string, unknown>) => Promise<string>,
   onEvent: EventCallback,
   signal: AbortSignal,
-): Promise<void> {
-  // 先输出文本部分
+): Promise<string[]> {
+  // Emit text blocks first
   for (const block of content) {
     if (block.type === "text") {
       onEvent({ type: "text", text: (block as AnthropicTextBlock).text });
@@ -760,26 +831,31 @@ async function processAnthropicToolBlocks(
   messages.push({ role: "assistant", content: content as AnthropicContentBlock[] });
 
   const toolResults: Array<{ type: "tool_result"; tool_use_id: string; content: string }> = [];
+  const toolNames: string[] = [];
 
   for (const block of content) {
     if (block.type !== "tool_use") continue;
     if (signal.aborted) break;
 
     const toolBlock = block as AnthropicToolUseBlock;
+    toolNames.push(toolBlock.name);
     onEvent({ type: "tool_use", toolName: toolBlock.name, toolInput: JSON.stringify(toolBlock.input) });
 
     try {
       const result = await executeTool(toolBlock.name, toolBlock.input);
+      onEvent({ type: "tool_result", toolName: toolBlock.name, toolOutput: result.slice(0, 200) });
       onEvent({ type: "thinking", text: `✅ ${toolBlock.name}: ${result.slice(0, 120)}\n` });
       toolResults.push({ type: "tool_result", tool_use_id: toolBlock.id, content: result.slice(0, 15000) });
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
+      onEvent({ type: "tool_result", toolName: toolBlock.name, toolOutput: `Error: ${err}`, isError: true });
       onEvent({ type: "thinking", text: `❌ ${toolBlock.name}: ${err}\n` });
       toolResults.push({ type: "tool_result", tool_use_id: toolBlock.id, content: `Error: ${err}` });
     }
   }
 
   messages.push({ role: "user", content: toolResults as unknown as AnthropicCacheBlock[] });
+  return toolNames;
 }
 
 async function callGemini(
