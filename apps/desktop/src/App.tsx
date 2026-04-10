@@ -50,6 +50,8 @@ function App() {
     startMonitor();
     // Load MCP config and connect servers on startup
     import("./lib/mcp-client").then(m => m.loadMCPConfig()).catch(console.warn);
+    // Initialize Lark integration
+    import("./lib/lark-integration").then(m => m.initLark()).catch(console.warn);
     // Load persisted tasks from IndexedDB
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
   }, []);

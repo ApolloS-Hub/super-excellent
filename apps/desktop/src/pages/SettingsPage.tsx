@@ -297,6 +297,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
         <Tabs.List>
           <Tabs.Tab value="model">🤖 模型配置</Tabs.Tab>
           <Tabs.Tab value="general">⚙️ 常规设置</Tabs.Tab>
+          <Tabs.Tab value="lark">🐦 飞书</Tabs.Tab>
           <Tabs.Tab value="advanced">🔧 高级设置</Tabs.Tab>
         </Tabs.List>
 
@@ -442,6 +443,11 @@ function SettingsPage({ onBack }: SettingsPageProps) {
               <MCPConfigPanel />
             </Paper>
           </Stack>
+        </Tabs.Panel>
+
+        {/* ── 飞书配置 (Lark/Feishu) ── */}
+        <Tabs.Panel value="lark" pt="md">
+          <LarkConfigPanel />
         </Tabs.Panel>
 
         {/* ── 高级设置 (Advanced) ── */}
@@ -1007,6 +1013,103 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
         </Stack>
       )}
     </Paper>
+  );
+}
+
+/** Lark/Feishu Configuration Panel */
+function LarkConfigPanel() {
+  const [larkCfg, setLarkCfg] = useState(() => {
+    try {
+      const raw = localStorage.getItem("lark-config");
+      return raw ? JSON.parse(raw) : { appId: "", appSecret: "", cliPath: "lark-cli", outputFormat: "pretty" };
+    } catch { return { appId: "", appSecret: "", cliPath: "lark-cli", outputFormat: "pretty" }; }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    import("../lib/lark-integration").then(m => {
+      m.setLarkConfig(larkCfg);
+      m.registerLarkTools();
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const isConfigured = !!larkCfg.appId && !!larkCfg.appSecret;
+
+  return (
+    <Stack gap="md">
+      <Paper p="md" radius="md" withBorder>
+        <Text fw={600} mb="sm">🐦 飞书集成 / Lark Integration</Text>
+        <Text size="sm" c="dimmed" mb="md">
+          连接飞书生态，让 AI 助手管理日程、发消息、操作文档、处理审批
+        </Text>
+
+        {saved && (
+          <Notification color="green" withCloseButton={false} mb="md">
+            ✅ 飞书配置已保存，工具已注册
+          </Notification>
+        )}
+
+        <Stack gap="md">
+          <TextInput
+            label="App ID"
+            placeholder="cli_xxxxxxxxxx"
+            value={larkCfg.appId}
+            onChange={(e) => setLarkCfg({ ...larkCfg, appId: e.currentTarget.value })}
+            description="飞书开放平台应用的 App ID"
+          />
+
+          <PasswordInput
+            label="App Secret"
+            placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            value={larkCfg.appSecret}
+            onChange={(e) => setLarkCfg({ ...larkCfg, appSecret: e.currentTarget.value })}
+            description="飞书开放平台应用的 App Secret"
+          />
+
+          <TextInput
+            label="CLI 路径"
+            placeholder="lark-cli"
+            value={larkCfg.cliPath}
+            onChange={(e) => setLarkCfg({ ...larkCfg, cliPath: e.currentTarget.value })}
+            description="lark-cli 可执行文件路径（默认 lark-cli）"
+          />
+
+          <Group>
+            <Button onClick={handleSave} flex={1}>
+              💾 保存飞书配置
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
+
+      <Paper p="md" radius="md" withBorder>
+        <Text fw={600} mb="sm">🔧 已注册工具 / Registered Tools</Text>
+        <Group gap="xs" mb="sm">
+          <Badge color={isConfigured ? "green" : "gray"} variant="light">
+            {isConfigured ? "✅ 已配置" : "⚠️ 未配置"}
+          </Badge>
+        </Group>
+        <Stack gap="xs">
+          {[
+            { name: "lark_calendar", desc: "📅 日程管理 — 查看/创建/空闲查询" },
+            { name: "lark_im", desc: "💬 消息发送 — 个人/群聊/搜索" },
+            { name: "lark_doc", desc: "📄 文档操作 — 创建/读取/搜索" },
+            { name: "lark_task", desc: "✅ 任务管理 — 创建/查看/完成" },
+            { name: "lark_approval", desc: "✍️ 审批处理 — 查询/审批/驳回" },
+            { name: "lark_sheet", desc: "📊 表格数据 — 读写/创建" },
+          ].map(tool => (
+            <Group key={tool.name} gap="xs" wrap="nowrap">
+              <Badge size="xs" variant="outline" color={isConfigured ? "blue" : "gray"}>
+                {tool.name}
+              </Badge>
+              <Text size="xs" c="dimmed">{tool.desc}</Text>
+            </Group>
+          ))}
+        </Stack>
+      </Paper>
+    </Stack>
   );
 }
 
