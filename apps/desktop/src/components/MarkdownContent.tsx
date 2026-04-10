@@ -5,8 +5,9 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useMemo, type ReactNode } from "react";
 import { useMantineColorScheme } from "@mantine/core";
+import { extractWidgets, hasWidgets, WidgetRenderer } from "./GenerativeUI";
 
 /** Extracts language name from className like "language-typescript" */
 function extractLang(className?: string): string | null {
@@ -170,11 +171,22 @@ interface MarkdownContentProps {
 
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   const { colorScheme } = useMantineColorScheme();
+
+  const { cleanContent, widgets } = useMemo(() => {
+    if (!hasWidgets(content)) return { cleanContent: content, widgets: [] };
+    return extractWidgets(content);
+  }, [content]);
+
   return (
     <div className={`md-content ${className || ""}`} data-theme={colorScheme}>
       <ReactMarkdown remarkPlugins={remarkPlugins} components={MarkdownComponents}>
-        {content}
+        {cleanContent}
       </ReactMarkdown>
+      {widgets.map((w, i) => (
+        <div key={i} style={{ margin: "8px 0" }}>
+          <WidgetRenderer widget={w} />
+        </div>
+      ))}
     </div>
   );
 }
