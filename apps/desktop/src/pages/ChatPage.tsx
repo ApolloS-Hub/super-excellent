@@ -260,6 +260,17 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setAskInput("");
   }, [askPending]);
 
+  // ═══════════ Rewind — delete messages after a user message ═══════════
+  const handleRewind = useCallback((messageIndex: number) => {
+    setLocalMessages(prev => {
+      // Keep messages up to and including the selected user message
+      const rewound = prev.slice(0, messageIndex + 1);
+      // Persist immediately
+      persistMessages(rewound);
+      return rewound;
+    });
+  }, [persistMessages]);
+
   // ═══════════ File Drop ═══════════
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -1126,8 +1137,13 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
               </Stack>
             </Box>
           )}
-          {localMessages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} onRetry={(content) => { setInput(content); }} />
+          {localMessages.map((msg, idx) => (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              onRetry={(content) => { setInput(content); }}
+              onRewind={msg.role === "user" && !isLoading ? () => handleRewind(idx) : undefined}
+            />
           ))}
 
           {/* Thinking indicator with pulse animation */}
@@ -1259,7 +1275,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
   );
 }
 
-function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (content: string) => void }) {
+function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; onRetry?: (content: string) => void; onRewind?: () => void }) {
   const isUser = message.role === "user";
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
@@ -1373,6 +1389,13 @@ function MessageBubble({ message, onRetry }: { message: ChatMessage; onRetry?: (
             <Tooltip label="重新发送" position="top">
               <ActionIcon size="xs" variant="subtle" onClick={() => onRetry(message.content)}>
                 <Text size="xs">🔄</Text>
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {isUser && onRewind && (
+            <Tooltip label="倒回到这里" position="top">
+              <ActionIcon size="xs" variant="subtle" onClick={onRewind}>
+                <Text size="xs">⏪</Text>
               </ActionIcon>
             </Tooltip>
           )}
