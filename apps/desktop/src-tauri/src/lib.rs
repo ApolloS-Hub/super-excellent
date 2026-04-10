@@ -478,64 +478,44 @@ struct HealthStatus {
 async fn web_search(query: String) -> Result<String, String> {
     let encoded = urlencoding::encode(&query);
     let url = format!(
-        "https://hn.algolia.com/api/v1/search_by_date?query={}&tags=story&hitsPerPage=8",
+        "https://hn.algolia.com/api/v1/search_by_date?query={}&tags=story&hitsPerPage=5",
         encoded
     );
     
-    // Use curl with proxy — proven to work from this machine
-    let proxies = ["http://127.0.0.1:11088", "http://127.0.0.1:7897"];
-    
-    for proxy in &proxies {
-        let output = std::process::Command::new("curl")
-            .args(["-x", proxy, "-sL", "--connect-timeout", "8", "--max-time", "15", &url])
-            .output();
-        
-        if let Ok(out) = output {
-            if out.status.success() {
-                let body = String::from_utf8_lossy(&out.stdout);
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-                    let empty = vec![];
-                    let hits = json["hits"].as_array().unwrap_or(&empty);
-                    let mut results = Vec::new();
-                    for (i, hit) in hits.iter().take(5).enumerate() {
-                        let title = hit["title"].as_str().unwrap_or("N/A");
-                        let hn_url = format!("https://news.ycombinator.com/item?id={}", hit["objectID"].as_str().unwrap_or(""));
-                        let url = hit["url"].as_str().unwrap_or(&hn_url);
-                        let date = hit["created_at"].as_str().unwrap_or("").split('T').next().unwrap_or("");
-                        results.push(format!("{}. {}\n   {}\n   {}", i + 1, title, url, date));
-                    }
-                    if !results.is_empty() {
-                        return Ok(format!("\u{1f50d} \u{641c}\u{7d22}\u{7ed3}\u{679c} ({}):\n\n{}", query, results.join("\n\n")));
-                    }
-                }
-            }
-        }
-    }
-    
-    // Fallback: try without proxy
-    let output = std::process::Command::new("curl")
-        .args(["-sL", "--connect-timeout", "8", "--max-time", "15", &url])
+    // 直接用 curl + proxy，失败就报错
+    let output = std::process::Command::new("/usr/bin/curl")
+        .args(["-x", "http://127.0.0.1:11088", "-sL", "--connect-timeout", "10", "--max-time", "15", &url])
         .output()
-        .map_err(|e| format!("curl failed: {}", e))?;
+        .map_err(|e| format!("无法启动 curl: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("网络请求失败 (exit {}): {}", output.status.code().unwrap_or(-1), stderr.trim()));
+    }
     
     let body = String::from_utf8_lossy(&output.stdout);
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-        let empty = vec![];
-        let hits = json["hits"].as_array().unwrap_or(&empty);
-        let mut results = Vec::new();
-        for (i, hit) in hits.iter().take(5).enumerate() {
-            let title = hit["title"].as_str().unwrap_or("N/A");
-            let hn_url = format!("https://news.ycombinator.com/item?id={}", hit["objectID"].as_str().unwrap_or(""));
-            let url = hit["url"].as_str().unwrap_or(&hn_url);
-            let date = hit["created_at"].as_str().unwrap_or("").split('T').next().unwrap_or("");
-            results.push(format!("{}. {}\n   {}\n   {}", i + 1, title, url, date));
-        }
-        if !results.is_empty() {
-            return Ok(format!("\u{1f50d} \u{641c}\u{7d22}\u{7ed3}\u{679c} ({}):\n\n{}", query, results.join("\n\n")));
-        }
+    if body.is_empty() {
+        return Err("网络请求返回空内容 — 代理可能不可用".to_string());
     }
     
-    Ok(format!("\u{641c}\u{7d22} \"{}\" \u{6682}\u{65e0}\u{7ed3}\u{679c}", query))
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("返回内容不是 JSON: {} | 原始内容前100字: {}", e, &body[..body.len().min(100)]))?;
+    
+    let empty = vec![];
+    let hits = json["hits"].as_array().unwrap_or(&empty);
+    if hits.is_empty() {
+        return Ok(format!("搜索 \"{}\" 无结果（API 正常但无匹配）", query));
+    }
+    
+    let mut results = Vec::new();
+    for (i, hit) in hits.iter().take(5).enumerate() {
+        let title = hit["title"].as_str().unwrap_or("N/A");
+        let hn_url = format!("https://news.ycombinator.com/item?id={}", hit["objectID"].as_str().unwrap_or(""));
+        let u = hit["url"].as_str().unwrap_or(&hn_url);
+        let date = hit["created_at"].as_str().unwrap_or("").split('T').next().unwrap_or("");
+        results.push(format!("{}. {}\n   {}\n   {}", i + 1, title, u, date));
+    }
+    Ok(format!("\u{1f50d} ({}):\n\n{}", query, results.join("\n\n")))
 }
 
 #[tauri::command]
