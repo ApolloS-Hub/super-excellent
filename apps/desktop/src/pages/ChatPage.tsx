@@ -96,7 +96,22 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setDroppedFiles([]);
   }, [conversation?.id]);
 
-  // Subscribe to stream-manager events for current session
+  const persistMessages = useCallback((msgs: ChatMessage[]) => {
+    const convId = conversation?.id;
+    if (!convId) return;
+    const updated = conversations.map(c => {
+      if (c.id !== convId) return c;
+      const title = c.messages.length === 0 && msgs.length > 0
+        ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || c.title)
+        : c.title;
+      // Only update timestamp when there are new messages (not on auto-persist)
+      const hasNewMessages = msgs.length > c.messages.length;
+      return { ...c, title, messages: msgs, updatedAt: hasNewMessages ? Date.now() : c.updatedAt };
+    });
+    onConversationsUpdate(updated);
+  }, [conversation?.id, conversations, onConversationsUpdate]);
+
+    // Subscribe to stream-manager events for current session
   useEffect(() => {
     const convId = conversation?.id;
     if (!convId) return;
@@ -198,20 +213,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   }, []);
 
   // Persist local messages back to conversation
-  const persistMessages = useCallback((msgs: ChatMessage[]) => {
-    const convId = conversation?.id;
-    if (!convId) return;
-    const updated = conversations.map(c => {
-      if (c.id !== convId) return c;
-      const title = c.messages.length === 0 && msgs.length > 0
-        ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || c.title)
-        : c.title;
-      // Only update timestamp when there are new messages (not on auto-persist)
-      const hasNewMessages = msgs.length > c.messages.length;
-      return { ...c, title, messages: msgs, updatedAt: hasNewMessages ? Date.now() : c.updatedAt };
-    });
-    onConversationsUpdate(updated);
-  }, [conversation?.id, conversations, onConversationsUpdate]);
+// [moved up]
 
   // Auto-persist messages on change (debounced) to prevent data loss on conversation switch
   useEffect(() => {

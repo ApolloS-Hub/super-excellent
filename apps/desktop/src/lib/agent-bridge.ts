@@ -428,7 +428,10 @@ let _memoryModule: typeof import("./memory") | null = null;
 void import("./memory").then((m) => { _memoryModule = m; }).catch(() => {});
 
 /**
- * Send a message to the agent and receive streaming events
+ * Send a message to the agent and receive streaming events.
+ *
+ * Stream lifecycle is managed by stream-manager.ts — this function focuses
+ * on routing the message to the correct provider and relaying events via onEvent.
  */
 export async function sendMessage(
   message: string,
@@ -436,7 +439,7 @@ export async function sendMessage(
   onEvent: EventCallback,
   history?: Array<{ role: string; content: string }>,
 ): Promise<void> {
-  // Abort any previous request to prevent crosstalk
+  // Abort any previous in-flight request (stream-manager calls this per-session)
   abortGeneration();
 
   // For MVP: direct API call from frontend
