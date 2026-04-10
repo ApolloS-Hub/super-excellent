@@ -550,24 +550,20 @@ export async function sendMessage(
       );
     }
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    let friendlyMsg = errMsg;
+    const { classifyError, formatClassifiedError } = await import("./error-classifier");
+    const classified = classifyError({
+      error,
+      providerName: config.provider,
+      baseUrl: config.baseURL,
+      model: config.model,
+    });
 
-    if (errMsg.includes("fetch") || errMsg.includes("network") || errMsg.includes("Failed to fetch") || errMsg.includes("ERR_")) {
-      friendlyMsg = "🌐 网络连接失败，请检查网络或代理设置";
-    } else if (errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("Too Many")) {
-      friendlyMsg = "⏳ 请求太频繁，请稍后再试（API 限流）";
-    } else if (errMsg.includes("401") || errMsg.includes("Unauthorized") || errMsg.includes("auth")) {
-      friendlyMsg = "🔑 API Key 无效或已过期，请到设置页重新配置";
-    } else if (errMsg.includes("403") || errMsg.includes("Forbidden")) {
-      friendlyMsg = "🚫 API Key 权限不足（403）";
-    } else if (errMsg.includes("timeout") || errMsg.includes("Timeout") || errMsg.includes("abort")) {
-      friendlyMsg = "⏰ 请求超时，服务器响应太慢，请稍后重试";
-    } else if (errMsg.includes("500") || errMsg.includes("502") || errMsg.includes("503")) {
-      friendlyMsg = "🔧 服务器暂时不可用，请稍后重试";
+    // Don't emit error for user-initiated aborts
+    if (classified.category === 'ABORT') {
+      onEvent({ type: "result", text: "⏹ 已停止" });
+    } else {
+      onEvent({ type: "error", text: formatClassifiedError(classified) });
     }
-
-    onEvent({ type: "error", text: friendlyMsg });
   }
 }
 
@@ -662,7 +658,14 @@ async function callAnthropic(
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Anthropic API error ${response.status}: ${err}`);
+      const { classifyError, formatClassifiedError } = await import("./error-classifier");
+      const classified = classifyError({
+        error: new Error(`${response.status}: ${err}`),
+        providerName: "anthropic",
+        baseUrl: baseURL,
+        model: config.model,
+      });
+      throw new Error(formatClassifiedError(classified));
     }
 
     const data = await response.json() as {
