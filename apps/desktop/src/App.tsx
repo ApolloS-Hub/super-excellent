@@ -421,9 +421,6 @@ function App() {
             py={6}
           />
           <NavLink
-            py={6}
-          />
-          <NavLink
             label="Skill 市场"
             leftSection={<Text size="sm">🛒</Text>}
             active={currentPage === "skills"}

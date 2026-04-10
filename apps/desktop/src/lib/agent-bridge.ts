@@ -807,7 +807,18 @@ async function callAnthropic(
     }
     onEvent({ type: "result", text: loop.lastText });
   } else if (loop.phase === 'done') {
-    onEvent({ type: "result", text: "工具调用完成" });
+    // Show tool results if no text summary
+    const toolResults = loop.messages
+      .filter(m => m.role === "user" && Array.isArray(m.content))
+      .flatMap(m => (m.content as any[]).filter(b => b.type === "tool_result").map(b => typeof b.content === "string" ? b.content : JSON.stringify(b.content)))
+      .filter(Boolean);
+    if (toolResults.length > 0) {
+      const summary = toolResults.join("\n\n---\n\n").slice(0, 5000);
+      onEvent({ type: "text", text: summary });
+      onEvent({ type: "result", text: summary });
+    } else {
+      onEvent({ type: "result", text: "工具调用完成" });
+    }
   }
 
   currentAbortController = null;
