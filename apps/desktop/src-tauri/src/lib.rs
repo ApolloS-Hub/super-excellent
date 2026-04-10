@@ -476,10 +476,27 @@ struct HealthStatus {
 
 #[tauri::command]
 async fn web_search(query: String) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("HTTP client error: {}", e))?;
+    // Try system proxy, then common proxy ports
+    let proxy_urls = vec!["http://127.0.0.1:11088", "http://127.0.0.1:7897", "http://127.0.0.1:1087"];
+    let mut client_opt = None;
+    for proxy_url in &proxy_urls {
+        if let Ok(proxy) = reqwest::Proxy::all(*proxy_url) {
+            if let Ok(c) = reqwest::Client::builder()
+                .proxy(proxy)
+                .timeout(std::time::Duration::from_secs(15))
+                .build() {
+                client_opt = Some(c);
+                break;
+            }
+        }
+    }
+    // Fallback: no proxy
+    let client = client_opt.unwrap_or_else(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap()
+    });
     
     let url = format!(
         "https://hn.algolia.com/api/v1/search_by_date?query={}&tags=story&hitsPerPage=8",
