@@ -948,17 +948,18 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   if (!query) return "❌ 缺少 query 参数";
 
   try {
-    // Use fetchWithRetry from api-retry.ts — proven to work (same as chat API calls)
-    const { fetchWithRetry } = await import("./api-retry");
     const enOnly = query.replace(/[一-鿿]/g, " ").replace(/\d{4}/g, "")
       .replace(/(news|latest|search|find|today|recent)/gi, "")
       .replace(/\s+/g, " ").trim() || "AI";
 
-    const resp = await fetchWithRetry(
+    // Use native window.fetch — it respects system proxy (unlike Tauri HTTP plugin)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await window.fetch(
       "https://hn.algolia.com/api/v1/search_by_date?query=" + encodeURIComponent(enOnly) + "&tags=story&hitsPerPage=8",
-      { method: "GET" },
-      { maxRetries: 1, baseDelayMs: 500, maxDelayMs: 3000, retryableStatuses: [500, 502, 503] },
+      { method: "GET", signal: controller.signal },
     );
+    clearTimeout(timeout);
 
     if (!resp.ok) return "搜索失败: HTTP " + resp.status;
 
@@ -975,6 +976,8 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
       ? "\ud83d\udd0d 搜索结果 (" + query + "):\n\n" + results.join("\n\n")
       : "搜索 \"" + query + "\" 暂无结果。";
   } catch (e) {
-    return "搜索失败: " + (e instanceof Error ? e.message : String(e));
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("abort")) return "搜索超时 (15s)，请重试";
+    return "搜索失败: " + msg;
   }
 }
