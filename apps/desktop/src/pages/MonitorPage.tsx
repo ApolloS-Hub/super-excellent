@@ -319,10 +319,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </Tabs>
       </Paper>
 
-      {/* Cost & Usage */}
+      {/* Cost & Usage — enhanced with charts */}
       <Paper p="md" radius="md" withBorder>
         <Text fw={600} mb="sm">💰 费用 & Token 使用 / Cost & Usage</Text>
-        <SimpleGrid cols={4}>
+        <SimpleGrid cols={4} mb="md">
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{costData.totalCost < 0.01 ? `$${costData.totalCost.toFixed(4)}` : `$${costData.totalCost.toFixed(2)}`}</Text>
             <Text size="xs" c="dimmed">总费用</Text>
@@ -340,6 +340,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <Text size="xs" c="dimmed">已完成</Text>
           </Stack>
         </SimpleGrid>
+        <UsageChartPanel />
       </Paper>
 
       {/* Permission Overview */}
@@ -792,6 +793,155 @@ function WorkflowPanel() {
         </ScrollArea>
       )}
     </Stack>
+  );
+}
+
+/** SVG Bar Chart — simple bar chart drawn with pure SVG, no chart libraries */
+function SvgBarChart({ data, width = 400, height = 160, barColor = "var(--mantine-color-blue-5)" }: {
+  data: Array<{ label: string; value: number }>;
+  width?: number;
+  height?: number;
+  barColor?: string;
+}) {
+  if (data.length === 0) return <Text size="xs" c="dimmed" ta="center" py="md">暂无数据</Text>;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const barWidth = Math.max(12, Math.min(32, (width - 40) / data.length - 4));
+  const chartHeight = height - 30;
+  const startX = 40;
+
+  return (
+    <svg width={width} height={height} style={{ display: "block", margin: "0 auto" }}>
+      {/* Y-axis labels */}
+      <text x={36} y={12} textAnchor="end" fontSize={9} fill="var(--mantine-color-dimmed)">{formatTokenCount(maxVal)}</text>
+      <text x={36} y={chartHeight / 2 + 6} textAnchor="end" fontSize={9} fill="var(--mantine-color-dimmed)">{formatTokenCount(maxVal / 2)}</text>
+      <text x={36} y={chartHeight + 2} textAnchor="end" fontSize={9} fill="var(--mantine-color-dimmed)">0</text>
+      {/* Grid lines */}
+      <line x1={startX} y1={4} x2={width} y2={4} stroke="var(--mantine-color-dark-4)" strokeWidth={0.5} strokeDasharray="3,3" />
+      <line x1={startX} y1={chartHeight / 2} x2={width} y2={chartHeight / 2} stroke="var(--mantine-color-dark-4)" strokeWidth={0.5} strokeDasharray="3,3" />
+      <line x1={startX} y1={chartHeight} x2={width} y2={chartHeight} stroke="var(--mantine-color-dark-4)" strokeWidth={0.5} />
+      {/* Bars */}
+      {data.map((d, i) => {
+        const barH = (d.value / maxVal) * (chartHeight - 8);
+        const x = startX + i * (barWidth + 4) + 4;
+        const y = chartHeight - barH;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={barWidth} height={barH} rx={2} fill={barColor} opacity={0.85}>
+              <title>{`${d.label}: ${formatTokenCount(d.value)}`}</title>
+            </rect>
+            <text x={x + barWidth / 2} y={height - 2} textAnchor="middle" fontSize={8} fill="var(--mantine-color-dimmed)">
+              {d.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+/** Usage Chart Panel — tabs for daily/weekly/monthly + breakdown by provider/model */
+function UsageChartPanel() {
+  const [snapshot, setSnapshot] = useState<{
+    periods: Array<{ key: string; label: string; tokens: number; estimatedCost: number; requestCount: number }>;
+    breakdown: {
+      byModel: Array<{ label: string; tokens: number; estimatedCost: number; requests: number }>;
+      byProvider: Array<{ label: string; tokens: number; estimatedCost: number; requests: number }>;
+    };
+    budget: { message: string };
+  } | null>(null);
+
+  useEffect(() => {
+    const refresh = () => {
+      import("../lib/runtime/usage-cost").then(m => {
+        setSnapshot(m.buildUsageCostSnapshot());
+      });
+    };
+    refresh();
+    const timer = setInterval(refresh, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!snapshot) return null;
+
+  const periodData = snapshot.periods.map(p => ({
+    label: p.label.replace("今日", "Today").replace("近7天", "7d").replace("近30天", "30d"),
+    value: p.tokens,
+  }));
+
+  const modelData = snapshot.breakdown.byModel
+    .filter(r => r.tokens > 0)
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 8)
+    .map(r => ({ label: r.label.length > 10 ? r.label.slice(0, 9) + "…" : r.label, value: r.tokens }));
+
+  const providerData = snapshot.breakdown.byProvider
+    .filter(r => r.tokens > 0)
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 8)
+    .map(r => ({ label: r.label, value: r.tokens }));
+
+  const costByModel = snapshot.breakdown.byModel
+    .filter(r => r.estimatedCost > 0)
+    .sort((a, b) => b.estimatedCost - a.estimatedCost)
+    .slice(0, 8)
+    .map(r => ({ label: r.label.length > 10 ? r.label.slice(0, 9) + "…" : r.label, value: r.estimatedCost * 10000 }));
+
+  return (
+    <Tabs defaultValue="period">
+      <Tabs.List>
+        <Tabs.Tab value="period">📊 时段统计</Tabs.Tab>
+        <Tabs.Tab value="model">🧠 按模型</Tabs.Tab>
+        <Tabs.Tab value="provider">🏢 按供应商</Tabs.Tab>
+        <Tabs.Tab value="cost">💵 费用估算</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel value="period" pt="sm">
+        {periodData.length > 0 ? (
+          <SvgBarChart data={periodData} width={320} height={140} barColor="var(--mantine-color-blue-5)" />
+        ) : (
+          <Text size="xs" c="dimmed" ta="center" py="md">暂无使用记录。发送消息后这里会显示统计图。</Text>
+        )}
+        <SimpleGrid cols={3} mt="xs">
+          {snapshot.periods.map(p => (
+            <Stack key={p.key} gap={0} align="center">
+              <Text size="sm" fw={600}>{formatTokenCount(p.tokens)}</Text>
+              <Text size="xs" c="dimmed">{p.label} ({p.requestCount} 次)</Text>
+              <Text size="xs" c="blue">${p.estimatedCost.toFixed(4)}</Text>
+            </Stack>
+          ))}
+        </SimpleGrid>
+      </Tabs.Panel>
+      <Tabs.Panel value="model" pt="sm">
+        {modelData.length > 0 ? (
+          <SvgBarChart data={modelData} width={380} height={140} barColor="var(--mantine-color-violet-5)" />
+        ) : (
+          <Text size="xs" c="dimmed" ta="center" py="md">暂无按模型的使用数据</Text>
+        )}
+      </Tabs.Panel>
+      <Tabs.Panel value="provider" pt="sm">
+        {providerData.length > 0 ? (
+          <SvgBarChart data={providerData} width={380} height={140} barColor="var(--mantine-color-green-5)" />
+        ) : (
+          <Text size="xs" c="dimmed" ta="center" py="md">暂无按供应商的使用数据</Text>
+        )}
+      </Tabs.Panel>
+      <Tabs.Panel value="cost" pt="sm">
+        {costByModel.length > 0 ? (
+          <>
+            <Text size="xs" c="dimmed" ta="center" mb="xs">单位: $0.0001</Text>
+            <SvgBarChart data={costByModel} width={380} height={140} barColor="var(--mantine-color-orange-5)" />
+          </>
+        ) : (
+          <Text size="xs" c="dimmed" ta="center" py="md">暂无费用数据</Text>
+        )}
+        <Text size="xs" c="dimmed" ta="center" mt="xs">{snapshot.budget.message}</Text>
+      </Tabs.Panel>
+    </Tabs>
   );
 }
 
