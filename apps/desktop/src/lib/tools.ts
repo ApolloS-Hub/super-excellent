@@ -952,32 +952,14 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
       .replace(/(news|latest|search|find|today|recent)/gi, "")
       .replace(/\s+/g, " ").trim() || "AI";
 
-    // Use native window.fetch — it respects system proxy (unlike Tauri HTTP plugin)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await window.fetch(
-      "https://hn.algolia.com/api/v1/search_by_date?query=" + encodeURIComponent(enOnly) + "&tags=story&hitsPerPage=8",
-      { method: "GET", signal: controller.signal },
-    );
-    clearTimeout(timeout);
-
-    if (!resp.ok) return "搜索失败: HTTP " + resp.status;
-
-    const data = await resp.json() as { hits?: Array<{ title: string; url?: string; objectID: string; created_at?: string }> };
-    const results: string[] = [];
-    for (const hit of (data.hits || []).slice(0, 5)) {
-      const idx = results.length + 1;
-      const url = hit.url || ("https://news.ycombinator.com/item?id=" + hit.objectID);
-      const date = hit.created_at ? hit.created_at.split("T")[0] : "";
-      results.push(idx + ". " + hit.title + "\n   " + url + (date ? "\n   " + date : ""));
+    // Use Rust backend web_search command (reqwest with system proxy)
+    if (isTauriAvailable()) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return await invoke("web_search", { query: enOnly }) as string;
     }
 
-    return results.length > 0
-      ? "\ud83d\udd0d 搜索结果 (" + query + "):\n\n" + results.join("\n\n")
-      : "搜索 \"" + query + "\" 暂无结果。";
+    return "⚠️ 搜索需要桌面 App 环境";
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("abort")) return "搜索超时 (15s)，请重试";
-    return "搜索失败: " + msg;
+    return "搜索失败: " + (e instanceof Error ? e.message : String(e));
   }
 }

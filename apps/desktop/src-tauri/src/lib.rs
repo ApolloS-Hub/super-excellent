@@ -475,7 +475,50 @@ struct HealthStatus {
 }
 
 #[tauri::command]
+async fn web_search(query: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+    
+    let url = format!(
+        "https://hn.algolia.com/api/v1/search_by_date?query={}&tags=story&hitsPerPage=8",
+        urlencoding::encode(&query)
+    );
+    
+    let resp = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+    
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    
+    let body: serde_json::Value = resp.json().await
+        .map_err(|e| format!("JSON解析失败: {}", e))?;
+    
+    let empty = vec![];
+    let hits = body["hits"].as_array().unwrap_or(&empty);
+    let mut results = Vec::new();
+    for (i, hit) in hits.iter().take(5).enumerate() {
+        let title = hit["title"].as_str().unwrap_or("N/A");
+        let hn_url = format!("https://news.ycombinator.com/item?id={}", hit["objectID"].as_str().unwrap_or(""));
+        let url = hit["url"].as_str().unwrap_or(&hn_url);
+        let date = hit["created_at"].as_str().unwrap_or("").split('T').next().unwrap_or("");
+        results.push(format!("{}. {}\n   {}\n   {}", i + 1, title, url, date));
+    }
+    
+    if results.is_empty() {
+        Ok(format!("搜索 \"{}\" 暂无结果", query))
+    } else {
+        Ok(format!("🔍 搜索结果 ({}):\n\n{}", query, results.join("\n\n")))
+    }
+}
+
+#[tauri::command]
 fn health_check() -> HealthStatus {
+
     let config_dir = dirs_config_path();
     let (config_valid, config_error) = match fs::read_to_string(&config_dir) {
         Ok(content) => {
@@ -562,6 +605,7 @@ pub fn run() {
             write_file,
             list_directory,
             delete_file,
+            web_search,
             health_check,
             repair_config,
         ])
