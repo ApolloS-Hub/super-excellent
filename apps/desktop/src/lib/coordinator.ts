@@ -281,6 +281,21 @@ async function callWorkerLLM(
   onEvent: EventCallback,
   _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
+  // 60-second overall timeout for worker execution
+  const timeoutMs = 60000;
+  const timeoutPromise = new Promise<string>((_, reject) =>
+    setTimeout(() => reject(new Error("Worker 执行超时 (60s)")), timeoutMs)
+  );
+  return Promise.race([callWorkerLLMInner(worker, task, config, onEvent, _history), timeoutPromise]);
+}
+
+async function callWorkerLLMInner(
+  worker: Worker,
+  task: string,
+  config: AgentConfig,
+  onEvent: EventCallback,
+  _history?: Array<{ role: string; content: string }>,
+): Promise<string> {
   const rawBaseURL = config.baseURL || "https://api.openai.com";
   const baseURL = rawBaseURL.replace(/\/v1\/?$/, "");
   const { getAllToolDefinitions, executeTool } = await import("./tools");
