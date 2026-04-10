@@ -306,6 +306,170 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setExportNotice("✅ 已导出为 JSON");
   }, [conversation, localMessages]);
 
+  // ═══════════ Import Claude Code JSONL ═══════════
+  const importClaudeJsonl = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".jsonl,.json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const lines = text.trim().split("\n").filter(Boolean);
+        const imported: ChatMessage[] = [];
+        for (const line of lines) {
+          try {
+            const obj = JSON.parse(line);
+            // Claude Code JSONL format: { type: "human"|"assistant", message: { content: ... } }
+            // or: { role: "user"|"assistant", content: "..." }
+            let role: "user" | "assistant" = "user";
+            let content = "";
+            if (obj.type === "human" || obj.role === "user") {
+              role = "user";
+              content = obj.message?.content || obj.content || "";
+              if (Array.isArray(content)) {
+                content = content.map((c: { text?: string; type?: string }) => c.text || "").join("\n");
+              }
+            } else if (obj.type === "assistant" || obj.role === "assistant") {
+              role = "assistant";
+              content = obj.message?.content || obj.content || "";
+              if (Array.isArray(content)) {
+                content = content.map((c: { text?: string; type?: string }) => c.text || "").join("\n");
+              }
+            } else {
+              continue;
+            }
+            if (!content.trim()) continue;
+            imported.push({
+              id: `imp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              role,
+              content,
+              timestamp: new Date(obj.timestamp || obj.created_at || Date.now()),
+            });
+          } catch {
+            // Skip malformed lines
+          }
+        }
+        if (imported.length > 0) {
+          setLocalMessages(prev => [...prev, ...imported]);
+          setExportNotice(`✅ 已导入 ${imported.length} 条消息`);
+        } else {
+          setExportNotice("⚠️ 未找到可导入的消息");
+        }
+      } catch {
+        setExportNotice("❌ 文件读取失败");
+      }
+    };
+    input.click();
+  }, []);
+
+  // ═══════════ Export as PDF ═══════════
+  const exportAsPDF = useCallback(() => {
+    if (!conversation) return;
+    // Generate a simple PDF using text layout (no external library)
+    const title = conversation.title;
+    const msgs = localMessages;
+
+    // Build PDF content manually using minimal PDF spec
+    const textLines: string[] = [];
+    textLines.push(title);
+    textLines.push("=".repeat(title.length));
+    textLines.push("");
+    for (const msg of msgs) {
+      const role = msg.role === "user" ? "[User]" : "[Assistant]";
+      textLines.push(`${role} ${msg.timestamp ? new Date(msg.timestamp).toLocaleString() : ""}`);
+      textLines.push(msg.content);
+      textLines.push("");
+    }
+
+    // Use a printable text approach — create a hidden iframe, print to PDF
+    const printContent = textLines.join("\n");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:20px;font-size:13px;line-height:1.6}
+h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:8px}
+.msg{margin:12px 0;padding:8px 12px;border-radius:8px}
+.user{background:#e8f4fd;border-left:3px solid #3b82f6}
+.assistant{background:#f0f0f0;border-left:3px solid #10b981}
+.role{font-weight:bold;font-size:11px;color:#666;margin-bottom:4px}
+pre{background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px}
+code{font-family:'JetBrains Mono',monospace;font-size:12px}
+</style></head><body>
+<h1>${title}</h1>
+${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user" ? "User" : "Assistant"}</div><div>${m.content.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div></div>`).join("\n")}
+</body></html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, "_blank");
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      };
+    }
+    setExportNotice("✅ PDF 打印窗口已打开");
+  }, [conversation, localMessages]);
+
+  // ═══════════ Export as Image ═══════════
+  const exportAsImage = useCallback(() => {
+    if (!conversation || !viewport.current) return;
+    // Use canvas to capture the chat area
+    const chatArea = viewport.current;
+    const canvas = document.createElement("canvas");
+    const scale = 2;
+    canvas.width = chatArea.scrollWidth * scale;
+    canvas.height = Math.min(chatArea.scrollHeight * scale, 8000); // Cap height
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Draw background
+    ctx.fillStyle = "#1a1a2e";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw messages as text
+    ctx.scale(scale, scale);
+    ctx.font = "13px system-ui, sans-serif";
+    let y = 30;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 16px system-ui";
+    ctx.fillText(conversation.title, 16, y);
+    y += 30;
+
+    for (const msg of localMessages) {
+      const isUser = msg.role === "user";
+      ctx.fillStyle = isUser ? "#3b82f6" : "#10b981";
+      ctx.font = "bold 11px system-ui";
+      ctx.fillText(isUser ? "User" : "Assistant", 16, y);
+      y += 16;
+      ctx.fillStyle = "#e0e0e0";
+      ctx.font = "13px system-ui";
+      const lines = msg.content.split("\n");
+      for (const line of lines) {
+        // Word wrap at ~80 chars
+        const chunks = line.match(/.{1,80}/g) || [""];
+        for (const chunk of chunks) {
+          if (y > canvas.height / scale - 20) break;
+          ctx.fillText(chunk, 20, y);
+          y += 18;
+        }
+      }
+      y += 12;
+      if (y > canvas.height / scale - 20) break;
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice("✅ 已导出为图片");
+    }, "image/png");
+  }, [conversation, localMessages]);
+
   // ═══════════ Pause / Resume / Stop ═══════════
   const [isPausedState, setIsPausedState] = useState(false);
 
@@ -366,7 +530,8 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 | /brief | 项目摘要 |
 | /agents | 显示 Worker 状态 |
 | /history | 对话历史统计 |
-| /export [format] | 导出对话 (md/json) |
+| /export [format] | 导出对话 (md/json/pdf/image) |
+| /import | 导入 Claude Code JSONL 会话 |
 | /model [id] | 查看或切换模型 |
 | /permission [level] | 设置权限级别 |
 | /tasks | 显示任务列表 |
@@ -555,11 +720,15 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 
       case "export": {
         const format = (args[0] || "md").toLowerCase();
-        if (format === "json") {
-          exportAsJSON();
-          return null;
-        }
+        if (format === "json") { exportAsJSON(); return null; }
+        if (format === "pdf") { exportAsPDF(); return null; }
+        if (format === "image" || format === "png") { exportAsImage(); return null; }
         exportAsMarkdown();
+        return null;
+      }
+
+      case "import": {
+        importClaudeJsonl();
         return null;
       }
 
@@ -914,8 +1083,14 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
               <ActionIcon variant="subtle" size="sm"><Text size="xs">📤</Text></ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Label>导出</Menu.Label>
               <Menu.Item onClick={exportAsMarkdown}>📝 导出 Markdown</Menu.Item>
               <Menu.Item onClick={exportAsJSON}>📋 导出 JSON</Menu.Item>
+              <Menu.Item onClick={exportAsPDF}>📄 导出 PDF</Menu.Item>
+              <Menu.Item onClick={exportAsImage}>🖼️ 导出图片</Menu.Item>
+              <Menu.Divider />
+              <Menu.Label>导入</Menu.Label>
+              <Menu.Item onClick={importClaudeJsonl}>📥 导入 Claude JSONL</Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
