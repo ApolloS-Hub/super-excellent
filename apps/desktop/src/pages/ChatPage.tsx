@@ -61,9 +61,11 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   const activeConvIdRef = useRef(conversation?.id);
   activeConvIdRef.current = conversation?.id;
 
-  // Track localMessages in a ref so we can save before switching
+  // Track localMessages and conversations in refs for save-before-switch
   const localMessagesRef = useRef<ChatMessage[]>([]);
   localMessagesRef.current = localMessages;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
   const prevConvIdRef = useRef<string | undefined>(conversation?.id);
 
   // Sync local messages with conversation and clear stale state on switch
@@ -72,7 +74,8 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     // Save previous conversation's messages before switching
     if (prevId && prevId !== conversation?.id && localMessagesRef.current.length > 0) {
       const msgs = localMessagesRef.current;
-      const updated = conversations.map(c => {
+      // Use ref to get LATEST conversations (not stale closure)
+      const updated = conversationsRef.current.map(c => {
         if (c.id !== prevId) return c;
         return { ...c, messages: msgs, updatedAt: Date.now() };
       });
