@@ -6,11 +6,14 @@ import {
   Notification, useMantineColorScheme,
 } from "@mantine/core";
 import { sendMessage, loadConfig } from "../lib/agent-bridge";
-import type { ChatMessage, AgentEvent } from "../lib/agent-bridge";
+import type { ChatMessage } from "../lib/agent-bridge";
+import {
+  startStream, getSnapshot, subscribe, abortStream,
+} from "../lib/stream-manager";
+import type { StreamEvent } from "../lib/stream-manager";
 import {
   setAskUserHandler, onPlanModeChange, isPlanMode, setProgressEmitter,
 } from "../lib/tool-registry";
-import { emitAgentEvent } from "../lib/event-bus";
 import type { Conversation } from "../lib/conversations";
 import { MarkdownContent } from "../components/MarkdownContent";
 import ToolProgress from "../components/ToolProgress";
@@ -58,41 +61,94 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   } | null>(null);
   const [askInput, setAskInput] = useState("");
   const viewport = useRef<HTMLDivElement>(null);
-  const activeConvIdRef = useRef(conversation?.id);
-  activeConvIdRef.current = conversation?.id;
-
-  // Track localMessages and conversations in refs for save-before-switch
-  const localMessagesRef = useRef<ChatMessage[]>([]);
-  localMessagesRef.current = localMessages;
-  const conversationsRef = useRef(conversations);
-  conversationsRef.current = conversations;
-  const prevConvIdRef = useRef<string | undefined>(conversation?.id);
-
-  // Sync local messages with conversation and clear stale state on switch
+  // Sync local messages with conversation on switch; recover from stream-manager snapshot
   useEffect(() => {
-    const prevId = prevConvIdRef.current;
-    // Save previous conversation's messages before switching
-    if (prevId && prevId !== conversation?.id && localMessagesRef.current.length > 0) {
-      const msgs = localMessagesRef.current;
-      // Use ref to get LATEST conversations (not stale closure)
-      const updated = conversationsRef.current.map(c => {
-        if (c.id !== prevId) return c;
-        return { ...c, messages: msgs, updatedAt: Date.now() };
-      });
-      onConversationsUpdate(updated);
-    }
-    prevConvIdRef.current = conversation?.id;
+    const convId = conversation?.id;
 
-    // Abort any running generation when switching conversations
-    import("../lib/agent-bridge").then(m => m.abortGeneration()).catch(() => {});
-    setLocalMessages(conversation?.messages ?? []);
+    // Recover state from stream-manager if there's an active/completed stream
+    if (convId) {
+      const snapshot = getSnapshot(convId);
+      if (snapshot && snapshot.status === "active") {
+        // Stream still running — restore from snapshot and subscribe
+        const msgs = conversation?.messages ?? [];
+        const lastMsg = msgs[msgs.length - 1];
+        if (lastMsg?.role === "assistant") {
+          lastMsg.content = snapshot.accumulatedText;
+          lastMsg.isStreaming = true;
+        }
+        setLocalMessages([...msgs]);
+        setIsLoading(true);
+        setIsThinking(snapshot.isThinking);
+      } else {
+        setLocalMessages(conversation?.messages ?? []);
+        setIsLoading(false);
+        setIsThinking(false);
+      }
+    } else {
+      setLocalMessages([]);
+      setIsLoading(false);
+      setIsThinking(false);
+    }
+
     setToolCalls([]);
-    setIsThinking(false);
-    setIsLoading(false);
     setAskPending(null);
     setAskInput("");
     setDroppedFiles([]);
   }, [conversation?.id]);
+
+  // Subscribe to stream-manager events for current session
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId) return;
+
+    const listener = (event: StreamEvent) => {
+      const snap = event.snapshot;
+
+      // Update assistant message from snapshot
+      setLocalMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === "assistant") {
+          last.content = snap.accumulatedText;
+          last.isStreaming = snap.status === "active";
+          // Sync tool calls into message
+          last.toolCalls = snap.toolCalls.map(tc => ({
+            name: tc.name,
+            input: tc.input,
+            output: tc.output,
+            status: tc.status,
+          }));
+        }
+        return updated;
+      });
+
+      setIsThinking(snap.isThinking);
+
+      // Sync tool progress UI
+      setToolCalls(snap.toolCalls.map((tc, i) => ({
+        id: `tc_${i}`,
+        name: tc.name,
+        input: tc.input,
+        output: tc.output,
+        status: tc.status === "running" ? "running" as ToolCallStatus : tc.status === "error" ? "error" as ToolCallStatus : "success" as ToolCallStatus,
+        startedAt: Date.now(),
+        ...(tc.status !== "running" ? { endedAt: Date.now() } : {}),
+      })));
+
+      if (event.type === "completed" || event.type === "error") {
+        setIsLoading(false);
+        setIsThinking(false);
+        // Persist after completion
+        setLocalMessages(prev => {
+          persistMessages(prev);
+          return prev;
+        });
+      }
+    };
+
+    const unsub = subscribe(convId, listener);
+    return unsub;
+  }, [conversation?.id, persistMessages]);
 
   useEffect(() => {
     viewport.current?.scrollTo({ top: viewport.current.scrollHeight, behavior: "smooth" });
@@ -222,7 +278,9 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 
   // ═══════════ Stop ═══════════
   const handleStop = useCallback(() => {
-    import("../lib/agent-bridge").then(m => m.abortGeneration());
+    if (conversation?.id) {
+      abortStream(conversation.id);
+    }
     setIsLoading(false);
     setLocalMessages(prev => {
       const updated = [...prev];
@@ -230,7 +288,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
       if (last?.isStreaming) last.isStreaming = false;
       return updated;
     });
-  }, []);
+  }, [conversation?.id]);
 
   // ═══════════ Slash Commands ═══════════
   const handleSlashCommand = useCallback(async (cmd: string): Promise<string | null> => {
@@ -738,130 +796,17 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     setToolCalls([]);
     setIsThinking(true);
 
-    const targetConvId = activeConvIdRef.current;
-    const onEvent = (event: AgentEvent) => {
-      // Ignore events from stale requests (user switched conversation)
-      if (activeConvIdRef.current !== targetConvId) return;
-      emitAgentEvent(event as unknown as Record<string, unknown>);
-      if (event.type === "text" && event.text) {
-        setIsThinking(false);
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") last.content += event.text;
-          return updated;
-        });
-      } else if (event.type === "thinking" && event.text) {
-        setIsThinking(true);
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            if (!last.content.includes("💭")) last.content += "\n💭 *思考中...*\n";
-            last.content += event.text;
-          }
-          return updated;
-        });
-      } else if (event.type === "tool_use") {
-        setIsThinking(false);
-        const callId = `tc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        setToolCalls(prev => [...prev, {
-          id: callId,
-          name: event.toolName || "?",
-          input: event.toolInput || "",
-          status: "running" as ToolCallStatus,
-          startedAt: Date.now(),
-        }]);
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            last.toolCalls = [...(last.toolCalls || []), { name: event.toolName || "?", input: event.toolInput || "" }];
-          }
-          return updated;
-        });
-      } else if (event.type === "tool_result") {
-        setToolCalls(prev => {
-          const updated = [...prev];
-          const running = [...updated].reverse().find(c => c.status === "running");
-          if (running) {
-            running.status = event.isError ? "error" : "success";
-            running.endedAt = Date.now();
-            running.output = event.toolOutput;
-          }
-          return updated;
-        });
-        // Update message toolCalls with result
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant" && last.toolCalls?.length) {
-            const tc = [...last.toolCalls].reverse().find(c => !c.status || c.status === "running");
-            if (tc) {
-              tc.status = event.isError ? "error" : "success";
-              tc.output = event.toolOutput;
-            }
-          }
-          return updated;
-        });
-      } else if (event.type === "error") {
-        setIsThinking(false);
-        setToolCalls(prev => prev.map(c =>
-          c.status === "running" ? { ...c, status: "error" as ToolCallStatus, endedAt: Date.now() } : c,
-        ));
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            // Append error instead of overwriting tool results
-            if (last.content && last.content.trim().length > 0) {
-              last.content += `\n\n❌ ${event.text}`;
-            } else {
-              last.content = `❌ ${event.text}`;
-            }
-            last.isStreaming = false;
-          }
-          return updated;
-        });
-      } else if (event.type === "result") {
-        setIsThinking(false);
-        setToolCalls(prev => prev.map(c =>
-          c.status === "running" ? { ...c, status: "success" as ToolCallStatus, endedAt: Date.now() } : c,
-        ));
-        setLocalMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant") {
-            if (event.text && event.text.length > 10) {
-              // Show tool result as main content, hide thinking noise
-              const modelText = last.content.split(/\n(?=[\u{1F4AD}\u{1F504}\u{1F4E6}\u{2705}\u{274C}\u{1F4B0}\u{231B}\u{1F3AF}])/u)[0]?.trim() || "";
-              last.content = modelText ? modelText + "\n\n" + event.text : event.text;
-            }
-            last.isStreaming = false;
-          }
-          return updated;
-        });
-      }
-    };
+    // Build history from previous messages (not including current user msg)
+    const chatHistory = localMessages
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .filter(m => m.content && !m.isStreaming)
+      .map(m => ({ role: m.role, content: m.content }));
 
-    try {
-      // Build history from previous messages (not including current user msg)
-      const chatHistory = localMessages
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .filter(m => m.content && !m.isStreaming)
-        .map(m => ({ role: m.role, content: m.content }));
-
-      await sendMessage(userMsg.content, config, onEvent, chatHistory);
-    } catch (err) {
-      onEvent({ type: "error", text: String(err) });
-    } finally {
-      setIsLoading(false);
-      setIsThinking(false);
-      setLocalMessages(prev => {
-        persistMessages(prev);
-        return prev;
-      });
-    }
+    // Delegate to stream-manager — events flow through subscription above
+    startStream(
+      { sessionId: conversation.id, message: userMsg.content, config, history: chatHistory },
+      sendMessage,
+    );
   }, [input, isLoading, conversation, localMessages, droppedFiles, persistMessages]);
 
   // Render chat UI
