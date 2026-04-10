@@ -440,7 +440,7 @@ async function callWorkerLLM(
       }
       workerToolCalls += msg.tool_calls!.length;
       // Force stop after 3 total tool calls
-      if (workerToolCalls >= 3) {
+      if (workerToolCalls >= 1) {
         const toolMsgs = isolatedMessages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
         const summary = toolMsgs.length > 0 ? (toolMsgs as string[]).join("\n\n").slice(0, 5000) : "工具调用完成";
         onEvent({ type: "text", text: summary });
