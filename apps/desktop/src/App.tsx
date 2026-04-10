@@ -137,21 +137,68 @@ function App() {
     setAppState({ currentPage, conversations, activeConversationId: activeConvId });
   }, [currentPage, conversations, activeConvId]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — comprehensive system
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl + N — New conversation
+      if (mod && e.key === "n") {
         e.preventDefault();
         handleNewConversation();
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+
+      // Cmd/Ctrl + , — Open settings
+      if (mod && e.key === ",") {
         e.preventDefault();
         setCurrentPage("settings");
+        return;
+      }
+
+      // Cmd/Ctrl + Enter — Send message (dispatched to active textarea)
+      if (mod && e.key === "Enter") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("shortcut-send"));
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + S — Stop generation
+      if (mod && e.shiftKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("shortcut-stop"));
+        return;
+      }
+
+      // Cmd/Ctrl + 1/2/3 — Switch to Nth conversation
+      if (mod && ["1", "2", "3", "4", "5", "6", "7", "8", "9"].includes(e.key)) {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        const sortedConvs = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
+        if (idx < sortedConvs.length) {
+          setActiveConvId(sortedConvs[idx].id);
+          setCurrentPage("chat");
+        }
+        return;
+      }
+
+      // Escape — Close modals / exit split mode / back to chat
+      if (e.key === "Escape") {
+        if (splitMode) {
+          setSplitMode(false);
+          setSplitConvId(null);
+          return;
+        }
+        if (currentPage !== "chat") {
+          setCurrentPage("chat");
+          return;
+        }
+        return;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [conversations, currentPage, splitMode]);
 
   const handlePermApprove = useCallback((id: string, remember: boolean) => {
     permissionManager.approve(id, remember);

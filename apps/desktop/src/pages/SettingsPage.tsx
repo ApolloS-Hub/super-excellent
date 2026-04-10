@@ -404,16 +404,32 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                   <Badge variant="outline" size="sm">⌘/Ctrl + N</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">设置</Text>
+                  <Text size="sm">发送消息</Text>
+                  <Badge variant="outline" size="sm">⌘/Ctrl + Enter</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">停止生成</Text>
+                  <Badge variant="outline" size="sm">⌘/Ctrl + Shift + S</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">切换对话 1~9</Text>
+                  <Badge variant="outline" size="sm">⌘/Ctrl + 1~9</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">打开设置</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + ,</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">发送消息</Text>
-                  <Badge variant="outline" size="sm">Enter</Badge>
+                  <Text size="sm">关闭弹窗 / 返回</Text>
+                  <Badge variant="outline" size="sm">Escape</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">换行</Text>
+                  <Text size="sm">输入框换行</Text>
                   <Badge variant="outline" size="sm">Shift + Enter</Badge>
+                </Group>
+                <Group justify="space-between">
+                  <Text size="sm">输入框发送</Text>
+                  <Badge variant="outline" size="sm">Enter</Badge>
                 </Group>
               </Stack>
             </Paper>

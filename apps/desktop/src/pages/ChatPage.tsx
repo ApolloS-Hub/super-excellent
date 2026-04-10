@@ -231,6 +231,18 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   // Persist local messages back to conversation
 // [moved up]
 
+  // Global keyboard shortcut listeners (dispatched from App.tsx)
+  useEffect(() => {
+    const onSend = () => { if (!isLoading && input.trim()) handleSend(); };
+    const onStop = () => { if (isLoading) handleStop(); };
+    window.addEventListener("shortcut-send", onSend);
+    window.addEventListener("shortcut-stop", onStop);
+    return () => {
+      window.removeEventListener("shortcut-send", onSend);
+      window.removeEventListener("shortcut-stop", onStop);
+    };
+  }, [isLoading, input]);
+
   // Auto-persist messages on change (debounced) to prevent data loss on conversation switch
   useEffect(() => {
     if (!conversation?.id || localMessages.length === 0) return;
