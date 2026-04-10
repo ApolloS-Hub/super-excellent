@@ -10,6 +10,7 @@ import ChatPage from "./pages/ChatPage";
 import SettingsPage from "./pages/SettingsPage";
 import MonitorPage from "./pages/MonitorPage";
 import MediaStudioPage from "./pages/MediaStudioPage";
+import SkillMarketPage from "./pages/SkillMarketPage";
 import { PermissionDialog, permissionManager } from "./components/PermissionDialog";
 import type { PermissionRequest } from "./components/PermissionDialog";
 import {
@@ -427,6 +428,13 @@ function App() {
             onClick={() => { setCurrentPage("media"); close(); }}
             py={6}
           />
+          <NavLink
+            label="Skill 市场"
+            leftSection={<Text size="sm">🛒</Text>}
+            active={currentPage === "skills"}
+            onClick={() => { setCurrentPage("skills"); close(); }}
+            py={6}
+          />
         </Stack>
       </AppShell.Navbar>
 
@@ -487,6 +495,9 @@ function App() {
         )}
         {currentPage === "media" && (
           <MediaStudioPage onBack={() => setCurrentPage("chat")} />
+        )}
+        {currentPage === "skills" && (
+          <SkillMarketPage onBack={() => setCurrentPage("chat")} />
         )}
       </AppShell.Main>
 
