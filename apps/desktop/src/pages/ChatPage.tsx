@@ -717,15 +717,15 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const assistantMsgs = localMessages.filter(m => m.role === "assistant");
         const totalChars = localMessages.reduce((s, m) => s + m.content.length, 0);
         const estimatedTokens = Math.ceil(totalChars / 4);
-        return `## 📊 对话统计
+        return `## 📊 ${t("chat.historyTitle")}
 
-| 指标 | 值 |
+| ${t("chat.historyMetric")} | ${t("chat.historyValue")} |
 |------|------|
-| 总消息数 | ${localMessages.length} |
-| 用户消息 | ${userMsgs.length} |
-| 助手消息 | ${assistantMsgs.length} |
-| 总字符数 | ${totalChars.toLocaleString()} |
-| 估计 Token | ~${estimatedTokens.toLocaleString()} |`;
+| ${t("chat.historyTotalMessages")} | ${localMessages.length} |
+| ${t("chat.historyUserMessages")} | ${userMsgs.length} |
+| ${t("chat.historyAssistantMessages")} | ${assistantMsgs.length} |
+| ${t("chat.historyTotalChars")} | ${totalChars.toLocaleString()} |
+| ${t("chat.historyEstimatedTokens")} | ~${estimatedTokens.toLocaleString()} |`;
       }
 
       case "export": {
@@ -751,30 +751,30 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           const rules = permissionEngine.getRules();
           const stats = permissionEngine.getDenialStats();
           const lines = [
-            "## 🔐 权限状态",
+            `## 🔐 ${t("chat.permissionStatus")}`,
             "",
-            `**引擎级别**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`,
-            `**说明**: ${permMeta.description}`,
+            `**${t("chat.permissionEngineLevel")}**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`,
+            `**${t("chat.permissionDescription")}**: ${permMeta.description}`,
             "",
-            "**门禁状态**:",
-            `- 只读模式: ${gate.readonlyMode ? "✅" : "❌"}`,
-            `- 操作已启用: ${gate.actionsEnabled ? "✅" : "❌"}`,
-            `- 试运行模式: ${gate.dryRun ? "✅" : "❌"}`,
+            `**${t("chat.permissionGateStatus")}**:`,
+            `- ${t("chat.permissionReadonly")}: ${gate.readonlyMode ? "✅" : "❌"}`,
+            `- ${t("chat.permissionActionsEnabled")}: ${gate.actionsEnabled ? "✅" : "❌"}`,
+            `- ${t("chat.permissionDryRun")}: ${gate.dryRun ? "✅" : "❌"}`,
           ];
           if (rules.length > 0) {
-            lines.push("", `**自定义规则 (${rules.length})**:`);
+            lines.push("", `**${t("chat.permissionCustomRules", { count: rules.length })}**:`);
             for (const r of rules) {
               lines.push(`- \`${r.action}\` ${r.tool}${r.path ? ` @ ${r.path}` : ""}`);
             }
           }
           if (stats.length > 0) {
-            lines.push("", `**拒绝统计 (top ${Math.min(5, stats.length)})**:`);
+            lines.push("", `**${t("chat.permissionDenialStats", { count: Math.min(5, stats.length) })}**:`);
             for (const s of stats.slice(0, 5)) {
               lines.push(`- \`${s.tool}\`: ${s.count}× — ${s.topReasons.join(", ")}`);
             }
           }
-          lines.push("", "可用级别: `default` `acceptEdits` `dontAsk` `bypassPermissions` `plan`");
-          lines.push("门禁快捷: `/permission full` · `/permission readonly` · `/permission dryrun`");
+          lines.push("", `${t("chat.permissionAvailableLevels")}: \`default\` \`acceptEdits\` \`dontAsk\` \`bypassPermissions\` \`plan\``);
+          lines.push(`${t("chat.permissionGateShortcuts")}: \`/permission full\` · \`/permission readonly\` · \`/permission dryrun\``);
           return lines.join("\n");
         }
         switch (levelArg.toLowerCase()) {
@@ -782,19 +782,19 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
             setApprovalGate({ readonlyMode: false, actionsEnabled: true, dryRun: false });
             permissionEngine.setLevel("dontAsk");
             setAppState({ permissionMode: "dontAsk" });
-            return "🔓 已设置为完全权限模式 (dontAsk)";
+            return `🔓 ${t("chat.permissionSetFull")}`;
           case "readonly":
             setApprovalGate({ readonlyMode: true, actionsEnabled: false, dryRun: false });
             permissionEngine.setLevel("plan");
             setAppState({ permissionMode: "plan" });
-            return "🔒 已设置为只读模式 (plan)";
+            return `🔒 ${t("chat.permissionSetReadonly")}`;
           case "dryrun":
             setApprovalGate({ readonlyMode: false, actionsEnabled: true, dryRun: true });
             permissionEngine.setLevel("default");
             setAppState({ permissionMode: "default" });
-            return "🧪 已设置为试运行模式 (default)";
+            return `🧪 ${t("chat.permissionSetDryRun")}`;
           default:
-            return `❌ 未知权限级别: ${levelArg}\n可用: full, readonly, dryrun`;
+            return `❌ ${t("chat.permissionUnknownLevel", { level: levelArg })}`;
         }
       }
 
@@ -802,38 +802,38 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const cfg = loadConfig();
         const modelArg = args[0];
         if (!modelArg) {
-          return `## 🧠 当前模型
+          return `## 🧠 ${t("chat.currentModel")}
 
-| 项目 | 值 |
+| ${t("chat.configItem")} | ${t("chat.configValue")} |
 |------|------|
 | Provider | ${cfg.provider} |
 | Model | ${cfg.model} |
 
-使用 \`/model <id>\` 切换模型，例如: \`/model claude-sonnet-4-6\``;
+${t("chat.modelUseHint")}`;
         }
         const { saveConfig: sc } = await import("../lib/agent-bridge");
         sc({ ...cfg, model: modelArg });
-        return `✅ 模型已切换为 \`${modelArg}\`（Provider: ${cfg.provider}）`;
+        return `✅ ${t("chat.modelSwitched", { model: modelArg, provider: cfg.provider })}`;
       }
 
       case "tasks": {
         const tasks = listTasks();
-        if (tasks.length === 0) return "📭 暂无任务。使用 AI 创建任务。";
+        if (tasks.length === 0) return `📭 ${t("chat.noTasks")}`;
         const statusIcon: Record<string, string> = { todo: "⬜", in_progress: "🔄", blocked: "🚫", done: "✅" };
         const lines = [
-          `## 📋 任务列表 (${tasks.length})`,
+          `## 📋 ${t("chat.taskListTitle", { count: tasks.length })}`,
           "",
-          "| 状态 | 任务 | 负责人 |",
+          `| ${t("chat.taskStatus")} | ${t("chat.taskName")} | ${t("chat.taskOwner")} |`,
           "|------|------|--------|",
-          ...tasks.map(t => `| ${statusIcon[t.status] || "❓"} | ${t.title} | ${t.owner} |`),
+          ...tasks.map(tk => `| ${statusIcon[tk.status] || "❓"} | ${tk.title} | ${tk.owner} |`),
         ];
         return lines.join("\n");
       }
 
       case "files": {
         const changes = getFileChanges();
-        if (changes.length === 0) return "📭 本次会话无文件变更";
-        return `## 📁 文件变更 (${changes.length})\n\n${getChangeSummary()}\n\n${formatFileChanges()}`;
+        if (changes.length === 0) return `📭 ${t("chat.noFileChangesSession")}`;
+        return `## 📁 ${t("chat.fileChangesTitle", { count: changes.length })}\n\n${getChangeSummary()}\n\n${formatFileChanges()}`;
       }
 
       case "usage": {
