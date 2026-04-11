@@ -839,23 +839,23 @@ ${t("chat.modelUseHint")}`;
       case "usage": {
         const snapshot = buildUsageCostSnapshot();
         const lines = [
-          "## 📈 使用量统计",
+          `## 📈 ${t("chat.usageTitle")}`,
           "",
-          "### 时段摘要",
-          "| 时段 | 请求数 | Token | 费用 |",
+          `### ${t("chat.usagePeriodSummary")}`,
+          `| ${t("chat.usagePeriod")} | ${t("chat.usageRequests")} | ${t("chat.usageTokens")} | ${t("chat.usageCost")} |`,
           "|------|--------|-------|------|",
           ...snapshot.periods.map(p =>
             `| ${p.label} | ${p.requestCount} | ${p.tokens.toLocaleString()} | $${p.estimatedCost.toFixed(4)} |`
           ),
           "",
-          "### 按模型",
-          "| 模型 | Token | 费用 |",
+          `### ${t("chat.usageByModel")}`,
+          `| ${t("chat.usageModel")} | ${t("chat.usageTokens")} | ${t("chat.usageCost")} |`,
           "|------|-------|------|",
           ...snapshot.breakdown.byModel.map(r =>
             `| ${r.label} | ${r.tokens.toLocaleString()} | $${r.estimatedCost.toFixed(4)} |`
           ),
           "",
-          `**预算**: ${snapshot.budget.message}`,
+          `**${t("chat.usageBudget")}**: ${snapshot.budget.message}`,
         ];
         return lines.join("\n");
       }
@@ -864,30 +864,30 @@ ${t("chat.modelUseHint")}`;
         const path = args[0];
         if (!path) {
           const all = getAllBackups();
-          if (all.length === 0) return "📭 本次会话无文件修改记录";
+          if (all.length === 0) return `📭 ${t("chat.diffNoRecords")}`;
           const files = [...new Set(all.map(b => b.path))];
-          return `## 📜 文件修改历史 (${all.length} 次)\n\n${files.map(f => {
+          return `## 📜 ${t("chat.diffHistoryTitle", { count: all.length })}\n\n${files.map(f => {
             const bkps = all.filter(b => b.path === f);
-            return `- \`${f}\` — ${bkps.length} 次修改`;
-          }).join("\n")}\n\n使用 \`/diff <path>\` 查看具体 diff`;
+            return `- \`${f}\` — ${t("chat.diffModifications", { count: bkps.length })}`;
+          }).join("\n")}\n\n${t("chat.diffUseCommand")}`;
         }
         const backups = getAllBackups().filter(b => b.path === path);
-        if (backups.length === 0) return `📭 无 \`${path}\` 的修改记录`;
+        if (backups.length === 0) return `📭 ${t("chat.diffNoFileRecords", { path })}`;
         const last = backups[backups.length - 1];
         const diffLines = formatDiff(computeDiff(last.originalContent, last.newContent));
-        return `## 📄 Diff: \`${path}\`\n\n最近修改: ${new Date(last.timestamp).toLocaleString()}\n\n\`\`\`diff\n${diffLines || "(无变化)"}\n\`\`\``;
+        return `## 📄 ${t("chat.diffTitle", { path })}\n\n${t("chat.diffLastModified", { time: new Date(last.timestamp).toLocaleString() })}\n\n\`\`\`diff\n${diffLines || `(${t("chat.diffNoChange")})`}\n\`\`\``;
       }
 
       case "undo": {
         const path = args[0];
-        if (!path) return "用法: `/undo <path>` — 查看可撤销内容";
-        if (!canRewind(path)) return `📭 无 \`${path}\` 的备份记录，无法撤销`;
+        if (!path) return t("chat.undoUsage");
+        if (!canRewind(path)) return `📭 ${t("chat.undoNoBackup", { path })}`;
         const original = getRewindContent(path);
-        return `## ↩️ 可撤销内容: \`${path}\`\n\n原始内容（撤销后恢复）:\n\n\`\`\`\n${(original || "").slice(0, 1000)}${(original || "").length > 1000 ? "\n...(内容截断)" : ""}\n\`\`\`\n\n请让 AI 执行 \`undo\` 工具以实际恢复文件。`;
+        return `## ↩️ ${t("chat.undoTitle", { path })}\n\n${t("chat.undoOriginalContent")}\n\n\`\`\`\n${(original || "").slice(0, 1000)}${(original || "").length > 1000 ? `\n${t("chat.undoContentTruncated")}` : ""}\n\`\`\`\n\n${t("chat.undoExecuteHint")}`;
       }
 
       default:
-        return `❓ 未知命令: /${command}\n输入 /help 查看可用命令`;
+        return `❓ ${t("chat.unknownCommand", { command })}`;
     }
   }, [localMessages, setLocalMessages, exportAsMarkdown, exportAsJSON]);
 
@@ -928,7 +928,7 @@ ${t("chat.modelUseHint")}`;
         saveUserMemory(memo);
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `✅ 已记住: "${memo}"`, timestamp: new Date(),
+          content: `✅ ${t("chat.remembered", { memo })}`, timestamp: new Date(),
         }]);
         setInput("");
       }
@@ -939,7 +939,7 @@ ${t("chat.modelUseHint")}`;
       const mem = getUserMemoryText();
       setLocalMessages(prev => [...prev, {
         id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-        content: mem ? `📝 **用户偏好**\n${mem}` : "暂无保存的偏好。使用 `/remember 内容` 来保存。",
+        content: mem ? `📝 ${t("chat.userPreferences", { content: mem })}` : t("chat.noPreferences"),
         timestamp: new Date(),
       }]);
       setInput("");
@@ -968,18 +968,18 @@ ${t("chat.modelUseHint")}`;
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`,
           role: "assistant" as const,
-          content: `✅ 已切换到 **${modelName}**（${target.model}）`,
+          content: `✅ ${t("chat.switchedToModel", { model: modelName, modelId: target.model })}`,
           timestamp: new Date(),
         }]);
         setInput("");
         persistMessages([...localMessages, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `✅ 已切换到 ${modelName}`, timestamp: new Date(),
+          content: `✅ ${t("chat.switchedToModelShort", { model: modelName })}`, timestamp: new Date(),
         }]);
       } else {
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `❌ 未知模型: ${modelName}\n可用: kimi, claude, gpt, gemini`,
+          content: `❌ ${t("chat.unknownModel", { model: modelName })}`,
           timestamp: new Date(),
         }]);
         setInput("");
@@ -1059,7 +1059,7 @@ ${t("chat.modelUseHint")}`;
           display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
         }}>
-          <Text size="xl" fw={700} c="blue">📎 拖放文件到这里</Text>
+          <Text size="xl" fw={700} c="blue">📎 {t("chat.dropFilesHere")}</Text>
         </Box>
       )}
 
@@ -1074,12 +1074,12 @@ ${t("chat.modelUseHint")}`;
           <CostBadge conversationId={conversation?.id ?? null} compact />
           {planModeActive && (
             <Badge color="violet" variant="light" size="sm" leftSection="📐">
-              计划模式
+              {t("chat.planMode")}
             </Badge>
           )}
         </Group>
         <Group gap={4}>
-          <Tooltip label={showHistory ? "隐藏文件历史" : "文件修改历史"} position="bottom">
+          <Tooltip label={showHistory ? t("chat.hideFileHistory") : t("chat.fileChangeHistory")} position="bottom">
             <ActionIcon
               variant={showHistory ? "filled" : "subtle"}
               size="sm"
@@ -1093,14 +1093,14 @@ ${t("chat.modelUseHint")}`;
               <ActionIcon variant="subtle" size="sm"><Text size="xs">📤</Text></ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>导出</Menu.Label>
-              <Menu.Item onClick={exportAsMarkdown}>📝 导出 Markdown</Menu.Item>
-              <Menu.Item onClick={exportAsJSON}>📋 导出 JSON</Menu.Item>
-              <Menu.Item onClick={exportAsPDF}>📄 导出 PDF</Menu.Item>
-              <Menu.Item onClick={exportAsImage}>🖼️ 导出图片</Menu.Item>
+              <Menu.Label>{t("chat.exportLabel")}</Menu.Label>
+              <Menu.Item onClick={exportAsMarkdown}>📝 {t("chat.exportMarkdown")}</Menu.Item>
+              <Menu.Item onClick={exportAsJSON}>📋 {t("chat.exportJSON")}</Menu.Item>
+              <Menu.Item onClick={exportAsPDF}>📄 {t("chat.exportPDF")}</Menu.Item>
+              <Menu.Item onClick={exportAsImage}>🖼️ {t("chat.exportImage")}</Menu.Item>
               <Menu.Divider />
-              <Menu.Label>导入</Menu.Label>
-              <Menu.Item onClick={importClaudeJsonl}>📥 导入 Claude JSONL</Menu.Item>
+              <Menu.Label>{t("chat.importLabel")}</Menu.Label>
+              <Menu.Item onClick={importClaudeJsonl}>📥 {t("chat.importClaudeJSONL")}</Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -1124,11 +1124,11 @@ ${t("chat.modelUseHint")}`;
                 <Badge variant="light" color="orange">Qwen</Badge>
                 <Badge variant="light" color="pink">MiniMax</Badge>
                 <Badge variant="light" color="lime">Zhipu</Badge>
-                <Badge variant="light" color="violet">自定义</Badge>
+                <Badge variant="light" color="violet">{t("chat.custom")}</Badge>
               </Group>
               <Stack mt="xl" gap="xs" align="center">
-                <Text size="sm" c="dimmed">试试这些：</Text>
-                {["帮我在 /tmp 创建一个 TODO 应用", "搜索最新的 AI 新闻", "分析 package.json 的依赖"].map((hint, i) => (
+                <Text size="sm" c="dimmed">{t("chat.trySuggestions")}</Text>
+                {[t("chat.hintCreateTodo"), t("chat.hintSearchNews"), t("chat.hintAnalyzeDeps")].map((hint, i) => (
                   <Badge key={i} variant="outline" size="lg" style={{ cursor: "pointer" }}
                     onClick={() => setInput(hint)}>
                     {hint}
@@ -1155,7 +1155,7 @@ ${t("chat.modelUseHint")}`;
                   background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
                   animation: "thinking-pulse 1.5s ease-in-out infinite",
                 }} />
-                <Text size="sm" c="dimmed" fw={500}>正在思考...</Text>
+                <Text size="sm" c="dimmed" fw={500}>{t("chat.thinkingEllipsis")}</Text>
                 <Box style={{ display: "flex", gap: 3 }}>
                   {[0, 1, 2].map(i => (
                     <Box key={i} style={{
@@ -1210,7 +1210,7 @@ ${t("chat.modelUseHint")}`;
                 minRows={1}
                 maxRows={3}
                 autosize
-                placeholder="输入回答..."
+                placeholder={t("chat.inputAnswer")}
                 value={askInput}
                 onChange={(e) => setAskInput(e.currentTarget.value)}
                 onKeyDown={(e) => {
@@ -1222,7 +1222,7 @@ ${t("chat.modelUseHint")}`;
               />
               <Button size="xs" color="violet" onClick={() => handleAskAnswer(askInput)}
                 disabled={!askInput.trim()}>
-                回答
+                {t("chat.answer")}
               </Button>
             </Group>
           )}
@@ -1250,19 +1250,19 @@ ${t("chat.modelUseHint")}`;
         {isLoading && !isPausedState ? (
           <Group gap={4}>
             <Button onClick={handlePause} color="yellow" variant="filled" size="md">
-              ⏸ 暂停
+              ⏸ {t("chat.pauseBtn")}
             </Button>
             <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ 停止
+              ⏹ {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : isPausedState ? (
           <Group gap={4}>
             <Button onClick={handleResume} color="green" variant="filled" size="md">
-              ▶ 恢复
+              ▶ {t("chat.resumeBtn")}
             </Button>
             <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ 停止
+              ⏹ {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : (
@@ -1276,6 +1276,7 @@ ${t("chat.modelUseHint")}`;
 }
 
 function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; onRetry?: (content: string) => void; onRewind?: () => void }) {
+  const { t } = useTranslation();
   const isUser = message.role === "user";
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
@@ -1320,7 +1321,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
       {message.isStreaming && !mainContent && toolCalls.length === 0 && (
         <Group gap="xs" py="xs">
           <Box style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", animation: "pulse 1.5s infinite" }} />
-          <Text size="xs" c="dimmed">思考中...</Text>
+          <Text size="xs" c="dimmed">{t("chat.thinkingStatus")}</Text>
         </Group>
       )}
 
@@ -1341,7 +1342,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
               >
                 <Badge size="xs" variant="light" color="violet">Reasoning</Badge>
                 <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-                  {thinkingLines.length} 步
+                  {t("chat.steps", { count: thinkingLines.length })}
                 </Text>
                 <Text size="xs" c="dimmed">{showThinking ? "▼" : "▶"}</Text>
               </Group>
@@ -1360,10 +1361,10 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
           {toolCalls.length > 0 && (
             <Stack gap={4}>
               <Group gap="xs">
-                <Text size="xs" fw={600} c="dimmed">工具调用</Text>
-                {runningCount > 0 && <Badge size="xs" variant="dot" color="blue">{runningCount} 运行中</Badge>}
-                {successCount > 0 && <Badge size="xs" variant="dot" color="green">{successCount} 完成</Badge>}
-                {errorCount > 0 && <Badge size="xs" variant="dot" color="red">{errorCount} 失败</Badge>}
+                <Text size="xs" fw={600} c="dimmed">{t("chat.toolCalls")}</Text>
+                {runningCount > 0 && <Badge size="xs" variant="dot" color="blue">{runningCount} {t("chat.running")}</Badge>}
+                {successCount > 0 && <Badge size="xs" variant="dot" color="green">{successCount} {t("chat.completed")}</Badge>}
+                {errorCount > 0 && <Badge size="xs" variant="dot" color="red">{errorCount} {t("chat.failed")}</Badge>}
               </Group>
               {toolCalls.map((tc, i) => (
                 <ToolCallCard key={i} name={tc.name} input={tc.input || ""} output={tc.output} status={tc.status} />
@@ -1380,20 +1381,20 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
       {/* Action buttons on hover */}
       {hovered && !message.isStreaming && (
         <Group gap={4} style={{ position: "absolute", top: 4, right: 4 }}>
-          <Tooltip label={copied ? "已复制" : "复制"} position="top">
+          <Tooltip label={copied ? t("chat.copied") : t("chat.copy")} position="top">
             <ActionIcon size="xs" variant="subtle" onClick={handleCopy}>
               <Text size="xs">{copied ? "✓" : "📋"}</Text>
             </ActionIcon>
           </Tooltip>
           {isUser && onRetry && (
-            <Tooltip label="重新发送" position="top">
+            <Tooltip label={t("chat.resend")} position="top">
               <ActionIcon size="xs" variant="subtle" onClick={() => onRetry(message.content)}>
                 <Text size="xs">🔄</Text>
               </ActionIcon>
             </Tooltip>
           )}
           {isUser && onRewind && (
-            <Tooltip label="倒回到这里" position="top">
+            <Tooltip label={t("chat.rewindToHere")} position="top">
               <ActionIcon size="xs" variant="subtle" onClick={onRewind}>
                 <Text size="xs">⏪</Text>
               </ActionIcon>
@@ -1407,6 +1408,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
 
 /** File History Panel — shows all file backups recorded this session */
 function FileHistoryPanel() {
+  const { t } = useTranslation();
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -1421,9 +1423,9 @@ function FileHistoryPanel() {
   return (
     <Paper p="sm" radius="md" withBorder mx="sm">
       <Group justify="space-between" mb="xs">
-        <Text fw={600} size="sm">📜 文件修改历史 ({backups.length} 条记录)</Text>
+        <Text fw={600} size="sm">📜 {t("chat.fileHistoryTitle", { count: backups.length })}</Text>
         {backups.length === 0 && (
-          <Text size="xs" c="dimmed">本次会话暂无文件修改记录</Text>
+          <Text size="xs" c="dimmed">{t("chat.noFileChanges")}</Text>
         )}
       </Group>
       {[...byPath.entries()].map(([path, bkps]) => {
@@ -1455,7 +1457,7 @@ function FileHistoryPanel() {
                     {line || " "}
                   </Text>
                 )) : (
-                  <Text size="xs" c="dimmed">(内容未变化)</Text>
+                  <Text size="xs" c="dimmed">({t("chat.contentUnchanged")})</Text>
                 )}
               </Box>
             )}

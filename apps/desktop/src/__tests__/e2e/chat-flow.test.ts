@@ -22,10 +22,10 @@ import type { ChatMessage } from "../../lib/agent-bridge";
 
 // Mock the session-store module (IndexedDB persistence)
 vi.mock("../../lib/session-store", () => ({
-  loadAllConversations: vi.fn().mockResolvedValue([]),
-  saveConversation: vi.fn().mockResolvedValue(undefined),
-  deleteConversationDB: vi.fn().mockResolvedValue(undefined),
-  migrateFromLocalStorage: vi.fn().mockResolvedValue(undefined),
+  loadAllConversations: vi.fn(() => Promise.resolve([])),
+  saveConversation: vi.fn(() => Promise.resolve(undefined)),
+  deleteConversationDB: vi.fn(() => Promise.resolve(undefined)),
+  migrateFromLocalStorage: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 // ═══════════ Helpers ═══════════

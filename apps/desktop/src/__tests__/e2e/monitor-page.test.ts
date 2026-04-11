@@ -71,7 +71,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       // Set up a valid config
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         apiKey: "sk-test",
       }));
 
@@ -88,7 +88,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("reports healthy when config is valid", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         apiKey: "sk-test",
       }));
 
@@ -118,7 +118,7 @@ describe("Monitor Page — Health Monitoring System", () => {
 
       const repaired = JSON.parse(store.get("agent-config")!);
       expect(repaired.provider).toBe("anthropic");
-      expect(repaired.model).toBe("claude-sonnet-4-20250514");
+      expect(repaired.model).toBe("claude-sonnet-4-6");
     });
 
     it("reports fail and resets when config is corrupted JSON", () => {
@@ -156,7 +156,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("reports healthy when no issues found", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         apiKey: "sk-test",
       }));
 
@@ -177,7 +177,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("detects working localStorage", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -192,7 +192,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("reports ok when no conversations stored", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -209,7 +209,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       ]));
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -223,7 +223,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       store.set("conversations", "not-json");
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -240,7 +240,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       store.set("user-memory", "some text content");
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -254,7 +254,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       store.set("user-memory", "{invalid json here");
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       const report = runHealthChecks();
@@ -294,7 +294,7 @@ describe("Monitor Page — Health Monitoring System", () => {
 
       expect(defaults.provider).toBe("anthropic");
       expect(defaults.apiKey).toBe("");
-      expect(defaults.model).toBe("claude-sonnet-4-20250514");
+      expect(defaults.model).toBe("claude-sonnet-4-6");
 
       const stored = JSON.parse(store.get("agent-config")!);
       expect(stored.provider).toBe("anthropic");
@@ -308,7 +308,7 @@ describe("Monitor Page — Health Monitoring System", () => {
       // Need valid config for the initial check
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       startHealthMonitor();
@@ -321,7 +321,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("runs initial health check on start", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       startHealthMonitor();
@@ -336,7 +336,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("does not start multiple timers on repeated calls", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       startHealthMonitor();
@@ -355,7 +355,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("stores health reports in the log", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       runHealthChecks();
@@ -368,7 +368,7 @@ describe("Monitor Page — Health Monitoring System", () => {
     it("limits log to MAX_LOG_ENTRIES", () => {
       store.set("agent-config", JSON.stringify({
         provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
       }));
 
       // Run many health checks

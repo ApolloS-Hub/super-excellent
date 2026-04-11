@@ -276,9 +276,9 @@ describe("Coordinator — Intent Analysis & Routing", () => {
     });
 
     it("defaults long unrecognized messages to developer task", () => {
-      // A long message with no recognized keywords
+      // A long message with no recognized keywords — avoid words that match worker keywords
       const result = analyzeIntent(
-        "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua",
+        "Curabitur pretium tincidunt lacus nulla gravida orci mattis erat vitae posuere velit lacinia accumsan nulla facilisi donec",
       );
       // Long messages default to developer task
       expect(result.type).toBe("task");
