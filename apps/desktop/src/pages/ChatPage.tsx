@@ -111,7 +111,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     const convId = conversation?.id;
     if (!convId) return;
     const title = (conversation?.messages?.length === 0 && msgs.length > 0)
-      ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || conversation?.title || "新对话")
+      ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || conversation?.title || t("chat.newChat"))
       : undefined;
     // Save directly to DB (centralized persistence)
     import("../lib/session-store").then(({ saveMessagesForConversation }) => {
@@ -302,7 +302,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportNotice("✅ 已导出为 Markdown");
+    setExportNotice(`✅ ${t("chat.exportedMarkdown")}`);
   }, [conversation, localMessages]);
 
   const exportAsJSON = useCallback(() => {
@@ -314,7 +314,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportNotice("✅ 已导出为 JSON");
+    setExportNotice(`✅ ${t("chat.exportedJSON")}`);
   }, [conversation, localMessages]);
 
   // ═══════════ Import Claude Code JSONL ═══════════
@@ -364,12 +364,12 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
         }
         if (imported.length > 0) {
           setLocalMessages(prev => [...prev, ...imported]);
-          setExportNotice(`✅ 已导入 ${imported.length} 条消息`);
+          setExportNotice(`✅ ${t("chat.importedMessages", { count: imported.length })}`);
         } else {
-          setExportNotice("⚠️ 未找到可导入的消息");
+          setExportNotice(`⚠️ ${t("chat.noImportableMessages")}`);
         }
       } catch {
-        setExportNotice("❌ 文件读取失败");
+        setExportNotice(`❌ ${t("chat.fileReadFailed")}`);
       }
     };
     input.click();
@@ -418,7 +418,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       };
     }
-    setExportNotice("✅ PDF 打印窗口已打开");
+    setExportNotice(`✅ ${t("chat.pdfWindowOpened")}`);
   }, [conversation, localMessages]);
 
   // ═══════════ Export as Image ═══════════
@@ -476,7 +476,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
       a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      setExportNotice("✅ 已导出为图片");
+      setExportNotice(`✅ ${t("chat.exportedImage")}`);
     }, "image/png");
   }, [conversation, localMessages]);
 
@@ -520,76 +520,76 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
 
     switch (command) {
       case "help":
-        return `## 可用命令
+        return `## ${t("chat.helpTitle")}
 
-| 命令 | 说明 |
+| ${t("chat.helpCommand")} | ${t("chat.helpDescription")} |
 |------|------|
-| /help | 显示此帮助 |
-| /clear | 清空当前对话 |
-| /compact | 压缩对话历史 |
-| /cost | 查看费用统计 |
-| /todo | 查看任务清单 |
-| /memory | 查看/编辑记忆 |
-| /diff [path] | 查看文件修改 |
-| /undo [path] | 撤销文件修改 |
-| /project [path] | 分析项目 |
-| /config | 显示当前配置 |
-| /commit [msg] | Git 提交当前变更 |
-| /doctor | 运行诊断检查 |
-| /context | 显示当前上下文 |
-| /brief | 项目摘要 |
-| /agents | 显示 Worker 状态 |
-| /history | 对话历史统计 |
-| /export [format] | 导出对话 (md/json/pdf/image) |
-| /import | 导入 Claude Code JSONL 会话 |
-| /model [id] | 查看或切换模型 |
-| /permission [level] | 设置权限级别 |
-| /tasks | 显示任务列表 |
-| /files | 显示文件变更 |
-| /usage | 详细使用量统计 |`;
+| /help | ${t("chat.helpShowHelp")} |
+| /clear | ${t("chat.helpClear")} |
+| /compact | ${t("chat.helpCompact")} |
+| /cost | ${t("chat.helpCost")} |
+| /todo | ${t("chat.helpTodo")} |
+| /memory | ${t("chat.helpMemory")} |
+| /diff [path] | ${t("chat.helpDiff")} |
+| /undo [path] | ${t("chat.helpUndo")} |
+| /project [path] | ${t("chat.helpProject")} |
+| /config | ${t("chat.helpConfig")} |
+| /commit [msg] | ${t("chat.helpCommit")} |
+| /doctor | ${t("chat.helpDoctor")} |
+| /context | ${t("chat.helpContext")} |
+| /brief | ${t("chat.helpBrief")} |
+| /agents | ${t("chat.helpAgents")} |
+| /history | ${t("chat.helpHistory")} |
+| /export [format] | ${t("chat.helpExport")} |
+| /import | ${t("chat.helpImport")} |
+| /model [id] | ${t("chat.helpModel")} |
+| /permission [level] | ${t("chat.helpPermission")} |
+| /tasks | ${t("chat.helpTasks")} |
+| /files | ${t("chat.helpFiles")} |
+| /usage | ${t("chat.helpUsage")} |`;
 
       case "clear":
         setLocalMessages([]);
-        return "🗑️ 对话已清空";
+        return `🗑️ ${t("chat.conversationCleared")}`;
 
       case "compact": {
         const msgs = localMessages;
         const userMsgs = msgs.filter(m => m.role === "user").length;
         const assistantMsgs = msgs.filter(m => m.role === "assistant").length;
-        if (msgs.length <= 4) return "对话太短，无需压缩";
+        if (msgs.length <= 4) return t("chat.tooShortToCompact");
         const keep = msgs.slice(-4);
         setLocalMessages(keep);
-        return `📦 已压缩: 保留最近 4 条消息（删除了 ${userMsgs + assistantMsgs - 4} 条）`;
+        return `📦 ${t("chat.compacted", { count: userMsgs + assistantMsgs - 4 })}`;
       }
 
       case "cost":
-        return "💰 费用统计请查看 Monitor 页面（侧边栏 🤖 按钮）";
+        return `💰 ${t("chat.costHint")}`;
 
       case "todo":
-        return "📋 使用 AI 的 todo_write 工具管理任务清单。\n\n试试说：\"帮我创建一个 TODO 清单\"";
+        return `📋 ${t("chat.todoHint")}`;
 
       case "memory": {
         const mem = loadMemory();
         setAppState({ memorySnapshot: mem });
-        return mem ? `📝 当前记忆:\n\n${mem}` : "📭 暂无记忆。AI 会自动学习你的偏好。";
+        return mem ? `📝 ${t("chat.currentMemory", { content: mem })}` : `📭 ${t("chat.noMemory")}`;
       }
 
       case "config": {
         const cfg = loadConfig();
-        return `## ⚙️ 当前配置
+        return `## ⚙️ ${t("chat.configTitle")}
 
-| 项目 | 值 |
+| ${t("chat.configItem")} | ${t("chat.configValue")} |
 |------|------|
 | Provider | ${cfg.provider} |
 | Model | ${cfg.model} |
-| Base URL | ${cfg.baseURL || "(默认)"} |
-| 工作目录 | ${cfg.workDir || "(未设置)"} |
-| API Key | ${cfg.apiKey ? "✅ 已配置" : "❌ 未配置"} |`;
+| Base URL | ${cfg.baseURL || `(${t("chat.configDefault")})`} |
+| ${t("chat.configWorkDir")} | ${cfg.workDir || `(${t("chat.configNotSet")})`} |
+| API Key | ${cfg.apiKey ? `✅ ${t("chat.configApiKeySet")}` : `❌ ${t("chat.configApiKeyNotSet")}`} |`;
       }
 
       case "commit": {
         const msg = args.join(" ") || "auto commit";
-        return `📌 请通过 AI 执行 Git 提交。\n\n试试说：\"帮我 git commit，消息为: ${msg}\"`;
+        return `📌 ${t("chat.commitHint", { msg })}`;
       }
 
       case "doctor": {
@@ -600,13 +600,13 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           runQualityGate(),
         ]);
         return [
-          "## 🩺 诊断报告",
+          `## 🩺 ${t("chat.diagnosticReport")}`,
           "",
           "```",
           formatDiagnosticsText(bundle).trimEnd(),
           "```",
           "",
-          "## ✅ 质量门禁",
+          `## ✅ ${t("chat.qualityGate")}`,
           "",
           "```",
           formatGateResult(gate),
@@ -630,70 +630,70 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const toolCount = getAllTools().length;
 
         const lines = [
-          "## 📋 当前上下文",
+          `## 📋 ${t("chat.contextTitle")}`,
           "",
-          "### 项目",
-          `- **工作目录**: ${cfg.workDir || "(未设置)"}`,
+          `### ${t("chat.contextProject")}`,
+          `- **${t("chat.contextWorkDir")}**: ${cfg.workDir || `(${t("chat.configNotSet")})`}`,
           `- **Provider**: ${cfg.provider}`,
           `- **Model**: ${cfg.model}`,
         ];
         if (project) {
-          lines.push(`- **项目名称**: ${project.name}`);
-          lines.push(`- **项目类型**: ${project.type}`);
-          lines.push(`- **项目路径**: ${project.rootPath}`);
-          if (project.description) lines.push(`- **描述**: ${project.description}`);
+          lines.push(`- **${t("chat.contextProjectName")}**: ${project.name}`);
+          lines.push(`- **${t("chat.contextProjectType")}**: ${project.type}`);
+          lines.push(`- **${t("chat.contextProjectPath")}**: ${project.rootPath}`);
+          if (project.description) lines.push(`- **${t("chat.contextDescription")}**: ${project.description}`);
           if (project.dependencies?.length) {
-            lines.push(`- **依赖数量**: ${project.dependencies.length}`);
+            lines.push(`- **${t("chat.contextDepsCount")}**: ${project.dependencies.length}`);
           }
         } else {
-          lines.push("- **项目**: 未检测到项目");
+          lines.push(`- **${t("chat.contextProject")}**: ${t("chat.contextNoProject")}`);
         }
 
-        lines.push("", "### 记忆");
-        lines.push(`- **长期记忆**: ${memLineCount} 条记录`);
-        if (memLineCount === 0) lines.push("  *(使用 `/remember <内容>` 保存偏好)*");
+        lines.push("", `### ${t("chat.contextMemory")}`);
+        lines.push(`- **${t("chat.contextLongTermMemory")}**: ${t("chat.contextMemoryRecords", { count: memLineCount })}`);
+        if (memLineCount === 0) lines.push(`  *(${t("chat.contextMemoryHint")})*`);
 
-        lines.push("", "### 权限");
-        lines.push(`- **模式**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`);
-        lines.push(`- **说明**: ${permMeta.description}`);
+        lines.push("", `### ${t("chat.contextPermission")}`);
+        lines.push(`- **${t("chat.contextMode")}**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`);
+        lines.push(`- **${t("chat.contextModeDescription")}**: ${permMeta.description}`);
 
-        lines.push("", "### 活跃任务");
+        lines.push("", `### ${t("chat.contextActiveTasks")}`);
         if (activeTodo) {
           const statusIcon: Record<string, string> = {
             pending: "⬜", running: "🔄", done: "✅", failed: "❌", blocked: "🚫",
           };
-          lines.push(`- **任务**: ${activeTodo.title}`);
-          lines.push(`- **状态**: ${statusIcon[activeTodo.status] || "❓"} ${activeTodo.status}`);
+          lines.push(`- **${t("chat.contextTask")}**: ${activeTodo.title}`);
+          lines.push(`- **${t("chat.contextStatus")}**: ${statusIcon[activeTodo.status] || "❓"} ${activeTodo.status}`);
         } else {
-          lines.push("- *(无活跃任务)*");
+          lines.push(`- *(${t("chat.contextNoActiveTasks")})*`);
         }
-        lines.push(`- **运行时任务总数**: ${tasks.length}`);
+        lines.push(`- **${t("chat.contextRuntimeTasks")}**: ${tasks.length}`);
 
-        lines.push("", "### 工具");
-        lines.push(`- **已注册工具**: ${toolCount} 个`);
-        lines.push("- **LLM 提供商**: Anthropic / OpenAI / Google / Kimi / Ollama / DeepSeek / Qwen / MiniMax / Zhipu / Custom");
-        lines.push("- **MCP**: 扩展协议就绪");
+        lines.push("", `### ${t("chat.contextTools")}`);
+        lines.push(`- **${t("chat.contextRegisteredTools")}**: ${t("chat.contextToolCount", { count: toolCount })}`);
+        lines.push(`- **${t("chat.contextLLMProviders")}**: Anthropic / OpenAI / Google / Kimi / Ollama / DeepSeek / Qwen / MiniMax / Zhipu / Custom`);
+        lines.push(`- **${t("chat.contextMCP")}**: ${t("chat.contextMCPReady")}`);
 
         return lines.join("\n");
       }
 
       case "brief": {
         const project = getCachedProject();
-        if (!project) return "📭 未检测到项目。请先设置工作目录或打开项目。";
+        if (!project) return `📭 ${t("chat.briefNoProject")}`;
         const lines = [
-          `## 📊 项目摘要: ${project.name}`,
+          `## 📊 ${t("chat.briefTitle", { name: project.name })}`,
           "",
-          `- **类型**: ${project.type}`,
-          `- **路径**: ${project.rootPath}`,
+          `- **${t("chat.briefType")}**: ${project.type}`,
+          `- **${t("chat.briefPath")}**: ${project.rootPath}`,
         ];
-        if (project.description) lines.push(`- **描述**: ${project.description}`);
+        if (project.description) lines.push(`- **${t("chat.briefDescription")}**: ${project.description}`);
         if (project.dependencies?.length) {
-          lines.push(`- **依赖数量**: ${project.dependencies.length}`);
-          lines.push(`- **主要依赖**: ${project.dependencies.slice(0, 8).join(", ")}`);
+          lines.push(`- **${t("chat.briefDepsCount")}**: ${project.dependencies.length}`);
+          lines.push(`- **${t("chat.briefMainDeps")}**: ${project.dependencies.slice(0, 8).join(", ")}`);
         }
         if (project.scripts) {
           const scriptList = Object.keys(project.scripts).slice(0, 8);
-          lines.push(`- **脚本**: ${scriptList.join(", ")}`);
+          lines.push(`- **${t("chat.briefScripts")}**: ${scriptList.join(", ")}`);
         }
         return lines.join("\n");
       }
@@ -701,11 +701,11 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
       case "agents": {
         const roster = loadAgentRoster();
         const lines = [
-          `## 🤖 Agent 状态 (${roster.status})`,
+          `## 🤖 ${t("chat.agentStatus", { status: roster.status })}`,
           "",
           `${roster.detail}`,
           "",
-          "| Agent ID | 名称 |",
+          `| ${t("chat.agentId")} | ${t("chat.agentName")} |`,
           "|----------|------|",
           ...roster.entries.map(e => `| ${e.agentId} | ${e.displayName} |`),
         ];
@@ -717,15 +717,15 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const assistantMsgs = localMessages.filter(m => m.role === "assistant");
         const totalChars = localMessages.reduce((s, m) => s + m.content.length, 0);
         const estimatedTokens = Math.ceil(totalChars / 4);
-        return `## 📊 对话统计
+        return `## 📊 ${t("chat.historyTitle")}
 
-| 指标 | 值 |
+| ${t("chat.historyMetric")} | ${t("chat.historyValue")} |
 |------|------|
-| 总消息数 | ${localMessages.length} |
-| 用户消息 | ${userMsgs.length} |
-| 助手消息 | ${assistantMsgs.length} |
-| 总字符数 | ${totalChars.toLocaleString()} |
-| 估计 Token | ~${estimatedTokens.toLocaleString()} |`;
+| ${t("chat.historyTotalMessages")} | ${localMessages.length} |
+| ${t("chat.historyUserMessages")} | ${userMsgs.length} |
+| ${t("chat.historyAssistantMessages")} | ${assistantMsgs.length} |
+| ${t("chat.historyTotalChars")} | ${totalChars.toLocaleString()} |
+| ${t("chat.historyEstimatedTokens")} | ~${estimatedTokens.toLocaleString()} |`;
       }
 
       case "export": {
@@ -751,30 +751,30 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           const rules = permissionEngine.getRules();
           const stats = permissionEngine.getDenialStats();
           const lines = [
-            "## 🔐 权限状态",
+            `## 🔐 ${t("chat.permissionStatus")}`,
             "",
-            `**引擎级别**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`,
-            `**说明**: ${permMeta.description}`,
+            `**${t("chat.permissionEngineLevel")}**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`,
+            `**${t("chat.permissionDescription")}**: ${permMeta.description}`,
             "",
-            "**门禁状态**:",
-            `- 只读模式: ${gate.readonlyMode ? "✅" : "❌"}`,
-            `- 操作已启用: ${gate.actionsEnabled ? "✅" : "❌"}`,
-            `- 试运行模式: ${gate.dryRun ? "✅" : "❌"}`,
+            `**${t("chat.permissionGateStatus")}**:`,
+            `- ${t("chat.permissionReadonly")}: ${gate.readonlyMode ? "✅" : "❌"}`,
+            `- ${t("chat.permissionActionsEnabled")}: ${gate.actionsEnabled ? "✅" : "❌"}`,
+            `- ${t("chat.permissionDryRun")}: ${gate.dryRun ? "✅" : "❌"}`,
           ];
           if (rules.length > 0) {
-            lines.push("", `**自定义规则 (${rules.length})**:`);
+            lines.push("", `**${t("chat.permissionCustomRules", { count: rules.length })}**:`);
             for (const r of rules) {
               lines.push(`- \`${r.action}\` ${r.tool}${r.path ? ` @ ${r.path}` : ""}`);
             }
           }
           if (stats.length > 0) {
-            lines.push("", `**拒绝统计 (top ${Math.min(5, stats.length)})**:`);
+            lines.push("", `**${t("chat.permissionDenialStats", { count: Math.min(5, stats.length) })}**:`);
             for (const s of stats.slice(0, 5)) {
               lines.push(`- \`${s.tool}\`: ${s.count}× — ${s.topReasons.join(", ")}`);
             }
           }
-          lines.push("", "可用级别: `default` `acceptEdits` `dontAsk` `bypassPermissions` `plan`");
-          lines.push("门禁快捷: `/permission full` · `/permission readonly` · `/permission dryrun`");
+          lines.push("", `${t("chat.permissionAvailableLevels")}: \`default\` \`acceptEdits\` \`dontAsk\` \`bypassPermissions\` \`plan\``);
+          lines.push(`${t("chat.permissionGateShortcuts")}: \`/permission full\` · \`/permission readonly\` · \`/permission dryrun\``);
           return lines.join("\n");
         }
         switch (levelArg.toLowerCase()) {
@@ -782,19 +782,19 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
             setApprovalGate({ readonlyMode: false, actionsEnabled: true, dryRun: false });
             permissionEngine.setLevel("dontAsk");
             setAppState({ permissionMode: "dontAsk" });
-            return "🔓 已设置为完全权限模式 (dontAsk)";
+            return `🔓 ${t("chat.permissionSetFull")}`;
           case "readonly":
             setApprovalGate({ readonlyMode: true, actionsEnabled: false, dryRun: false });
             permissionEngine.setLevel("plan");
             setAppState({ permissionMode: "plan" });
-            return "🔒 已设置为只读模式 (plan)";
+            return `🔒 ${t("chat.permissionSetReadonly")}`;
           case "dryrun":
             setApprovalGate({ readonlyMode: false, actionsEnabled: true, dryRun: true });
             permissionEngine.setLevel("default");
             setAppState({ permissionMode: "default" });
-            return "🧪 已设置为试运行模式 (default)";
+            return `🧪 ${t("chat.permissionSetDryRun")}`;
           default:
-            return `❌ 未知权限级别: ${levelArg}\n可用: full, readonly, dryrun`;
+            return `❌ ${t("chat.permissionUnknownLevel", { level: levelArg })}`;
         }
       }
 
@@ -802,60 +802,60 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const cfg = loadConfig();
         const modelArg = args[0];
         if (!modelArg) {
-          return `## 🧠 当前模型
+          return `## 🧠 ${t("chat.currentModel")}
 
-| 项目 | 值 |
+| ${t("chat.configItem")} | ${t("chat.configValue")} |
 |------|------|
 | Provider | ${cfg.provider} |
 | Model | ${cfg.model} |
 
-使用 \`/model <id>\` 切换模型，例如: \`/model claude-sonnet-4-6\``;
+${t("chat.modelUseHint")}`;
         }
         const { saveConfig: sc } = await import("../lib/agent-bridge");
         sc({ ...cfg, model: modelArg });
-        return `✅ 模型已切换为 \`${modelArg}\`（Provider: ${cfg.provider}）`;
+        return `✅ ${t("chat.modelSwitched", { model: modelArg, provider: cfg.provider })}`;
       }
 
       case "tasks": {
         const tasks = listTasks();
-        if (tasks.length === 0) return "📭 暂无任务。使用 AI 创建任务。";
+        if (tasks.length === 0) return `📭 ${t("chat.noTasks")}`;
         const statusIcon: Record<string, string> = { todo: "⬜", in_progress: "🔄", blocked: "🚫", done: "✅" };
         const lines = [
-          `## 📋 任务列表 (${tasks.length})`,
+          `## 📋 ${t("chat.taskListTitle", { count: tasks.length })}`,
           "",
-          "| 状态 | 任务 | 负责人 |",
+          `| ${t("chat.taskStatus")} | ${t("chat.taskName")} | ${t("chat.taskOwner")} |`,
           "|------|------|--------|",
-          ...tasks.map(t => `| ${statusIcon[t.status] || "❓"} | ${t.title} | ${t.owner} |`),
+          ...tasks.map(tk => `| ${statusIcon[tk.status] || "❓"} | ${tk.title} | ${tk.owner} |`),
         ];
         return lines.join("\n");
       }
 
       case "files": {
         const changes = getFileChanges();
-        if (changes.length === 0) return "📭 本次会话无文件变更";
-        return `## 📁 文件变更 (${changes.length})\n\n${getChangeSummary()}\n\n${formatFileChanges()}`;
+        if (changes.length === 0) return `📭 ${t("chat.noFileChangesSession")}`;
+        return `## 📁 ${t("chat.fileChangesTitle", { count: changes.length })}\n\n${getChangeSummary()}\n\n${formatFileChanges()}`;
       }
 
       case "usage": {
         const snapshot = buildUsageCostSnapshot();
         const lines = [
-          "## 📈 使用量统计",
+          `## 📈 ${t("chat.usageTitle")}`,
           "",
-          "### 时段摘要",
-          "| 时段 | 请求数 | Token | 费用 |",
+          `### ${t("chat.usagePeriodSummary")}`,
+          `| ${t("chat.usagePeriod")} | ${t("chat.usageRequests")} | ${t("chat.usageTokens")} | ${t("chat.usageCost")} |`,
           "|------|--------|-------|------|",
           ...snapshot.periods.map(p =>
             `| ${p.label} | ${p.requestCount} | ${p.tokens.toLocaleString()} | $${p.estimatedCost.toFixed(4)} |`
           ),
           "",
-          "### 按模型",
-          "| 模型 | Token | 费用 |",
+          `### ${t("chat.usageByModel")}`,
+          `| ${t("chat.usageModel")} | ${t("chat.usageTokens")} | ${t("chat.usageCost")} |`,
           "|------|-------|------|",
           ...snapshot.breakdown.byModel.map(r =>
             `| ${r.label} | ${r.tokens.toLocaleString()} | $${r.estimatedCost.toFixed(4)} |`
           ),
           "",
-          `**预算**: ${snapshot.budget.message}`,
+          `**${t("chat.usageBudget")}**: ${snapshot.budget.message}`,
         ];
         return lines.join("\n");
       }
@@ -864,30 +864,30 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const path = args[0];
         if (!path) {
           const all = getAllBackups();
-          if (all.length === 0) return "📭 本次会话无文件修改记录";
+          if (all.length === 0) return `📭 ${t("chat.diffNoRecords")}`;
           const files = [...new Set(all.map(b => b.path))];
-          return `## 📜 文件修改历史 (${all.length} 次)\n\n${files.map(f => {
+          return `## 📜 ${t("chat.diffHistoryTitle", { count: all.length })}\n\n${files.map(f => {
             const bkps = all.filter(b => b.path === f);
-            return `- \`${f}\` — ${bkps.length} 次修改`;
-          }).join("\n")}\n\n使用 \`/diff <path>\` 查看具体 diff`;
+            return `- \`${f}\` — ${t("chat.diffModifications", { count: bkps.length })}`;
+          }).join("\n")}\n\n${t("chat.diffUseCommand")}`;
         }
         const backups = getAllBackups().filter(b => b.path === path);
-        if (backups.length === 0) return `📭 无 \`${path}\` 的修改记录`;
+        if (backups.length === 0) return `📭 ${t("chat.diffNoFileRecords", { path })}`;
         const last = backups[backups.length - 1];
         const diffLines = formatDiff(computeDiff(last.originalContent, last.newContent));
-        return `## 📄 Diff: \`${path}\`\n\n最近修改: ${new Date(last.timestamp).toLocaleString()}\n\n\`\`\`diff\n${diffLines || "(无变化)"}\n\`\`\``;
+        return `## 📄 ${t("chat.diffTitle", { path })}\n\n${t("chat.diffLastModified", { time: new Date(last.timestamp).toLocaleString() })}\n\n\`\`\`diff\n${diffLines || `(${t("chat.diffNoChange")})`}\n\`\`\``;
       }
 
       case "undo": {
         const path = args[0];
-        if (!path) return "用法: `/undo <path>` — 查看可撤销内容";
-        if (!canRewind(path)) return `📭 无 \`${path}\` 的备份记录，无法撤销`;
+        if (!path) return t("chat.undoUsage");
+        if (!canRewind(path)) return `📭 ${t("chat.undoNoBackup", { path })}`;
         const original = getRewindContent(path);
-        return `## ↩️ 可撤销内容: \`${path}\`\n\n原始内容（撤销后恢复）:\n\n\`\`\`\n${(original || "").slice(0, 1000)}${(original || "").length > 1000 ? "\n...(内容截断)" : ""}\n\`\`\`\n\n请让 AI 执行 \`undo\` 工具以实际恢复文件。`;
+        return `## ↩️ ${t("chat.undoTitle", { path })}\n\n${t("chat.undoOriginalContent")}\n\n\`\`\`\n${(original || "").slice(0, 1000)}${(original || "").length > 1000 ? `\n${t("chat.undoContentTruncated")}` : ""}\n\`\`\`\n\n${t("chat.undoExecuteHint")}`;
       }
 
       default:
-        return `❓ 未知命令: /${command}\n输入 /help 查看可用命令`;
+        return `❓ ${t("chat.unknownCommand", { command })}`;
     }
   }, [localMessages, setLocalMessages, exportAsMarkdown, exportAsJSON]);
 
@@ -928,7 +928,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         saveUserMemory(memo);
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `✅ 已记住: "${memo}"`, timestamp: new Date(),
+          content: `✅ ${t("chat.remembered", { memo })}`, timestamp: new Date(),
         }]);
         setInput("");
       }
@@ -939,7 +939,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
       const mem = getUserMemoryText();
       setLocalMessages(prev => [...prev, {
         id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-        content: mem ? `📝 **用户偏好**\n${mem}` : "暂无保存的偏好。使用 `/remember 内容` 来保存。",
+        content: mem ? `📝 ${t("chat.userPreferences", { content: mem })}` : t("chat.noPreferences"),
         timestamp: new Date(),
       }]);
       setInput("");
@@ -968,18 +968,18 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`,
           role: "assistant" as const,
-          content: `✅ 已切换到 **${modelName}**（${target.model}）`,
+          content: `✅ ${t("chat.switchedToModel", { model: modelName, modelId: target.model })}`,
           timestamp: new Date(),
         }]);
         setInput("");
         persistMessages([...localMessages, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `✅ 已切换到 ${modelName}`, timestamp: new Date(),
+          content: `✅ ${t("chat.switchedToModelShort", { model: modelName })}`, timestamp: new Date(),
         }]);
       } else {
         setLocalMessages(prev => [...prev, {
           id: `msg_${Date.now()}_sys`, role: "assistant" as const,
-          content: `❌ 未知模型: ${modelName}\n可用: kimi, claude, gpt, gemini`,
+          content: `❌ ${t("chat.unknownModel", { model: modelName })}`,
           timestamp: new Date(),
         }]);
         setInput("");
@@ -1059,7 +1059,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
         }}>
-          <Text size="xl" fw={700} c="blue">📎 拖放文件到这里</Text>
+          <Text size="xl" fw={700} c="blue">📎 {t("chat.dropFilesHere")}</Text>
         </Box>
       )}
 
@@ -1074,12 +1074,12 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           <CostBadge conversationId={conversation?.id ?? null} compact />
           {planModeActive && (
             <Badge color="violet" variant="light" size="sm" leftSection="📐">
-              计划模式
+              {t("chat.planMode")}
             </Badge>
           )}
         </Group>
         <Group gap={4}>
-          <Tooltip label={showHistory ? "隐藏文件历史" : "文件修改历史"} position="bottom">
+          <Tooltip label={showHistory ? t("chat.hideFileHistory") : t("chat.fileChangeHistory")} position="bottom">
             <ActionIcon
               variant={showHistory ? "filled" : "subtle"}
               size="sm"
@@ -1093,14 +1093,14 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
               <ActionIcon variant="subtle" size="sm"><Text size="xs">📤</Text></ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>导出</Menu.Label>
-              <Menu.Item onClick={exportAsMarkdown}>📝 导出 Markdown</Menu.Item>
-              <Menu.Item onClick={exportAsJSON}>📋 导出 JSON</Menu.Item>
-              <Menu.Item onClick={exportAsPDF}>📄 导出 PDF</Menu.Item>
-              <Menu.Item onClick={exportAsImage}>🖼️ 导出图片</Menu.Item>
+              <Menu.Label>{t("chat.exportLabel")}</Menu.Label>
+              <Menu.Item onClick={exportAsMarkdown}>📝 {t("chat.exportMarkdown")}</Menu.Item>
+              <Menu.Item onClick={exportAsJSON}>📋 {t("chat.exportJSON")}</Menu.Item>
+              <Menu.Item onClick={exportAsPDF}>📄 {t("chat.exportPDF")}</Menu.Item>
+              <Menu.Item onClick={exportAsImage}>🖼️ {t("chat.exportImage")}</Menu.Item>
               <Menu.Divider />
-              <Menu.Label>导入</Menu.Label>
-              <Menu.Item onClick={importClaudeJsonl}>📥 导入 Claude JSONL</Menu.Item>
+              <Menu.Label>{t("chat.importLabel")}</Menu.Label>
+              <Menu.Item onClick={importClaudeJsonl}>📥 {t("chat.importClaudeJSONL")}</Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -1124,11 +1124,11 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
                 <Badge variant="light" color="orange">Qwen</Badge>
                 <Badge variant="light" color="pink">MiniMax</Badge>
                 <Badge variant="light" color="lime">Zhipu</Badge>
-                <Badge variant="light" color="violet">自定义</Badge>
+                <Badge variant="light" color="violet">{t("chat.custom")}</Badge>
               </Group>
               <Stack mt="xl" gap="xs" align="center">
-                <Text size="sm" c="dimmed">试试这些：</Text>
-                {["帮我在 /tmp 创建一个 TODO 应用", "搜索最新的 AI 新闻", "分析 package.json 的依赖"].map((hint, i) => (
+                <Text size="sm" c="dimmed">{t("chat.trySuggestions")}</Text>
+                {[t("chat.hintCreateTodo"), t("chat.hintSearchNews"), t("chat.hintAnalyzeDeps")].map((hint, i) => (
                   <Badge key={i} variant="outline" size="lg" style={{ cursor: "pointer" }}
                     onClick={() => setInput(hint)}>
                     {hint}
@@ -1155,7 +1155,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
                   background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
                   animation: "thinking-pulse 1.5s ease-in-out infinite",
                 }} />
-                <Text size="sm" c="dimmed" fw={500}>正在思考...</Text>
+                <Text size="sm" c="dimmed" fw={500}>{t("chat.thinkingEllipsis")}</Text>
                 <Box style={{ display: "flex", gap: 3 }}>
                   {[0, 1, 2].map(i => (
                     <Box key={i} style={{
@@ -1210,7 +1210,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
                 minRows={1}
                 maxRows={3}
                 autosize
-                placeholder="输入回答..."
+                placeholder={t("chat.inputAnswer")}
                 value={askInput}
                 onChange={(e) => setAskInput(e.currentTarget.value)}
                 onKeyDown={(e) => {
@@ -1222,7 +1222,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
               />
               <Button size="xs" color="violet" onClick={() => handleAskAnswer(askInput)}
                 disabled={!askInput.trim()}>
-                回答
+                {t("chat.answer")}
               </Button>
             </Group>
           )}
@@ -1250,19 +1250,19 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         {isLoading && !isPausedState ? (
           <Group gap={4}>
             <Button onClick={handlePause} color="yellow" variant="filled" size="md">
-              ⏸ 暂停
+              ⏸ {t("chat.pauseBtn")}
             </Button>
             <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ 停止
+              ⏹ {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : isPausedState ? (
           <Group gap={4}>
             <Button onClick={handleResume} color="green" variant="filled" size="md">
-              ▶ 恢复
+              ▶ {t("chat.resumeBtn")}
             </Button>
             <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ 停止
+              ⏹ {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : (
@@ -1276,6 +1276,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
 }
 
 function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; onRetry?: (content: string) => void; onRewind?: () => void }) {
+  const { t } = useTranslation();
   const isUser = message.role === "user";
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
@@ -1320,7 +1321,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
       {message.isStreaming && !mainContent && toolCalls.length === 0 && (
         <Group gap="xs" py="xs">
           <Box style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", animation: "pulse 1.5s infinite" }} />
-          <Text size="xs" c="dimmed">思考中...</Text>
+          <Text size="xs" c="dimmed">{t("chat.thinkingStatus")}</Text>
         </Group>
       )}
 
@@ -1341,7 +1342,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
               >
                 <Badge size="xs" variant="light" color="violet">Reasoning</Badge>
                 <Text size="xs" c="dimmed" style={{ flex: 1 }}>
-                  {thinkingLines.length} 步
+                  {t("chat.steps", { count: thinkingLines.length })}
                 </Text>
                 <Text size="xs" c="dimmed">{showThinking ? "▼" : "▶"}</Text>
               </Group>
@@ -1360,10 +1361,10 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
           {toolCalls.length > 0 && (
             <Stack gap={4}>
               <Group gap="xs">
-                <Text size="xs" fw={600} c="dimmed">工具调用</Text>
-                {runningCount > 0 && <Badge size="xs" variant="dot" color="blue">{runningCount} 运行中</Badge>}
-                {successCount > 0 && <Badge size="xs" variant="dot" color="green">{successCount} 完成</Badge>}
-                {errorCount > 0 && <Badge size="xs" variant="dot" color="red">{errorCount} 失败</Badge>}
+                <Text size="xs" fw={600} c="dimmed">{t("chat.toolCalls")}</Text>
+                {runningCount > 0 && <Badge size="xs" variant="dot" color="blue">{runningCount} {t("chat.running")}</Badge>}
+                {successCount > 0 && <Badge size="xs" variant="dot" color="green">{successCount} {t("chat.completed")}</Badge>}
+                {errorCount > 0 && <Badge size="xs" variant="dot" color="red">{errorCount} {t("chat.failed")}</Badge>}
               </Group>
               {toolCalls.map((tc, i) => (
                 <ToolCallCard key={i} name={tc.name} input={tc.input || ""} output={tc.output} status={tc.status} />
@@ -1380,20 +1381,20 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
       {/* Action buttons on hover */}
       {hovered && !message.isStreaming && (
         <Group gap={4} style={{ position: "absolute", top: 4, right: 4 }}>
-          <Tooltip label={copied ? "已复制" : "复制"} position="top">
+          <Tooltip label={copied ? t("chat.copied") : t("chat.copy")} position="top">
             <ActionIcon size="xs" variant="subtle" onClick={handleCopy}>
               <Text size="xs">{copied ? "✓" : "📋"}</Text>
             </ActionIcon>
           </Tooltip>
           {isUser && onRetry && (
-            <Tooltip label="重新发送" position="top">
+            <Tooltip label={t("chat.resend")} position="top">
               <ActionIcon size="xs" variant="subtle" onClick={() => onRetry(message.content)}>
                 <Text size="xs">🔄</Text>
               </ActionIcon>
             </Tooltip>
           )}
           {isUser && onRewind && (
-            <Tooltip label="倒回到这里" position="top">
+            <Tooltip label={t("chat.rewindToHere")} position="top">
               <ActionIcon size="xs" variant="subtle" onClick={onRewind}>
                 <Text size="xs">⏪</Text>
               </ActionIcon>
@@ -1407,6 +1408,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
 
 /** File History Panel — shows all file backups recorded this session */
 function FileHistoryPanel() {
+  const { t } = useTranslation();
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -1421,9 +1423,9 @@ function FileHistoryPanel() {
   return (
     <Paper p="sm" radius="md" withBorder mx="sm">
       <Group justify="space-between" mb="xs">
-        <Text fw={600} size="sm">📜 文件修改历史 ({backups.length} 条记录)</Text>
+        <Text fw={600} size="sm">📜 {t("chat.fileHistoryTitle", { count: backups.length })}</Text>
         {backups.length === 0 && (
-          <Text size="xs" c="dimmed">本次会话暂无文件修改记录</Text>
+          <Text size="xs" c="dimmed">{t("chat.noFileChanges")}</Text>
         )}
       </Group>
       {[...byPath.entries()].map(([path, bkps]) => {
@@ -1455,7 +1457,7 @@ function FileHistoryPanel() {
                     {line || " "}
                   </Text>
                 )) : (
-                  <Text size="xs" c="dimmed">(内容未变化)</Text>
+                  <Text size="xs" c="dimmed">({t("chat.contentUnchanged")})</Text>
                 )}
               </Box>
             )}

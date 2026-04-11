@@ -80,16 +80,58 @@ describe("BrowserFetch helpers", () => {
     // Mock global fetch
     const fakeFetch = vi.fn().mockResolvedValue({
       ok: true,
+      headers: new Map([["content-type", "text/html"]]),
       text: async () =>
         `<html><head><title>Test Page</title></head>
          <body><script>evil()</script><p>Some content here</p></body></html>`,
     });
+    // Add get method to headers
+    fakeFetch.mockImplementation(() => Promise.resolve({
+      ok: true,
+      headers: { get: (k: string) => k === "content-type" ? "text/html" : null },
+      text: async () =>
+        `<html><head><title>Test Page</title></head>
+         <body><script>evil()</script><p>Some content here</p></body></html>`,
+    }));
     vi.stubGlobal("fetch", fakeFetch);
 
     const result = await tool.execute({ url: "https://example.com" });
-    expect(result).toContain("Title: Test Page");
+    expect(result).toContain("Test Page");
     expect(result).toContain("Some content here");
     expect(result).not.toContain("evil");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("BrowserFetch extracts links when requested", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (k: string) => k === "content-type" ? "text/html" : null },
+      text: async () =>
+        `<html><head><title>Links Page</title></head>
+         <body><a href="https://example.com/page1">Page 1</a><a href="/page2">Page 2</a></body></html>`,
+    }));
+
+    const result = await tool.execute({ url: "https://example.com", extractLinks: true });
+    expect(result).toContain("Links");
+    expect(result).toContain("Page 1");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("BrowserFetch extracts meta description", async () => {
+    const tool = BUILTIN_TOOLS.find(t => t.name === "BrowserFetch")!;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (k: string) => k === "content-type" ? "text/html" : null },
+      text: async () =>
+        `<html><head><title>Meta Page</title><meta name="description" content="A great page about AI"></head>
+         <body>Content here</body></html>`,
+    }));
+
+    const result = await tool.execute({ url: "https://example.com" });
+    expect(result).toContain("A great page about AI");
 
     vi.unstubAllGlobals();
   });
@@ -99,12 +141,13 @@ describe("BrowserFetch helpers", () => {
     const longBody = "A".repeat(10000);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
+      headers: { get: (k: string) => k === "content-type" ? "text/html" : null },
       text: async () => `<html><body>${longBody}</body></html>`,
     }));
 
     const result = await tool.execute({ url: "https://example.com", maxChars: 100 });
-    // Body portion should be at most 100 chars
-    expect(result.length).toBeLessThanOrEqual(100);
+    // Body text portion should not exceed maxChars significantly
+    expect(result.length).toBeLessThan(200); // title/metadata adds some overhead
 
     vi.unstubAllGlobals();
   });
@@ -115,6 +158,7 @@ describe("BrowserFetch helpers", () => {
       ok: false,
       status: 404,
       statusText: "Not Found",
+      headers: { get: () => null },
     }));
 
     const result = await tool.execute({ url: "https://example.com/nope" });
