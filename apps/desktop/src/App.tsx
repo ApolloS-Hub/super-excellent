@@ -21,6 +21,8 @@ import { registerAgent, startMonitor } from "./lib/runtime";
 import type { Conversation } from "./lib/conversations";
 import { setState as setAppState } from "./lib/app-state";
 import { check } from "@tauri-apps/plugin-updater";
+import { startHealthMonitor, stopHealthMonitor, backupConfig } from "./lib/health-monitor";
+import OnboardingWizard from "./components/OnboardingWizard";
 
 type Page = "chat" | "settings" | "monitor" | "skills";
 
@@ -37,24 +39,41 @@ function App() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessionCost, setSessionCost] = useState(0);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Split-screen state
   const [splitMode, setSplitMode] = useState(false);
   const [splitConvId, setSplitConvId] = useState<string | null>(null);
 
-  // Initialize runtime
+  // Initialize runtime + health monitor
   useEffect(() => {
     // Register built-in agents
     ["secretary", "developer", "tester", "devops", "writer", "product"].forEach(id => {
       registerAgent({ agentId: id, displayName: id });
     });
     startMonitor();
+    startHealthMonitor();
     // Load MCP config and connect servers on startup
     import("./lib/mcp-client").then(m => m.loadMCPConfig()).catch(console.warn);
     // Initialize Lark integration
     import("./lib/lark-integration").then(m => m.initLark()).catch(console.warn);
     // Load persisted tasks from IndexedDB
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
+    // Initialize memory bridge
+    import("./lib/memory-bridge").then(m => m.initMemoryBridge()).catch(console.warn);
+    // Check if onboarding is needed (no API key configured)
+    try {
+      const raw = localStorage.getItem("agent-config");
+      if (!raw) {
+        setShowOnboarding(true);
+      } else {
+        const config = JSON.parse(raw);
+        if (!config.apiKey) {
+          setShowOnboarding(true);
+        }
+      }
+    } catch { setShowOnboarding(true); }
+    return () => { stopHealthMonitor(); };
   }, []);
 
   // Auto health check + repair on startup
@@ -269,7 +288,7 @@ function App() {
 
   // Sort by updatedAt (most recent first) then group by date
   const sortedConversations = [...filteredConversations].sort((a, b) => b.updatedAt - a.updatedAt);
-  const groupedConversations = groupConversationsByDate(sortedConversations);
+  const groupedConversations = groupConversationsByDate(sortedConversations, t);
 
   // Auto-create a conversation if none exist
   useEffect(() => {
@@ -281,6 +300,32 @@ function App() {
   }, [conversations.length]);
 
   const activeConversation = conversations.find(c => c.id === activeConvId) || null;
+
+  const handleOnboardingComplete = useCallback((config: { provider: string; apiKey: string; model: string; language: string }) => {
+    // Save config
+    const fullConfig = {
+      provider: config.provider,
+      apiKey: config.apiKey,
+      model: config.model,
+      language: config.language,
+      theme: colorScheme,
+    };
+    localStorage.setItem("agent-config", JSON.stringify(fullConfig));
+    backupConfig();
+    // Switch language
+    i18n.changeLanguage(config.language);
+    setCurrentLang(config.language);
+    setShowOnboarding(false);
+  }, [colorScheme, i18n]);
+
+  const handleOnboardingSkip = useCallback(() => {
+    setShowOnboarding(false);
+  }, []);
+
+  // Show onboarding wizard if needed
+  if (showOnboarding) {
+    return <OnboardingWizard onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />;
+  }
 
   return (
     <AppShell
@@ -299,7 +344,7 @@ function App() {
             <Title order={3}>🌟 {t("app.title")}</Title>
           </Group>
           <Group gap="xs">
-            <Tooltip label={splitMode ? "单屏模式" : "双屏模式"} position="bottom">
+            <Tooltip label={splitMode ? t("nav.singleScreen") : t("nav.splitScreen")} position="bottom">
               <ActionIcon
                 variant={splitMode ? "filled" : "subtle"}
                 size="lg"
@@ -421,7 +466,7 @@ function App() {
             py={6}
           />
           <NavLink
-            label="Skill 市场"
+            label={t("nav.skillMarket")}
             leftSection={<Text size="sm">🛒</Text>}
             active={currentPage === "skills"}
             onClick={() => { setCurrentPage("skills"); close(); }}
@@ -512,6 +557,7 @@ function SplitPanelHeader({
   onSelect: (id: string) => void;
   label: string;
 }) {
+  const { t } = useTranslation();
   const current = conversations.find(c => c.id === selectedId);
   return (
     <Group gap="xs" px="xs" py={4} style={{ borderBottom: "1px solid var(--mantine-color-dark-4)", flexShrink: 0 }}>
@@ -519,7 +565,7 @@ function SplitPanelHeader({
       <Menu>
         <Menu.Target>
           <Button variant="subtle" size="xs" style={{ fontWeight: 500, maxWidth: 200 }}>
-            <Text size="xs" truncate>{current?.title || "选择对话"}</Text>
+            <Text size="xs" truncate>{current?.title || t("nav.conversations")}</Text>
           </Button>
         </Menu.Target>
         <Menu.Dropdown>
@@ -536,14 +582,14 @@ function SplitPanelHeader({
 
 // ═══════ Grouping helper (inspired by Hive HistorySidebar) ═══════
 
-function groupConversationsByDate(convs: Conversation[]): { label: string; items: Conversation[] }[] {
+function groupConversationsByDate(convs: Conversation[], t: (key: string) => string): { label: string; items: Conversation[] }[] {
   const now = Date.now();
   const todayStart = new Date().setHours(0, 0, 0, 0);
   const weekAgo = todayStart - 7 * 86_400_000;
   const groups: { label: string; items: Conversation[] }[] = [
-    { label: "📅 今天", items: [] },
-    { label: "📆 本周", items: [] },
-    { label: "🗓️ 更早", items: [] },
+    { label: `📅 ${t("nav.today")}`, items: [] },
+    { label: `📆 ${t("nav.thisWeek")}`, items: [] },
+    { label: `🗓️ ${t("nav.earlier")}`, items: [] },
   ];
   for (const c of convs) {
     const ts = c.updatedAt || now;
@@ -691,7 +737,7 @@ function ConversationItem({
             {searchQuery ? <HighlightText text={preview} query={searchQuery} /> : preview}
           </Text>
           {msgCount > 0 && (
-            <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>{msgCount}条</Text>
+            <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>{msgCount} {t("nav.messages")}</Text>
           )}
         </Group>
       </Stack>
