@@ -86,3 +86,5 @@ export { LongTermMemory } from "./long-term.js";
 export type { MemoryConfig, MemorySnapshot, MemoryEntry, MemoryLayer } from "./types.js";
 export * from "./learnings.js";
 export type { Learning, LearningStore } from "./learnings.js";
+export { createEmbeddingProvider, LocalEmbeddings, cosineSimilarity } from "./embeddings.js";
+export type { EmbeddingProvider } from "./embeddings.js";

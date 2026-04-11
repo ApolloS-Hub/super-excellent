@@ -111,7 +111,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     const convId = conversation?.id;
     if (!convId) return;
     const title = (conversation?.messages?.length === 0 && msgs.length > 0)
-      ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || conversation?.title || "新对话")
+      ? (msgs.find(m => m.role === "user")?.content.slice(0, 30) || conversation?.title || t("chat.newChat"))
       : undefined;
     // Save directly to DB (centralized persistence)
     import("../lib/session-store").then(({ saveMessagesForConversation }) => {
@@ -302,7 +302,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportNotice("✅ 已导出为 Markdown");
+    setExportNotice(`✅ ${t("chat.exportedMarkdown")}`);
   }, [conversation, localMessages]);
 
   const exportAsJSON = useCallback(() => {
@@ -314,7 +314,7 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
     a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportNotice("✅ 已导出为 JSON");
+    setExportNotice(`✅ ${t("chat.exportedJSON")}`);
   }, [conversation, localMessages]);
 
   // ═══════════ Import Claude Code JSONL ═══════════
@@ -364,12 +364,12 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
         }
         if (imported.length > 0) {
           setLocalMessages(prev => [...prev, ...imported]);
-          setExportNotice(`✅ 已导入 ${imported.length} 条消息`);
+          setExportNotice(`✅ ${t("chat.importedMessages", { count: imported.length })}`);
         } else {
-          setExportNotice("⚠️ 未找到可导入的消息");
+          setExportNotice(`⚠️ ${t("chat.noImportableMessages")}`);
         }
       } catch {
-        setExportNotice("❌ 文件读取失败");
+        setExportNotice(`❌ ${t("chat.fileReadFailed")}`);
       }
     };
     input.click();
@@ -418,7 +418,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       };
     }
-    setExportNotice("✅ PDF 打印窗口已打开");
+    setExportNotice(`✅ ${t("chat.pdfWindowOpened")}`);
   }, [conversation, localMessages]);
 
   // ═══════════ Export as Image ═══════════
@@ -476,7 +476,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
       a.download = `${conversation.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_")}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      setExportNotice("✅ 已导出为图片");
+      setExportNotice(`✅ ${t("chat.exportedImage")}`);
     }, "image/png");
   }, [conversation, localMessages]);
 
@@ -520,76 +520,76 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
 
     switch (command) {
       case "help":
-        return `## 可用命令
+        return `## ${t("chat.helpTitle")}
 
-| 命令 | 说明 |
+| ${t("chat.helpCommand")} | ${t("chat.helpDescription")} |
 |------|------|
-| /help | 显示此帮助 |
-| /clear | 清空当前对话 |
-| /compact | 压缩对话历史 |
-| /cost | 查看费用统计 |
-| /todo | 查看任务清单 |
-| /memory | 查看/编辑记忆 |
-| /diff [path] | 查看文件修改 |
-| /undo [path] | 撤销文件修改 |
-| /project [path] | 分析项目 |
-| /config | 显示当前配置 |
-| /commit [msg] | Git 提交当前变更 |
-| /doctor | 运行诊断检查 |
-| /context | 显示当前上下文 |
-| /brief | 项目摘要 |
-| /agents | 显示 Worker 状态 |
-| /history | 对话历史统计 |
-| /export [format] | 导出对话 (md/json/pdf/image) |
-| /import | 导入 Claude Code JSONL 会话 |
-| /model [id] | 查看或切换模型 |
-| /permission [level] | 设置权限级别 |
-| /tasks | 显示任务列表 |
-| /files | 显示文件变更 |
-| /usage | 详细使用量统计 |`;
+| /help | ${t("chat.helpShowHelp")} |
+| /clear | ${t("chat.helpClear")} |
+| /compact | ${t("chat.helpCompact")} |
+| /cost | ${t("chat.helpCost")} |
+| /todo | ${t("chat.helpTodo")} |
+| /memory | ${t("chat.helpMemory")} |
+| /diff [path] | ${t("chat.helpDiff")} |
+| /undo [path] | ${t("chat.helpUndo")} |
+| /project [path] | ${t("chat.helpProject")} |
+| /config | ${t("chat.helpConfig")} |
+| /commit [msg] | ${t("chat.helpCommit")} |
+| /doctor | ${t("chat.helpDoctor")} |
+| /context | ${t("chat.helpContext")} |
+| /brief | ${t("chat.helpBrief")} |
+| /agents | ${t("chat.helpAgents")} |
+| /history | ${t("chat.helpHistory")} |
+| /export [format] | ${t("chat.helpExport")} |
+| /import | ${t("chat.helpImport")} |
+| /model [id] | ${t("chat.helpModel")} |
+| /permission [level] | ${t("chat.helpPermission")} |
+| /tasks | ${t("chat.helpTasks")} |
+| /files | ${t("chat.helpFiles")} |
+| /usage | ${t("chat.helpUsage")} |`;
 
       case "clear":
         setLocalMessages([]);
-        return "🗑️ 对话已清空";
+        return `🗑️ ${t("chat.conversationCleared")}`;
 
       case "compact": {
         const msgs = localMessages;
         const userMsgs = msgs.filter(m => m.role === "user").length;
         const assistantMsgs = msgs.filter(m => m.role === "assistant").length;
-        if (msgs.length <= 4) return "对话太短，无需压缩";
+        if (msgs.length <= 4) return t("chat.tooShortToCompact");
         const keep = msgs.slice(-4);
         setLocalMessages(keep);
-        return `📦 已压缩: 保留最近 4 条消息（删除了 ${userMsgs + assistantMsgs - 4} 条）`;
+        return `📦 ${t("chat.compacted", { count: userMsgs + assistantMsgs - 4 })}`;
       }
 
       case "cost":
-        return "💰 费用统计请查看 Monitor 页面（侧边栏 🤖 按钮）";
+        return `💰 ${t("chat.costHint")}`;
 
       case "todo":
-        return "📋 使用 AI 的 todo_write 工具管理任务清单。\n\n试试说：\"帮我创建一个 TODO 清单\"";
+        return `📋 ${t("chat.todoHint")}`;
 
       case "memory": {
         const mem = loadMemory();
         setAppState({ memorySnapshot: mem });
-        return mem ? `📝 当前记忆:\n\n${mem}` : "📭 暂无记忆。AI 会自动学习你的偏好。";
+        return mem ? `📝 ${t("chat.currentMemory", { content: mem })}` : `📭 ${t("chat.noMemory")}`;
       }
 
       case "config": {
         const cfg = loadConfig();
-        return `## ⚙️ 当前配置
+        return `## ⚙️ ${t("chat.configTitle")}
 
-| 项目 | 值 |
+| ${t("chat.configItem")} | ${t("chat.configValue")} |
 |------|------|
 | Provider | ${cfg.provider} |
 | Model | ${cfg.model} |
-| Base URL | ${cfg.baseURL || "(默认)"} |
-| 工作目录 | ${cfg.workDir || "(未设置)"} |
-| API Key | ${cfg.apiKey ? "✅ 已配置" : "❌ 未配置"} |`;
+| Base URL | ${cfg.baseURL || `(${t("chat.configDefault")})`} |
+| ${t("chat.configWorkDir")} | ${cfg.workDir || `(${t("chat.configNotSet")})`} |
+| API Key | ${cfg.apiKey ? `✅ ${t("chat.configApiKeySet")}` : `❌ ${t("chat.configApiKeyNotSet")}`} |`;
       }
 
       case "commit": {
         const msg = args.join(" ") || "auto commit";
-        return `📌 请通过 AI 执行 Git 提交。\n\n试试说：\"帮我 git commit，消息为: ${msg}\"`;
+        return `📌 ${t("chat.commitHint", { msg })}`;
       }
 
       case "doctor": {
@@ -600,13 +600,13 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
           runQualityGate(),
         ]);
         return [
-          "## 🩺 诊断报告",
+          `## 🩺 ${t("chat.diagnosticReport")}`,
           "",
           "```",
           formatDiagnosticsText(bundle).trimEnd(),
           "```",
           "",
-          "## ✅ 质量门禁",
+          `## ✅ ${t("chat.qualityGate")}`,
           "",
           "```",
           formatGateResult(gate),
@@ -630,70 +630,70 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         const toolCount = getAllTools().length;
 
         const lines = [
-          "## 📋 当前上下文",
+          `## 📋 ${t("chat.contextTitle")}`,
           "",
-          "### 项目",
-          `- **工作目录**: ${cfg.workDir || "(未设置)"}`,
+          `### ${t("chat.contextProject")}`,
+          `- **${t("chat.contextWorkDir")}**: ${cfg.workDir || `(${t("chat.configNotSet")})`}`,
           `- **Provider**: ${cfg.provider}`,
           `- **Model**: ${cfg.model}`,
         ];
         if (project) {
-          lines.push(`- **项目名称**: ${project.name}`);
-          lines.push(`- **项目类型**: ${project.type}`);
-          lines.push(`- **项目路径**: ${project.rootPath}`);
-          if (project.description) lines.push(`- **描述**: ${project.description}`);
+          lines.push(`- **${t("chat.contextProjectName")}**: ${project.name}`);
+          lines.push(`- **${t("chat.contextProjectType")}**: ${project.type}`);
+          lines.push(`- **${t("chat.contextProjectPath")}**: ${project.rootPath}`);
+          if (project.description) lines.push(`- **${t("chat.contextDescription")}**: ${project.description}`);
           if (project.dependencies?.length) {
-            lines.push(`- **依赖数量**: ${project.dependencies.length}`);
+            lines.push(`- **${t("chat.contextDepsCount")}**: ${project.dependencies.length}`);
           }
         } else {
-          lines.push("- **项目**: 未检测到项目");
+          lines.push(`- **${t("chat.contextProject")}**: ${t("chat.contextNoProject")}`);
         }
 
-        lines.push("", "### 记忆");
-        lines.push(`- **长期记忆**: ${memLineCount} 条记录`);
-        if (memLineCount === 0) lines.push("  *(使用 `/remember <内容>` 保存偏好)*");
+        lines.push("", `### ${t("chat.contextMemory")}`);
+        lines.push(`- **${t("chat.contextLongTermMemory")}**: ${t("chat.contextMemoryRecords", { count: memLineCount })}`);
+        if (memLineCount === 0) lines.push(`  *(${t("chat.contextMemoryHint")})*`);
 
-        lines.push("", "### 权限");
-        lines.push(`- **模式**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`);
-        lines.push(`- **说明**: ${permMeta.description}`);
+        lines.push("", `### ${t("chat.contextPermission")}`);
+        lines.push(`- **${t("chat.contextMode")}**: ${permMeta.symbol} ${permMeta.label} (\`${permLevel}\`)`);
+        lines.push(`- **${t("chat.contextModeDescription")}**: ${permMeta.description}`);
 
-        lines.push("", "### 活跃任务");
+        lines.push("", `### ${t("chat.contextActiveTasks")}`);
         if (activeTodo) {
           const statusIcon: Record<string, string> = {
             pending: "⬜", running: "🔄", done: "✅", failed: "❌", blocked: "🚫",
           };
-          lines.push(`- **任务**: ${activeTodo.title}`);
-          lines.push(`- **状态**: ${statusIcon[activeTodo.status] || "❓"} ${activeTodo.status}`);
+          lines.push(`- **${t("chat.contextTask")}**: ${activeTodo.title}`);
+          lines.push(`- **${t("chat.contextStatus")}**: ${statusIcon[activeTodo.status] || "❓"} ${activeTodo.status}`);
         } else {
-          lines.push("- *(无活跃任务)*");
+          lines.push(`- *(${t("chat.contextNoActiveTasks")})*`);
         }
-        lines.push(`- **运行时任务总数**: ${tasks.length}`);
+        lines.push(`- **${t("chat.contextRuntimeTasks")}**: ${tasks.length}`);
 
-        lines.push("", "### 工具");
-        lines.push(`- **已注册工具**: ${toolCount} 个`);
-        lines.push("- **LLM 提供商**: Anthropic / OpenAI / Google / Kimi / Ollama / DeepSeek / Qwen / MiniMax / Zhipu / Custom");
-        lines.push("- **MCP**: 扩展协议就绪");
+        lines.push("", `### ${t("chat.contextTools")}`);
+        lines.push(`- **${t("chat.contextRegisteredTools")}**: ${t("chat.contextToolCount", { count: toolCount })}`);
+        lines.push(`- **${t("chat.contextLLMProviders")}**: Anthropic / OpenAI / Google / Kimi / Ollama / DeepSeek / Qwen / MiniMax / Zhipu / Custom`);
+        lines.push(`- **${t("chat.contextMCP")}**: ${t("chat.contextMCPReady")}`);
 
         return lines.join("\n");
       }
 
       case "brief": {
         const project = getCachedProject();
-        if (!project) return "📭 未检测到项目。请先设置工作目录或打开项目。";
+        if (!project) return `📭 ${t("chat.briefNoProject")}`;
         const lines = [
-          `## 📊 项目摘要: ${project.name}`,
+          `## 📊 ${t("chat.briefTitle", { name: project.name })}`,
           "",
-          `- **类型**: ${project.type}`,
-          `- **路径**: ${project.rootPath}`,
+          `- **${t("chat.briefType")}**: ${project.type}`,
+          `- **${t("chat.briefPath")}**: ${project.rootPath}`,
         ];
-        if (project.description) lines.push(`- **描述**: ${project.description}`);
+        if (project.description) lines.push(`- **${t("chat.briefDescription")}**: ${project.description}`);
         if (project.dependencies?.length) {
-          lines.push(`- **依赖数量**: ${project.dependencies.length}`);
-          lines.push(`- **主要依赖**: ${project.dependencies.slice(0, 8).join(", ")}`);
+          lines.push(`- **${t("chat.briefDepsCount")}**: ${project.dependencies.length}`);
+          lines.push(`- **${t("chat.briefMainDeps")}**: ${project.dependencies.slice(0, 8).join(", ")}`);
         }
         if (project.scripts) {
           const scriptList = Object.keys(project.scripts).slice(0, 8);
-          lines.push(`- **脚本**: ${scriptList.join(", ")}`);
+          lines.push(`- **${t("chat.briefScripts")}**: ${scriptList.join(", ")}`);
         }
         return lines.join("\n");
       }
@@ -701,11 +701,11 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
       case "agents": {
         const roster = loadAgentRoster();
         const lines = [
-          `## 🤖 Agent 状态 (${roster.status})`,
+          `## 🤖 ${t("chat.agentStatus", { status: roster.status })}`,
           "",
           `${roster.detail}`,
           "",
-          "| Agent ID | 名称 |",
+          `| ${t("chat.agentId")} | ${t("chat.agentName")} |`,
           "|----------|------|",
           ...roster.entries.map(e => `| ${e.agentId} | ${e.displayName} |`),
         ];
