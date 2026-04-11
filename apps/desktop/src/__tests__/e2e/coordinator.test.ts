@@ -277,8 +277,9 @@ describe("Coordinator — Intent Analysis & Routing", () => {
 
     it("defaults long unrecognized messages to developer task", () => {
       // A long message with no recognized keywords — avoid words that match worker keywords
+      // Note: avoid substrings like "ci" "cd" "deploy" "test" "bug" "doc" "api" etc.
       const result = analyzeIntent(
-        "Curabitur pretium tincidunt lacus nulla gravida orci mattis erat vitae posuere velit lacinia accumsan nulla facilisi donec",
+        "the brown fox jumped over the lazy dog and then sat down to rest for a long long long long long long long long long long long long long long long time",
       );
       // Long messages default to developer task
       expect(result.type).toBe("task");
