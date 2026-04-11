@@ -486,7 +486,7 @@ async fn web_search(query: String) -> Result<String, String> {
     use tokio::process::Command as AsyncCommand;
     
     let child = AsyncCommand::new("/usr/bin/curl")
-        .args(["-x", "http://127.0.0.1:11088", "-sL", "--connect-timeout", "8", "--max-time", "12", &url])
+        .args(["-x", "http://127.0.0.1:11088", "-sL", "--connect-timeout", "15", "--max-time", "25", &url])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -494,14 +494,14 @@ async fn web_search(query: String) -> Result<String, String> {
     
     // Hard 15s timeout
     let result = tokio::time::timeout(
-        std::time::Duration::from_secs(15),
+        std::time::Duration::from_secs(30),
         child.wait_with_output()
     ).await;
     
     let output = match result {
         Ok(Ok(o)) => o,
         Ok(Err(e)) => return Err(format!("curl 执行错误: {}", e)),
-        Err(_) => return Err("搜索超时 (15s) — 网络或代理不可用".to_string()),
+        Err(_) => return Err("搜索超时 (30s) — 网络或代理不可用".to_string()),
     };
     
     if !output.status.success() {
