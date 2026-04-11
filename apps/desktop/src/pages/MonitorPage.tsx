@@ -201,8 +201,8 @@ function MonitorPage({ onBack }: MonitorPageProps) {
   return (
     <Stack maw={800} mx="auto">
       <Group justify="space-between">
-        <Text size="xl" fw={700}>🤖 {t("nav.agents")}</Text>
-        <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
+        <Text size="xl" fw={700}>🤖 {t("monitor.title")}</Text>
+        <Button variant="subtle" onClick={onBack}>← {t("monitor.back")}</Button>
       </Group>
 
       {error && <Notification color="yellow" withCloseButton={false}>⚠️ {error}</Notification>}
@@ -211,7 +211,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* System Health */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>系统健康 / System Health</Text>
+          <Text fw={600}>{t("monitor.health")}</Text>
           <Group gap="xs">
             <Badge
               color={autoRefresh ? "green" : "gray"}
@@ -219,28 +219,28 @@ function MonitorPage({ onBack }: MonitorPageProps) {
               style={{ cursor: "pointer" }}
               onClick={() => setAutoRefresh(!autoRefresh)}
             >
-              {autoRefresh ? `🔄 ${refreshInterval}s` : "⏸️ 暂停"}
+              {autoRefresh ? `🔄 ${refreshInterval}s` : `⏸️ ${t("chat.pause")}`}
             </Badge>
             {lastRefresh && (
               <Text size="xs" c="dimmed">{lastRefresh.toLocaleTimeString()}</Text>
             )}
-            <Button size="xs" variant="light" onClick={runHealthCheck}>刷新</Button>
+            <Button size="xs" variant="light" onClick={runHealthCheck}>{t("monitor.autoRefresh")}</Button>
             {health && !health.config_valid && (
-              <Button size="xs" color="red" onClick={handleRepair} loading={repairing}>修复配置</Button>
+              <Button size="xs" color="red" onClick={handleRepair} loading={repairing}>{t("monitor.repair")}</Button>
             )}
           </Group>
         </Group>
         {health && (
           <Stack gap="xs">
             <Group>
-              <Text size="sm">配置状态:</Text>
+              <Text size="sm">{t("settings.provider")}:</Text>
               <Badge color={health.config_valid ? "green" : "red"}>
-                {health.config_valid ? "✅ 正常" : "❌ 异常"}
+                {health.config_valid ? `✅ ${t("monitor.configValid")}` : `❌ ${t("monitor.configInvalid")}`}
               </Badge>
             </Group>
             {health.config_error && <Code block color="red">{health.config_error}</Code>}
             <Group>
-              <Text size="sm">版本:</Text>
+              <Text size="sm">Version:</Text>
               <Badge variant="outline">{health.app_version}</Badge>
             </Group>
           </Stack>
@@ -249,7 +249,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* 7-Phase Workflow Pipeline */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="md">工作流管线 / Workflow Pipeline</Text>
+        <Text fw={600} mb="md">{t("monitor.workflow")}</Text>
         <Stepper active={-1} size="xs" color="blue">
           {WORKFLOW_PHASES.map(p => (
             <Stepper.Step
@@ -267,33 +267,33 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* AI 员工团队 — 分团队展示 + 记忆 + 任务 */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>🤖 AI 员工团队 / Workers ({teamWorkers.length})</Text>
+          <Text fw={600}>🤖 {t("monitor.teamStatus")} ({teamWorkers.length})</Text>
           <Badge color={teamWorkers.some(w => w.status === "working") ? "green" : "gray"} variant="light">
-            {teamWorkers.filter(w => w.status === "working").length} 工作中
+            {teamWorkers.filter(w => w.status === "working").length} {t("monitor.working")}
           </Badge>
         </Group>
         <Tabs defaultValue="engineering">
           <Tabs.List>
             <Tabs.Tab value="engineering">
-              🛠️ 研发团队 ({teamWorkers.filter(w => ENGINEERING_IDS.has(w.id)).length})
+              🛠️ {t("monitor.engineeringTeam")} ({teamWorkers.filter(w => ENGINEERING_IDS.has(w.id)).length})
             </Tabs.Tab>
             <Tabs.Tab value="business">
-              💼 业务团队 ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
+              💼 {t("monitor.businessTeam")} ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
             </Tabs.Tab>
             <Tabs.Tab value="memory">
-              🧠 记忆
+              🧠 Memory
             </Tabs.Tab>
             <Tabs.Tab value="tasks">
-              📋 任务
+              📋 {t("monitor.tasks")}
             </Tabs.Tab>
             <Tabs.Tab value="background">
-              ⏳ 后台
+              ⏳ Background
             </Tabs.Tab>
             <Tabs.Tab value="protocols">
-              🤝 协议
+              🤝 Protocols
             </Tabs.Tab>
             <Tabs.Tab value="workflows">
-              🔄 工作流
+              🔄 {t("monitor.workflow")}
             </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="engineering" pt="sm">
@@ -322,23 +322,23 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* Cost & Usage — enhanced with charts */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">💰 费用 & Token 使用 / Cost & Usage</Text>
+        <Text fw={600} mb="sm">💰 {t("monitor.costOverview")}</Text>
         <SimpleGrid cols={4} mb="md">
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{costData.totalCost < 0.01 ? `$${costData.totalCost.toFixed(4)}` : `$${costData.totalCost.toFixed(2)}`}</Text>
-            <Text size="xs" c="dimmed">总费用</Text>
+            <Text size="xs" c="dimmed">Cost</Text>
           </Stack>
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{costData.totalTokens > 1000 ? `${(costData.totalTokens/1000).toFixed(1)}K` : costData.totalTokens}</Text>
-            <Text size="xs" c="dimmed">总 Token</Text>
+            <Text size="xs" c="dimmed">{t("monitor.tokenUsage")}</Text>
           </Stack>
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{taskCounts.running}</Text>
-            <Text size="xs" c="dimmed">进行中</Text>
+            <Text size="xs" c="dimmed">{t("monitor.running")}</Text>
           </Stack>
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{taskCounts.done}</Text>
-            <Text size="xs" c="dimmed">已完成</Text>
+            <Text size="xs" c="dimmed">{t("monitor.done")}</Text>
           </Stack>
         </SimpleGrid>
         <UsageChartPanel />
@@ -352,7 +352,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         <Paper p="md" radius="md" withBorder>
           <Group justify="space-between" mb="sm">
             <Text fw={600}>📁 文件变更 / File Changes ({fileChanges.length})</Text>
-            <Button size="xs" variant="light" onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}>清空</Button>
+            <Button size="xs" variant="light" onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}>{t("monitor.clearLog")}</Button>
           </Group>
           <Stack gap={2}>
             {fileChanges.slice(-20).map((fc, i: number) => (
@@ -369,23 +369,24 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* Tools & Integrations */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">工具与集成 / Tools</Text>
+        <Text fw={600} mb="sm">Tools & Integrations</Text>
         <Group gap="xs">
-          <Badge variant="light" color="blue">11 内置工具</Badge>
-          <Badge variant="light" color="green">10 LLM 提供商</Badge>
-          <Badge variant="light" color="violet">MCP 扩展协议</Badge>
-          <Badge variant="light" color="orange">浏览器控制</Badge>
-          <Badge variant="light" color="cyan">持续学习引擎</Badge>
-          <Badge variant="light" color="red">Rust 后端</Badge>
+          <Badge variant="light" color="blue">13 Built-in Tools</Badge>
+          <Badge variant="light" color="green">10 LLM Providers</Badge>
+          <Badge variant="light" color="violet">MCP Protocol</Badge>
+          <Badge variant="light" color="orange">Browser Control</Badge>
+          <Badge variant="light" color="cyan">Learning Engine</Badge>
+          <Badge variant="light" color="red">Rust Backend</Badge>
+          <Badge variant="light" color="teal">3-Layer Memory</Badge>
         </Group>
       </Paper>
 
       {/* Activity Timeline — last 20 events */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">⏱️ 活动时间线 / Activity Timeline</Text>
+        <Text fw={600} mb="sm">⏱️ {t("monitor.eventLog")}</Text>
         <ScrollArea h={160}>
           {eventLog.length === 0 ? (
-            <Text size="xs" c="dimmed" ta="center" py="md">暂无活动</Text>
+            <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noEvents")}</Text>
           ) : (
             <Stack gap={4}>
               {eventLog.slice(-20).reverse().map((entry: { time: string; type: string; detail: string }, i: number) => (

@@ -358,22 +358,34 @@ async function buildContextPart(): Promise<string> {
   return sections.join("\n\n");
 }
 
-/** 构建 memory 部分 — 三层记忆摘要 + memory-store */
+/** 构建 memory 部分 — 三层记忆摘要 + memory-store + memory-bridge */
 async function buildMemoryPart(): Promise<string> {
   const sections: string[] = [];
 
-  const shortTerm = _getShortTermSummary();
-  if (shortTerm) {
-    sections.push(`## 当前会话上下文（短期记忆）\n${shortTerm}`);
-  }
+  // Try memory-bridge first (unified three-layer system)
+  try {
+    const { getMemoryContext } = await import("./memory-bridge");
+    const bridgeContext = await getMemoryContext("general");
+    if (bridgeContext) {
+      sections.push(bridgeContext);
+    }
+  } catch { /* memory-bridge not available, fallback to legacy */ }
 
-  if (_cachedMidTermPrompt) {
-    sections.push(`## 用户偏好与习惯（中期记忆）\n${_cachedMidTermPrompt}`);
-  }
+  // Fallback: legacy memory layers
+  if (sections.length === 0) {
+    const shortTerm = _getShortTermSummary();
+    if (shortTerm) {
+      sections.push(`## 当前会话上下文（短期记忆）\n${shortTerm}`);
+    }
 
-  const longTerm = _getLongTermMemory();
-  if (longTerm) {
-    sections.push(`## 长期记忆\n${longTerm}`);
+    if (_cachedMidTermPrompt) {
+      sections.push(`## 用户偏好与习惯（中期记忆）\n${_cachedMidTermPrompt}`);
+    }
+
+    const longTerm = _getLongTermMemory();
+    if (longTerm) {
+      sections.push(`## 长期记忆\n${longTerm}`);
+    }
   }
 
   // Inject persistent memory-store entries
@@ -473,11 +485,16 @@ export async function sendMessage(
   // For MVP: direct API call from frontend
   
   if (!config.apiKey) {
-    onEvent({ type: "error", text: "请先在设置中配置 API Key" });
+    onEvent({ type: "error", text: "[No API Key] Please configure your API Key in Settings / 请先在设置中配置 API Key" });
     return;
   }
 
   try {
+    // Record conversation in memory bridge (non-blocking)
+    import("./memory-bridge").then(({ recordConversation }) => {
+      recordConversation(message, "").catch(() => {});
+    }).catch(() => {});
+
     // 接入 Runtime 系统
     recordRuntimeUsage({
       timestamp: new Date().toISOString(),
