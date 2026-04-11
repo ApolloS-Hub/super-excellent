@@ -1,6 +1,6 @@
 # 🌟 超优秀 (Super Excellent)
 
-跨平台 AI Agent 桌面客户端 — 你只跟秘书对话，秘书调度 AI 员工干活。
+非开发人员的 AI 工作助手平台 — 你只跟秘书对话，秘书调度 AI 员工团队帮你干活。
 
 [中文](#中文) | [English](#english)
 
@@ -11,81 +11,81 @@
 ### 核心理念
 
 ```
-你（用户）→ 秘书 Agent → AI 员工团队
+你（用户）→ 秘书 Agent → AI 员工团队 → 自动完成任务
 ```
 
-你只需要跟秘书说话，秘书会：
-1. 理解你的需求
-2. 判断需要哪些员工
-3. 自动派发任务
-4. 收集结果
-5. 把成品交给你
+你只需要用自然语言说需求，秘书会分析意图、匹配角色、派发任务、收集结果。
 
 ### AI 员工团队（20 个专业角色）
 
-**研发团队**
+**研发团队（12 人）**
 
 | 角色 | 职责 |
 |------|------|
-| 🎯 产品经理 | 需求分析、PRD、用户故事、产品规划 |
-| 🏗️ 架构师 | 系统设计、架构决策、技术选型 |
-| 💻 全栈开发 | 代码实现、功能开发、Bug 修复、重构 |
-| 🎨 前端工程师 | UI 实现、组件开发、性能优化 |
-| 🔍 代码审查 | 质量把关、安全检查、最佳实践 |
-| 🧪 测试工程师 | 测试策略、自动化测试、回归测试 |
-| 🚀 运维工程师 | CI/CD、部署、监控、基础设施 |
-| 🛡️ 安全工程师 | 威胁建模、安全审计、漏洞分析 |
-| 📝 技术文档 | API 文档、用户指南、变更日志 |
-| 🔬 研究员 | 技术调研、竞品分析、方案评估 |
-| 🎭 UX 设计师 | 用户体验、交互设计、信息架构 |
-| 📊 数据分析师 | 数据分析、指标设计、可视化 |
+| 🎯 产品经理 | 需求分析、PRD、用户故事 |
+| 🏗️ 架构师 | 系统设计、技术选型 |
+| 💻 全栈开发 | 代码实现、Bug 修复 |
+| 🎨 前端工程师 | UI 开发、性能优化 |
+| 🔍 代码审查 | 质量把关、安全检查 |
+| 🧪 测试工程师 | 测试策略、自动化 |
+| 🚀 运维工程师 | CI/CD、部署监控 |
+| 🛡️ 安全工程师 | 威胁建模、安全审计 |
+| 📝 技术文档 | API 文档、用户指南 |
+| 🔬 研究员 | 技术调研、竞品分析 |
+| 🎭 UX 设计师 | 用户体验、交互设计 |
+| 📊 数据分析师 | 数据分析、可视化 |
 
-**业务团队**
+**业务团队（8 人）**
 
 | 角色 | 职责 |
 |------|------|
-| 👔 运营总监 | 战略规划、业务推进、跨部门协调 |
-| 🚀 增长黑客 | 用户增长、转化漏斗、A/B 测试 |
-| 📢 内容运营 | 内容策略、社媒运营、品牌传播 |
-| ⚖️ 法务合规 | 合规检查、隐私保护、合同审核 |
-| 💰 财务分析 | 预算管理、成本分析、ROI 计算 |
-| 📅 项目经理 | 进度跟踪、风险管控、资源调配 |
-| 🎧 客户支持 | 反馈处理、FAQ 维护、满意度提升 |
-| 🛡️ 风控分析 | 风险识别、应急预案、灾难恢复 |
+| 👔 运营总监 | 战略规划、跨部门协调 |
+| 🚀 增长黑客 | 用户增长、A/B 测试 |
+| 📢 内容运营 | 内容策略、社媒运营 |
+| ⚖️ 法务合规 | 合规检查、隐私保护 |
+| 💰 财务分析 | 预算管理、ROI 计算 |
+| 📅 项目经理 | 进度跟踪、风险管控 |
+| 🎧 客户支持 | 反馈处理、FAQ 维护 |
+| 🛡️ 风控分析 | 风险识别、应急预案 |
 
-### 核心能力
+### 核心功能
 
-- **12 个内置工具**：终端、文件、编辑、搜索、浏览器、截图...
-- **三层记忆**：短期（会话）→ 中期（文件）→ 长期（语义检索）
-- **Prompt Cache 优化**：系统提示词缓存、会话压缩、工具结果截断
-- **MCP 协议**：连接外部 MCP 服务器扩展能力
-- **5 级权限控制**：从完全自动到需要审批
-- **自动修复**：配置损坏时自动恢复
+- **10 个 AI 供应商**：Anthropic / OpenAI / Google / Kimi / DeepSeek / 通义千问 / MiniMax / 智谱 / Ollama / 自定义兼容
+- **工作流可视化**：SVG 实时流程图，看到角色怎么协作
+- **飞书集成**：日历、消息、文档、任务、审批、表格（通过 Lark CLI）
+- **远程控制**：从飞书发消息，桌面 Agent 执行
+- **Generative UI**：AI 生成图表、表单、表格，消息内联渲染
+- **Skill 市场**：5 个预设工作流模板（日报、会议纪要、竞品分析等）
+- **会话倒回**：回到任意消息检查点
+- **分屏双会话**：左右同时看两个对话
+- **快捷键**：Cmd+Enter 发送、Cmd+N 新对话
+- **Token 用量统计**：SVG 柱状图，按 Provider/Model 分类
+- **Provider 诊断**：5 探针检测（连接、认证、模型、限流、延迟）
+- **12 个内置工具**：web_search、bash、文件读写、grep 等
+- **三层记忆**：短期（会话）→ 中期（IndexedDB）→ 长期（语义检索）
+- **Prompt Cache**：系统提示词缓存、会话压缩
+- **5 级权限**：从完全自动到需要审批
+- **错误分类器**：16 类结构化错误 + 用户友好提示
 - **多语言**：中文 / English
 
 ### 快速开始
 
 ```bash
-# 安装依赖
 pnpm install
-
-# 开发模式
-pnpm dev
-
-# 构建
-pnpm build
-
-# 运行测试
-pnpm test
+pnpm dev          # 开发模式
+pnpm build        # 构建
+pnpm test         # 测试
 ```
 
-### 配置
+### 技术栈
 
-首次启动后，在设置页面配置：
-1. 选择 AI 提供商（Claude / OpenAI / 兼容端点）
-2. 填入 API Key
-3. 选择模型
-4. 选择语言
+| 层 | 技术 |
+|----|------|
+| 桌面 | Tauri 2.x (Rust + WebView) — macOS 已验证，Windows CI |
+| 前端 | React 19 + TypeScript + Vite 6 |
+| UI | Mantine 7 |
+| Agent | TypeScript 自研引擎 |
+| i18n | i18next |
 
 ---
 
@@ -94,77 +94,34 @@ pnpm test
 ### Core Concept
 
 ```
-You (User) → Secretary Agent → AI Worker Team
+You (User) → Secretary Agent → AI Worker Team → Tasks Done
 ```
 
-Just talk to the Secretary. It will:
-1. Understand your request
-2. Determine which workers are needed
-3. Dispatch tasks automatically
-4. Collect results
-5. Deliver the final output
+Just tell the Secretary what you need. It analyzes intent, matches roles, dispatches tasks, and delivers results.
 
 ### Features
 
+- **10 AI providers**: Anthropic, OpenAI, Google, Kimi, DeepSeek, Qwen, MiniMax, Zhipu, Ollama, Custom
 - **20 specialized AI roles**: 12 engineering + 8 business/operations
-- **12 built-in tools**: Terminal, files, editing, search, browser, screenshot...
-- **Three-layer memory**: Short-term → Mid-term → Long-term (vector semantic search)
-- **Workflow templates**: Structured step-by-step workflows for business roles
-- **Prompt caching**: System prompt cache, conversation compaction
-- **MCP protocol**: Connect external MCP servers
-- **5-level permissions**: From fully automatic to user approval required
-- **Auto-repair**: Self-healing when config breaks
-- **i18n**: 中文 / English
+- **Workflow visualization**: Real-time SVG diagrams of role collaboration
+- **Feishu integration**: Calendar, IM, Docs, Tasks, Approval, Sheets via Lark CLI
+- **Remote control**: Send commands from Feishu, Agent executes on desktop
+- **Generative UI**: AI renders charts, forms, tables inline
+- **Skill marketplace**: 5 built-in workflow templates
+- **Session rewind**: Return to any message checkpoint
+- **Split-screen**: Side-by-side dual conversations
+- **Keyboard shortcuts**: Cmd+Enter send, Cmd+N new chat
+- **Token usage charts**: SVG bar charts by provider/model
+- **Provider diagnostics**: 5-probe health check
+- **16-category error classifier**: User-friendly error messages
+- **Dark / Light theme**
+- **i18n**: Chinese + English
 
 ### Quick Start
 
 ```bash
 pnpm install
 pnpm dev
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Desktop | Tauri 2.x (Rust + WebView) — macOS verified, Windows CI smoke |
-| Frontend | React 19 + TypeScript + Vite 6 |
-| UI | Mantine + Tailwind CSS |
-| Agent | TypeScript (custom engine) |
-| i18n | i18next |
-
-## Architecture
-
-```
-┌────────────────────────────────────────────┐
-│              Super Excellent                │
-│                                            │
-│  Tauri Shell (Rust)                        │
-│  ├── Terminal execution                    │
-│  ├── File system sandbox                   │
-│  ├── Health check / auto-repair            │
-│  └── Native APIs                           │
-│                                            │
-│  Frontend (React + Mantine)                │
-│  ├── Chat UI (streaming)                   │
-│  ├── Settings (provider config)            │
-│  ├── Agent Monitor (worker status)         │
-│  └── Permission Dialog (approval flow)     │
-│                                            │
-│  Agent Core (TypeScript)                   │
-│  ├── QueryEngine (agentic loop)            │
-│  ├── Secretary (Coordinator-Worker)        │
-│  ├── Multi-role worker system              │
-│  ├── 12 built-in tools                     │
-│  ├── Three-layer memory                    │
-│  ├── Prompt cache optimization             │
-│  └── MCP client                            │
-│                                            │
-│  Providers                                 │
-│  ├── Anthropic (Claude + prompt caching)   │
-│  ├── OpenAI (GPT)                          │
-│  └── Compatible endpoints                  │
-└────────────────────────────────────────────┘
 ```
 
 ## License
