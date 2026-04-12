@@ -1006,7 +1006,11 @@ async function processAnthropicToolBlocks(
     onEvent({ type: "tool_use", toolName: toolBlock.name, toolInput: JSON.stringify(toolBlock.input) });
 
     try {
-      const result = await executeTool(toolBlock.name, toolBlock.input);
+      // Per-tool timeout: 30s to prevent hanging
+      const toolTimeout = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error(`Tool ${toolBlock.name} timeout (30s)`)), 30000)
+      );
+      const result = await Promise.race([executeTool(toolBlock.name, toolBlock.input), toolTimeout]);
       onEvent({ type: "tool_result", toolName: toolBlock.name, toolOutput: result.slice(0, 200) });
       onEvent({ type: "thinking", text: `✅ ${toolBlock.name}: ${result.slice(0, 120)}\n` });
       toolResults.push({ type: "tool_result", tool_use_id: toolBlock.id, content: result.slice(0, 15000) });
