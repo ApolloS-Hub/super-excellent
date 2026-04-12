@@ -20,12 +20,12 @@ const PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI (GPT)" },
   { value: "google", label: "Google (Gemini)" },
   { value: "kimi", label: "Kimi (Moonshot)" },
-  { value: "ollama", label: "Ollama (本地模型)" },
+  { value: "ollama", label: "Ollama (Local)" },
   { value: "deepseek", label: "DeepSeek" },
-  { value: "qwen", label: "通义千问 (Qwen)" },
+  { value: "qwen", label: "Qwen" },
   { value: "minimax", label: "MiniMax" },
-  { value: "zhipu", label: "智谱 (Zhipu)" },
-  { value: "compatible", label: "自定义 / Custom" },
+  { value: "zhipu", label: "Zhipu (GLM)" },
+  { value: "compatible", label: "Custom" },
 ];
 
 const MODEL_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
@@ -90,12 +90,12 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI (GPT)",
   google: "Google (Gemini)",
   kimi: "Kimi (Moonshot)",
-  ollama: "Ollama (本地)",
+  ollama: "Ollama (Local)",
   deepseek: "DeepSeek",
-  qwen: "通义千问 (Qwen)",
+  qwen: "Qwen",
   minimax: "MiniMax",
-  zhipu: "智谱 (Zhipu)",
-  compatible: "自定义",
+  zhipu: "Zhipu (GLM)",
+  compatible: "Custom",
 };
 
 interface SettingsPageProps {
@@ -156,11 +156,11 @@ function SettingsPage({ onBack }: SettingsPageProps) {
           setValidationResult("success");
         } else {
           setValidationResult("error");
-          setValidationError(result.error || "API Key 无效");
+          setValidationError(result.error || t("settings.apiKeyInvalid"));
         }
       } catch (err) {
         setValidationResult("error");
-        setValidationError(err instanceof Error ? err.message : "验证失败");
+        setValidationError(err instanceof Error ? err.message : t("settings.validationFailed"));
       } finally {
         setValidating(false);
       }
@@ -171,10 +171,10 @@ function SettingsPage({ onBack }: SettingsPageProps) {
   const isCompatible = config.provider === "compatible";
   const providerLabel = PROVIDER_LABELS[config.provider] || config.provider;
   const modelLabel = isCompatible
-    ? (customModel || config.model || "未设置")
-    : (models.find(m => m.value === config.model)?.label || config.model || "未设置");
+    ? (customModel || config.model || t("settings.notSet"))
+    : (models.find(m => m.value === config.model)?.label || config.model || t("settings.notSet"));
   const hasKey = !!config.apiKey;
-  const maskedKey = hasKey ? config.apiKey.slice(0, 5) + "..." + config.apiKey.slice(-4) : "未配置";
+  const maskedKey = hasKey ? config.apiKey.slice(0, 5) + "..." + config.apiKey.slice(-4) : t("settings.notConfigured");
 
   // ═══════ Display Mode (configured, not editing) ═══════
   if (!editing && hasKey) {
@@ -187,7 +187,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
         {saved && (
           <Notification color="green" withCloseButton={false}>
-            ✅ 配置已保存
+            {`✅ ${t("settings.configSaved")}`}
           </Notification>
         )}
 
@@ -195,43 +195,43 @@ function SettingsPage({ onBack }: SettingsPageProps) {
           <Stack gap="lg">
             <Group justify="space-between" align="flex-start">
               <Stack gap={4}>
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>当前供应商</Text>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.currentProvider")}</Text>
                 <Group gap="xs">
                   <Badge size="lg" variant="light" color="blue">{providerLabel}</Badge>
                 </Group>
               </Stack>
               <Button variant="light" size="xs" onClick={() => setEditing(true)}>
-                ✏️ 编辑
+                {`✏️ ${t("settings.edit")}`}
               </Button>
             </Group>
 
             <Stack gap={4}>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>模型</Text>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.model")}</Text>
               <Text size="lg" fw={500}>{modelLabel}</Text>
             </Stack>
 
             <Stack gap={4}>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>API Key</Text>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.apiKey")}</Text>
               <Text size="sm" c="dimmed" ff="monospace">{maskedKey}</Text>
             </Stack>
 
             {(isCompatible || config.baseURL) && (
               <Stack gap={4}>
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>API 端点</Text>
-                <Text size="sm" c="dimmed" ff="monospace">{config.baseURL || "默认"}</Text>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.apiEndpoint")}</Text>
+                <Text size="sm" c="dimmed" ff="monospace">{config.baseURL || t("settings.default")}</Text>
               </Stack>
             )}
 
             {config.workDir && (
               <Stack gap={4}>
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>工作目录</Text>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.workDir")}</Text>
                 <Text size="sm" c="dimmed" ff="monospace">{config.workDir}</Text>
               </Stack>
             )}
 
             {config.proxyURL && (
               <Stack gap={4}>
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>代理</Text>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{t("settings.proxy")}</Text>
                 <Text size="sm" c="dimmed" ff="monospace">{config.proxyURL}</Text>
               </Stack>
             )}
@@ -244,14 +244,14 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                 {validating ? (
                   <>
                     <Text size="lg">⏳</Text>
-                    <Text size="sm" fw={500}>正在验证 API 连接...</Text>
+                    <Text size="sm" fw={500}>{t("settings.validatingConnection")}</Text>
                   </>
                 ) : validationResult === "error" ? (
                   <>
                     <Text size="lg">❌</Text>
                     <Stack gap={2}>
                       <Text size="sm" fw={500} c={isDark ? "red.4" : "red.7"}>
-                        API 验证失败
+                        {t("settings.apiValidationFailed")}
                       </Text>
                       <Text size="xs" c="dimmed">{validationError}</Text>
                     </Stack>
@@ -260,14 +260,14 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                   <>
                     <Text size="lg">✅</Text>
                     <Text size="sm" fw={500} c={isDark ? "green.4" : "green.8"}>
-                      API 连接正常，可以开始对话
+                      {t("settings.apiConnectionOk")}
                     </Text>
                   </>
                 ) : (
                   <>
                     <Text size="lg">✅</Text>
                     <Text size="sm" fw={500} c={isDark ? "green.4" : "green.8"}>
-                      已配置完成，可以开始对话
+                      {t("settings.configuredReady")}
                     </Text>
                   </>
                 )}
@@ -289,16 +289,16 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
       {saved && (
         <Notification color="green" withCloseButton={false}>
-          ✅ 配置已保存
+          {`✅ ${t("settings.configSaved")}`}
         </Notification>
       )}
 
       <Tabs defaultValue="model">
         <Tabs.List>
-          <Tabs.Tab value="model">🤖 模型配置</Tabs.Tab>
-          <Tabs.Tab value="general">⚙️ 常规设置</Tabs.Tab>
-          <Tabs.Tab value="lark">🐦 飞书</Tabs.Tab>
-          <Tabs.Tab value="advanced">🔧 高级设置</Tabs.Tab>
+          <Tabs.Tab value="model">{`🤖 ${t("settings.modelConfig")}`}</Tabs.Tab>
+          <Tabs.Tab value="general">{`⚙️ ${t("settings.general")}`}</Tabs.Tab>
+          <Tabs.Tab value="lark">{`🐦 ${t("settings.lark")}`}</Tabs.Tab>
+          <Tabs.Tab value="advanced">{`🔧 ${t("settings.advanced")}`}</Tabs.Tab>
         </Tabs.List>
 
         {/* ── 模型配置 (Model Config) ── */}
@@ -330,33 +330,33 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
               {(true) && (
                 <TextInput
-                  label="API 端点 / Base URL"
+                  label={t("settings.apiEndpoint")}
                   placeholder={
                     ({ anthropic: "https://api.anthropic.com", openai: "https://api.openai.com/v1", google: "https://generativelanguage.googleapis.com/v1beta", kimi: "https://api.moonshot.cn/v1", ollama: "http://localhost:11434/v1", deepseek: "https://api.deepseek.com/v1", qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1", minimax: "https://api.minimax.chat/v1", zhipu: "https://open.bigmodel.cn/api/paas/v4" } as Record<string, string>)[config.provider] || "https://api.example.com/v1"
                   }
                   value={config.baseURL || ""}
                   onChange={(e) => setConfig({ ...config, baseURL: e.currentTarget.value })}
-                  description={config.provider === "ollama" ? "Ollama 默认本地端口 11434，无需 API Key" : "留空使用默认地址，填写自定义地址覆盖（支持内网网关）"}
+                  description={config.provider === "ollama" ? t("settings.ollamaDefaultHint") : t("settings.baseUrlHint")}
                 />
               )}
 
               {isCompatible && (
                 <TextInput
-                  label="模型名称 / Model ID"
-                  placeholder="例如: deepseek-chat, qwen-max, llama-3"
+                  label={t("settings.modelName")}
+                  placeholder="e.g. deepseek-chat, qwen-max, llama-3"
                   value={customModel || config.model}
                   onChange={(e) => {
                     setCustomModel(e.currentTarget.value);
                     setConfig({ ...config, model: e.currentTarget.value });
                   }}
-                  description="供应商提供的模型标识符"
+                  description={t("settings.modelIdHint")}
                 />
               )}
 
               {isCompatible && (
                 <Switch
-                  label="启用工具调用 / Enable Tools"
-                  description="后端模型支持 function calling 时开启（如 Kimi、GPT、Claude）"
+                  label={t("settings.enableTools")}
+                  description={t("settings.enableToolsHint")}
                   checked={config.enableTools !== false}
                   onChange={(e) => setConfig({ ...config, enableTools: e.currentTarget.checked })}
                 />
@@ -364,11 +364,11 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
               <Group>
                 <Button onClick={handleSave} flex={1}>
-                  💾 保存
+                  {`💾 ${t("settings.save")}`}
                 </Button>
                 {hasKey && (
                   <Button variant="subtle" onClick={() => setEditing(false)}>
-                    取消
+                    {t("common.cancel")}
                   </Button>
                 )}
               </Group>
@@ -381,12 +381,12 @@ function SettingsPage({ onBack }: SettingsPageProps) {
         <Tabs.Panel value="general" pt="md">
           <Stack gap="md">
             <Paper p="md" radius="md" withBorder>
-              <Text fw={600} mb="sm">🌐 语言与外观 / Language & Appearance</Text>
+              <Text fw={600} mb="sm">{`🌐 ${t("settings.languageAppearance")}`}</Text>
               <Stack gap="md">
                 <Group justify="space-between">
                   <Stack gap={2}>
-                    <Text size="sm" fw={500}>深色模式 / Dark Mode</Text>
-                    <Text size="xs" c="dimmed">切换界面明暗主题</Text>
+                    <Text size="sm" fw={500}>{t("settings.darkMode")}</Text>
+                    <Text size="xs" c="dimmed">{t("settings.darkModeHint")}</Text>
                   </Stack>
                   <Switch
                     checked={isDark}
@@ -398,47 +398,47 @@ function SettingsPage({ onBack }: SettingsPageProps) {
             </Paper>
 
             <Paper p="md" radius="md" withBorder>
-              <Text fw={600} mb="sm">⌨️ 快捷键 / Keyboard Shortcuts</Text>
+              <Text fw={600} mb="sm">{`⌨️ ${t("settings.keyboardShortcuts")}`}</Text>
               <Stack gap="xs">
                 <Group justify="space-between">
-                  <Text size="sm">新对话</Text>
+                  <Text size="sm">{t("settings.shortcutNewChat")}</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + N</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">发送消息</Text>
+                  <Text size="sm">{t("settings.shortcutSendMessage")}</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + Enter</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">停止生成</Text>
+                  <Text size="sm">{t("settings.shortcutStopGeneration")}</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + Shift + S</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">切换对话 1~9</Text>
+                  <Text size="sm">{t("settings.shortcutSwitchChat")}</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + 1~9</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">打开设置</Text>
+                  <Text size="sm">{t("settings.shortcutOpenSettings")}</Text>
                   <Badge variant="outline" size="sm">⌘/Ctrl + ,</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">关闭弹窗 / 返回</Text>
+                  <Text size="sm">{t("settings.shortcutCloseBack")}</Text>
                   <Badge variant="outline" size="sm">Escape</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">输入框换行</Text>
+                  <Text size="sm">{t("settings.shortcutNewline")}</Text>
                   <Badge variant="outline" size="sm">Shift + Enter</Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">输入框发送</Text>
+                  <Text size="sm">{t("settings.shortcutSend")}</Text>
                   <Badge variant="outline" size="sm">Enter</Badge>
                 </Group>
               </Stack>
             </Paper>
 
             <Paper p="md" radius="md" withBorder>
-              <Text fw={600} mb="sm">🔌 MCP 扩展 / Extensions</Text>
+              <Text fw={600} mb="sm">{`🔌 ${t("settings.mcpExtensions")}`}</Text>
               <Text size="sm" c="dimmed" mb="md">
-                通过 MCP (Model Context Protocol) 连接外部工具和服务
+                {t("settings.mcpExtensionsHint")}
               </Text>
               <MCPConfigPanel />
             </Paper>
@@ -457,26 +457,26 @@ function SettingsPage({ onBack }: SettingsPageProps) {
         <Tabs.Panel value="advanced" pt="md">
           <Stack gap="md">
             <Paper p="md" radius="md" withBorder>
-              <Text fw={600} mb="sm">📁 工作环境 / Workspace</Text>
+              <Text fw={600} mb="sm">{`📁 ${t("settings.workspace")}`}</Text>
               <Stack gap="md">
                 <TextInput
-                  label="工作目录 / Workspace"
+                  label={t("settings.workDir")}
                   placeholder="~/Projects"
                   value={config.workDir || ""}
                   onChange={(e) => setConfig({ ...config, workDir: e.currentTarget.value })}
-                  description="AI Agent 创建文件、运行命令时的默认目录"
+                  description={t("settings.workDirHint")}
                 />
 
                 <TextInput
-                  label="代理设置 / Proxy"
+                  label={t("settings.proxySettings")}
                   placeholder="http://127.0.0.1:7890"
                   value={config.proxyURL || ""}
                   onChange={(e) => setConfig({ ...config, proxyURL: e.currentTarget.value })}
-                  description="工具的网络请求（搜索、抓取网页）会走此代理"
+                  description={t("settings.proxyHint")}
                 />
 
                 <Button onClick={handleSave} variant="light">
-                  💾 保存工作环境
+                  {`💾 ${t("settings.saveWorkspace")}`}
                 </Button>
               </Stack>
             </Paper>
@@ -491,6 +491,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
 /** Permission Level Settings Panel */
 function PermissionSettingsPanel() {
+  const { t } = useTranslation();
   const [level, setLevel] = usePermissionLevel();
   const meta = PERMISSION_LEVEL_META[level];
   // Use local state to force re-render when rules/denials change
@@ -539,20 +540,20 @@ function PermissionSettingsPanel() {
 
   return (
     <Paper p="md" radius="md" withBorder>
-      <Text fw={600} mb="sm">🛡️ 权限 & 诊断 / Permissions</Text>
+      <Text fw={600} mb="sm">{`🛡️ ${t("settings.permissionsAndDiagnostics")}`}</Text>
       <Text size="sm" c="dimmed" mb="md">
-        控制 AI Agent 执行工具时的权限审批策略，查看拒绝分析
+        {t("settings.permissionsHint")}
       </Text>
 
       <Stack gap="md">
         <Select
-          label="权限级别"
+          label={t("settings.permissionLevel")}
           data={[
-            { value: "default", label: "🛡️ 默认 — 每次都问" },
-            { value: "acceptEdits", label: "✏️ 接受编辑 — 自动允许文件编辑" },
-            { value: "dontAsk", label: "⚡ 自动模式 — 仅拦截高危操作" },
-            { value: "bypassPermissions", label: "🔓 开发者模式 — 全部自动允许" },
-            { value: "plan", label: "📋 计划模式 — 只规划不执行" },
+            { value: "default", label: `🛡️ ${t("settings.permDefault")}` },
+            { value: "acceptEdits", label: `✏️ ${t("settings.permAcceptEdits")}` },
+            { value: "dontAsk", label: `⚡ ${t("settings.permAuto")}` },
+            { value: "bypassPermissions", label: `🔓 ${t("settings.permDeveloper")}` },
+            { value: "plan", label: `📋 ${t("settings.permPlan")}` },
           ]}
           value={level}
           onChange={(val) => { if (val) setLevel(val as PermissionLevel); }}
@@ -568,10 +569,10 @@ function PermissionSettingsPanel() {
         </Paper>
 
         {/* Per-tool / per-path rules */}
-        <Divider label="精细规则 / Per-Tool Rules" labelPosition="center" />
+        <Divider label={t("settings.perToolRules")} labelPosition="center" />
         <Stack gap={4}>
           {rules.length === 0 && (
-            <Text size="xs" c="dimmed">暂无自定义规则。添加规则可精细控制每个工具的权限。</Text>
+            <Text size="xs" c="dimmed">{t("settings.noCustomRules")}</Text>
           )}
           {rules.map((r, i) => (
             <Group key={i} gap="xs" wrap="nowrap">
@@ -591,7 +592,7 @@ function PermissionSettingsPanel() {
                 variant="subtle"
                 color="red"
                 onClick={() => handleDeleteRule(i)}
-                title="删除规则"
+                title={t("settings.deleteRule")}
               >
                 ✕
               </ActionIcon>
@@ -601,19 +602,19 @@ function PermissionSettingsPanel() {
 
         {/* Add rule form */}
         <Paper p="xs" radius="sm" withBorder>
-          <Text size="xs" fw={600} mb="xs">添加规则</Text>
+          <Text size="xs" fw={600} mb="xs">{t("settings.addRule")}</Text>
           <Stack gap="xs">
             <Group gap="xs">
               <TextInput
                 size="xs"
-                placeholder="工具名 (e.g. bash, *)"
+                placeholder={t("settings.toolNamePlaceholder")}
                 value={newTool}
                 onChange={e => setNewTool(e.currentTarget.value)}
                 style={{ flex: 2 }}
               />
               <TextInput
                 size="xs"
-                placeholder="路径前缀 (可选)"
+                placeholder={t("settings.pathPrefixPlaceholder")}
                 value={newPath}
                 onChange={e => setNewPath(e.currentTarget.value)}
                 style={{ flex: 2 }}
@@ -623,14 +624,14 @@ function PermissionSettingsPanel() {
                 value={newAction}
                 onChange={v => { if (v) setNewAction(v as PermissionAction); }}
                 data={[
-                  { value: "allow", label: "允许" },
-                  { value: "deny", label: "拒绝" },
-                  { value: "ask", label: "询问" },
+                  { value: "allow", label: t("settings.actionAllow") },
+                  { value: "deny", label: t("settings.actionDeny") },
+                  { value: "ask", label: t("settings.actionAsk") },
                 ]}
                 style={{ flex: 1 }}
               />
               <Button size="xs" onClick={handleAddRule} disabled={!newTool.trim()}>
-                添加
+                {t("settings.add")}
               </Button>
             </Group>
           </Stack>
@@ -638,14 +639,14 @@ function PermissionSettingsPanel() {
 
         {rules.length > 0 && (
           <Button size="xs" variant="subtle" color="red" onClick={handleClearRules}>
-            清除所有规则
+            {t("settings.clearAllRules")}
           </Button>
         )}
 
         {/* Denial analytics */}
-        <Divider label={`拒绝分析 (${denialCount} 次)`} labelPosition="center" />
+        <Divider label={t("settings.denialAnalysis", { count: denialCount })} labelPosition="center" />
         {denialStats.length === 0 ? (
-          <Text size="xs" c="dimmed">暂无拒绝记录。</Text>
+          <Text size="xs" c="dimmed">{t("settings.noDenialRecords")}</Text>
         ) : (
           <Stack gap={4}>
             {denialStats.map(stat => (
@@ -663,7 +664,7 @@ function PermissionSettingsPanel() {
         )}
         {denialCount > 0 && (
           <Button size="xs" variant="subtle" color="gray" onClick={handleClearDenials}>
-            清除拒绝记录
+            {t("settings.clearDenialRecords")}
           </Button>
         )}
       </Stack>
@@ -681,6 +682,7 @@ interface MCPServerRow {
 
 /** MCP Server Configuration Panel */
 function MCPConfigPanel() {
+  const { t } = useTranslation();
   const [servers, setServers] = useState<MCPServerRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -771,7 +773,7 @@ function MCPConfigPanel() {
   return (
     <Stack gap="sm">
       {servers.length === 0 && (
-        <Text size="xs" c="dimmed">暂无 MCP 服务器。添加一个 SSE 端点以扩展工具。</Text>
+        <Text size="xs" c="dimmed">{t("settings.noMcpServers")}</Text>
       )}
       {servers.map((s) => (
         <Paper key={s.name} p="sm" radius="sm" withBorder>
@@ -792,7 +794,7 @@ function MCPConfigPanel() {
                     ? setExpandedServer(null)
                     : handleListResources(s.name)}
                 >
-                  {expandedServer === s.name ? "收起" : "资源"}
+                  {expandedServer === s.name ? t("settings.collapse") : t("settings.resources")}
                 </Button>
               )}
             </Group>
@@ -801,14 +803,14 @@ function MCPConfigPanel() {
           {expandedServer === s.name && serverResources[s.name] && (
             <Stack gap={4} mt="xs">
               {serverResources[s.name].length === 0
-                ? <Text size="xs" c="dimmed">该服务器暂无公开资源</Text>
+                ? <Text size="xs" c="dimmed">{t("settings.noPublicResources")}</Text>
                 : serverResources[s.name].map((r) => (
                   <Group key={r.uri} gap="xs">
                     <Text size="xs" ff="monospace" style={{ flex: 1 }} truncate>{r.name}</Text>
                     <Text size="xs" c="dimmed" truncate style={{ maxWidth: 120 }}>{r.uri}</Text>
                     <Button size="xs" variant="subtle"
                       onClick={() => handleReadResource(s.name, r.uri)}>
-                      读取
+                      {t("settings.read")}
                     </Button>
                   </Group>
                 ))
@@ -826,22 +828,22 @@ function MCPConfigPanel() {
           </Group>
           <Box style={{ maxHeight: 160, overflow: "auto" }}>
             <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-              {resourceContent.text.slice(0, 2000)}{resourceContent.text.length > 2000 ? "\n...(截断)" : ""}
+              {resourceContent.text.slice(0, 2000)}{resourceContent.text.length > 2000 ? `\n...(${t("settings.truncated")})` : ""}
             </Text>
           </Box>
         </Paper>
       )}
 
       <Paper p="sm" radius="sm" withBorder>
-        <Text size="xs" fw={600} mb="xs">添加 MCP 服务器</Text>
+        <Text size="xs" fw={600} mb="xs">{t("settings.addMcpServer")}</Text>
         <Stack gap="xs">
           <Group gap="xs">
-            <TextInput size="xs" placeholder="名称" value={newName} onChange={e => setNewName(e.currentTarget.value)} style={{ flex: 1 }} />
+            <TextInput size="xs" placeholder={t("settings.mcpName")} value={newName} onChange={e => setNewName(e.currentTarget.value)} style={{ flex: 1 }} />
             <TextInput size="xs" placeholder="SSE URL" value={newUrl} onChange={e => setNewUrl(e.currentTarget.value)} style={{ flex: 2 }} />
           </Group>
           <Group gap="xs">
-            <TextInput size="xs" placeholder="Bearer Token（可选）" value={newToken} onChange={e => setNewToken(e.currentTarget.value)} style={{ flex: 1 }} type="password" />
-            <Button size="xs" onClick={handleAdd}>添加</Button>
+            <TextInput size="xs" placeholder={t("settings.mcpBearerTokenOptional")} value={newToken} onChange={e => setNewToken(e.currentTarget.value)} style={{ flex: 1 }} type="password" />
+            <Button size="xs" onClick={handleAdd}>{t("settings.add")}</Button>
           </Group>
         </Stack>
       </Paper>
@@ -861,6 +863,7 @@ interface DiagProbe {
 }
 
 function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
+  const { t } = useTranslation();
   const [running, setRunning] = useState(false);
   const [probes, setProbes] = useState<DiagProbe[]>([]);
 
@@ -880,10 +883,10 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
   const runDiagnostics = async () => {
     if (!config.apiKey && config.provider !== "ollama") {
       setProbes([{
-        name: "前置检查",
+        name: t("settings.diagPrecheck"),
         severity: "error",
-        message: "未配置 API Key",
-        suggestion: "请先填写 API Key 再运行诊断",
+        message: t("settings.diagNoApiKey"),
+        suggestion: t("settings.diagNoApiKeyHint"),
       }]);
       return;
     }
@@ -895,11 +898,11 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
 
     // Probe 1: Connectivity
     const initProbes: DiagProbe[] = [
-      { name: "连接性", severity: "pending" as DiagSeverity, message: "正在检测..." },
-      { name: "认证", severity: "pending" as DiagSeverity, message: "等待中..." },
-      { name: "模型可用", severity: "pending" as DiagSeverity, message: "等待中..." },
-      { name: "速率限制", severity: "pending" as DiagSeverity, message: "等待中..." },
-      { name: "延迟", severity: "pending" as DiagSeverity, message: "等待中..." },
+      { name: t("settings.diagConnectivity"), severity: "pending" as DiagSeverity, message: t("settings.diagDetecting") },
+      { name: t("settings.diagAuth"), severity: "pending" as DiagSeverity, message: t("settings.diagWaiting") },
+      { name: t("settings.diagModelAvail"), severity: "pending" as DiagSeverity, message: t("settings.diagWaiting") },
+      { name: t("settings.diagRateLimit"), severity: "pending" as DiagSeverity, message: t("settings.diagWaiting") },
+      { name: t("settings.diagLatency"), severity: "pending" as DiagSeverity, message: t("settings.diagWaiting") },
     ];
     setProbes([...initProbes]);
 
@@ -912,12 +915,12 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
       }).catch(() => null);
       const dt = Date.now() - t0;
       if (resp && (resp.ok || resp.status === 401 || resp.status === 403 || resp.status === 404)) {
-        initProbes[0] = { name: "连接性", severity: "ok", message: `端点可达 (${dt}ms)`, durationMs: dt };
+        initProbes[0] = { name: t("settings.diagConnectivity"), severity: "ok", message: t("settings.diagEndpointReachable", { ms: dt }), durationMs: dt };
       } else {
-        initProbes[0] = { name: "连接性", severity: "error", message: `无法连接到 ${baseURL}`, suggestion: "检查网络连接和代理设置", durationMs: dt };
+        initProbes[0] = { name: t("settings.diagConnectivity"), severity: "error", message: t("settings.diagCannotConnect", { url: baseURL }), suggestion: t("settings.diagCheckNetwork"), durationMs: dt };
       }
     } catch {
-      initProbes[0] = { name: "连接性", severity: "error", message: "连接超时", suggestion: "检查网络或代理配置" };
+      initProbes[0] = { name: t("settings.diagConnectivity"), severity: "error", message: t("settings.diagConnectionTimeout"), suggestion: t("settings.diagCheckNetworkProxy") };
     }
     setProbes([...initProbes]);
 
@@ -925,12 +928,12 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
     try {
       const result = await validateApiKey(config);
       if (result.valid) {
-        initProbes[1] = { name: "认证", severity: "ok", message: "API Key 有效" };
+        initProbes[1] = { name: t("settings.diagAuth"), severity: "ok", message: t("settings.diagApiKeyValid") };
       } else {
-        initProbes[1] = { name: "认证", severity: "error", message: result.error || "认证失败", suggestion: "检查 API Key 是否正确" };
+        initProbes[1] = { name: t("settings.diagAuth"), severity: "error", message: result.error || t("settings.diagAuthFailed"), suggestion: t("settings.diagCheckApiKey") };
       }
     } catch (e) {
-      initProbes[1] = { name: "认证", severity: "warn", message: `验证异常: ${e instanceof Error ? e.message : String(e)}`, suggestion: "可能是网络问题" };
+      initProbes[1] = { name: t("settings.diagAuth"), severity: "warn", message: `${t("settings.diagValidationException")}: ${e instanceof Error ? e.message : String(e)}`, suggestion: t("settings.diagMaybeNetwork") };
     }
     setProbes([...initProbes]);
 
@@ -938,28 +941,28 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
     try {
       const models = MODEL_OPTIONS[config.provider] || [];
       if (models.length === 0 && config.provider !== "compatible") {
-        initProbes[2] = { name: "模型可用", severity: "warn", message: "无预配置模型列表", suggestion: "使用自定义模型名称" };
+        initProbes[2] = { name: t("settings.diagModelAvail"), severity: "warn", message: t("settings.diagNoModelList"), suggestion: t("settings.diagUseCustomModel") };
       } else if (models.some(m => m.value === config.model)) {
-        initProbes[2] = { name: "模型可用", severity: "ok", message: `${config.model} 在推荐列表中` };
+        initProbes[2] = { name: t("settings.diagModelAvail"), severity: "ok", message: t("settings.diagModelInList", { model: config.model }) };
       } else if (config.model) {
-        initProbes[2] = { name: "模型可用", severity: "warn", message: `${config.model} 非推荐模型`, suggestion: "模型可能仍然可用，但建议使用推荐模型" };
+        initProbes[2] = { name: t("settings.diagModelAvail"), severity: "warn", message: t("settings.diagModelNotRecommended", { model: config.model }), suggestion: t("settings.diagModelMayWork") };
       } else {
-        initProbes[2] = { name: "模型可用", severity: "error", message: "未选择模型", suggestion: "请选择一个模型" };
+        initProbes[2] = { name: t("settings.diagModelAvail"), severity: "error", message: t("settings.diagNoModelSelected"), suggestion: t("settings.diagSelectModel") };
       }
     } catch {
-      initProbes[2] = { name: "模型可用", severity: "warn", message: "无法检查模型" };
+      initProbes[2] = { name: t("settings.diagModelAvail"), severity: "warn", message: t("settings.diagCannotCheckModel") };
     }
     setProbes([...initProbes]);
 
     // Probe 4: Rate Limit (check by trying a minimal request)
     try {
       if (config.provider === "ollama") {
-        initProbes[3] = { name: "速率限制", severity: "ok", message: "本地模型无速率限制" };
+        initProbes[3] = { name: t("settings.diagRateLimit"), severity: "ok", message: t("settings.diagLocalNoRateLimit") };
       } else {
-        initProbes[3] = { name: "速率限制", severity: "ok", message: "未触发速率限制", detail: "发送正常请求后检测" };
+        initProbes[3] = { name: t("settings.diagRateLimit"), severity: "ok", message: t("settings.diagNoRateLimitHit"), detail: t("settings.diagCheckAfterRequest") };
       }
     } catch {
-      initProbes[3] = { name: "速率限制", severity: "warn", message: "无法检测" };
+      initProbes[3] = { name: t("settings.diagRateLimit"), severity: "warn", message: t("settings.diagCannotDetect") };
     }
     setProbes([...initProbes]);
 
@@ -969,14 +972,14 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
       await fetch(baseURL, { method: "OPTIONS", signal: AbortSignal.timeout(5000) }).catch(() => null);
       const latency = Date.now() - t0;
       if (latency < 500) {
-        initProbes[4] = { name: "延迟", severity: "ok", message: `${latency}ms — 快速`, durationMs: latency };
+        initProbes[4] = { name: t("settings.diagLatency"), severity: "ok", message: t("settings.diagFast", { ms: latency }), durationMs: latency };
       } else if (latency < 2000) {
-        initProbes[4] = { name: "延迟", severity: "warn", message: `${latency}ms — 较慢`, suggestion: "考虑使用代理或就近节点", durationMs: latency };
+        initProbes[4] = { name: t("settings.diagLatency"), severity: "warn", message: t("settings.diagSlow", { ms: latency }), suggestion: t("settings.diagConsiderProxy"), durationMs: latency };
       } else {
-        initProbes[4] = { name: "延迟", severity: "error", message: `${latency}ms — 很慢`, suggestion: "网络延迟过高，建议检查代理设置", durationMs: latency };
+        initProbes[4] = { name: t("settings.diagLatency"), severity: "error", message: t("settings.diagVerySlow", { ms: latency }), suggestion: t("settings.diagHighLatencyHint"), durationMs: latency };
       }
     } catch {
-      initProbes[4] = { name: "延迟", severity: "error", message: "测量超时", suggestion: "检查网络连接" };
+      initProbes[4] = { name: t("settings.diagLatency"), severity: "error", message: t("settings.diagMeasureTimeout"), suggestion: t("settings.diagCheckConnection") };
     }
     setProbes([...initProbes]);
     setRunning(false);
@@ -985,13 +988,13 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
   return (
     <Paper p="md" radius="md" withBorder mt="md">
       <Group justify="space-between" mb="sm">
-        <Text fw={600}>🩺 Provider 诊断 / Diagnostics</Text>
+        <Text fw={600}>{`🩺 ${t("settings.providerDiagnostics")}`}</Text>
         <Button size="xs" variant="light" onClick={runDiagnostics} loading={running}>
-          运行诊断
+          {t("settings.runDiagnostics")}
         </Button>
       </Group>
       {probes.length === 0 ? (
-        <Text size="xs" c="dimmed">点击「运行诊断」检测当前 Provider 的连接状态</Text>
+        <Text size="xs" c="dimmed">{t("settings.diagClickToRun")}</Text>
       ) : (
         <Stack gap="xs">
           {probes.map((p, i) => (
@@ -1021,6 +1024,7 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
 
 /** Lark/Feishu Configuration Panel */
 function LarkConfigPanel() {
+  const { t } = useTranslation();
   const [larkCfg, setLarkCfg] = useState(() => {
     try {
       const raw = localStorage.getItem("lark-config");
@@ -1043,14 +1047,14 @@ function LarkConfigPanel() {
   return (
     <Stack gap="md">
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">🐦 飞书集成 / Lark Integration</Text>
+        <Text fw={600} mb="sm">{`🐦 ${t("settings.larkIntegration")}`}</Text>
         <Text size="sm" c="dimmed" mb="md">
-          连接飞书生态，让 AI 助手管理日程、发消息、操作文档、处理审批
+          {t("settings.larkIntegrationHint")}
         </Text>
 
         {saved && (
           <Notification color="green" withCloseButton={false} mb="md">
-            ✅ 飞书配置已保存，工具已注册
+            {`✅ ${t("settings.larkConfigSaved")}`}
           </Notification>
         )}
 
@@ -1060,7 +1064,7 @@ function LarkConfigPanel() {
             placeholder="cli_xxxxxxxxxx"
             value={larkCfg.appId}
             onChange={(e) => setLarkCfg({ ...larkCfg, appId: e.currentTarget.value })}
-            description="飞书开放平台应用的 App ID"
+            description={t("settings.larkAppIdHint")}
           />
 
           <PasswordInput
@@ -1068,40 +1072,40 @@ function LarkConfigPanel() {
             placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             value={larkCfg.appSecret}
             onChange={(e) => setLarkCfg({ ...larkCfg, appSecret: e.currentTarget.value })}
-            description="飞书开放平台应用的 App Secret"
+            description={t("settings.larkAppSecretHint")}
           />
 
           <TextInput
-            label="CLI 路径"
+            label={t("settings.larkCliPath")}
             placeholder="lark-cli"
             value={larkCfg.cliPath}
             onChange={(e) => setLarkCfg({ ...larkCfg, cliPath: e.currentTarget.value })}
-            description="lark-cli 可执行文件路径（默认 lark-cli）"
+            description={t("settings.larkCliPathHint")}
           />
 
           <Group>
             <Button onClick={handleSave} flex={1}>
-              💾 保存飞书配置
+              {`💾 ${t("settings.saveLarkConfig")}`}
             </Button>
           </Group>
         </Stack>
       </Paper>
 
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">🔧 已注册工具 / Registered Tools</Text>
+        <Text fw={600} mb="sm">{`🔧 ${t("settings.registeredTools")}`}</Text>
         <Group gap="xs" mb="sm">
           <Badge color={isConfigured ? "green" : "gray"} variant="light">
-            {isConfigured ? "✅ 已配置" : "⚠️ 未配置"}
+            {isConfigured ? `✅ ${t("settings.configured")}` : `⚠️ ${t("settings.notConfigured")}`}
           </Badge>
         </Group>
         <Stack gap="xs">
           {[
-            { name: "lark_calendar", desc: "📅 日程管理 — 查看/创建/空闲查询" },
-            { name: "lark_im", desc: "💬 消息发送 — 个人/群聊/搜索" },
-            { name: "lark_doc", desc: "📄 文档操作 — 创建/读取/搜索" },
-            { name: "lark_task", desc: "✅ 任务管理 — 创建/查看/完成" },
-            { name: "lark_approval", desc: "✍️ 审批处理 — 查询/审批/驳回" },
-            { name: "lark_sheet", desc: "📊 表格数据 — 读写/创建" },
+            { name: "lark_calendar", desc: `📅 ${t("settings.larkCalendar")}` },
+            { name: "lark_im", desc: `💬 ${t("settings.larkIM")}` },
+            { name: "lark_doc", desc: `📄 ${t("settings.larkDoc")}` },
+            { name: "lark_task", desc: `✅ ${t("settings.larkTask")}` },
+            { name: "lark_approval", desc: `✍️ ${t("settings.larkApproval")}` },
+            { name: "lark_sheet", desc: `📊 ${t("settings.larkSheet")}` },
           ].map(tool => (
             <Group key={tool.name} gap="xs" wrap="nowrap">
               <Badge size="xs" variant="outline" color={isConfigured ? "blue" : "gray"}>
@@ -1118,6 +1122,7 @@ function LarkConfigPanel() {
 
 /** Remote Bridge Configuration Panel */
 function RemoteBridgePanel() {
+  const { t } = useTranslation();
   const [bridgeCfg, setBridgeCfg] = useState(() => {
     try {
       const raw = localStorage.getItem("remote-bridge-config");
@@ -1162,30 +1167,30 @@ function RemoteBridgePanel() {
   return (
     <Paper p="md" radius="md" withBorder>
       <Group justify="space-between" mb="sm">
-        <Text fw={600}>🌐 远程控制 / Remote Bridge</Text>
+        <Text fw={600}>{`🌐 ${t("settings.remoteBridge")}`}</Text>
         <Badge color={running ? "green" : "gray"} variant="light">
-          {running ? "🟢 运行中" : "⚪ 未启动"}
+          {running ? `🟢 ${t("settings.bridgeRunning")}` : `⚪ ${t("settings.bridgeStopped")}`}
         </Badge>
       </Group>
       <Text size="sm" c="dimmed" mb="md">
-        通过飞书消息远程控制 AI 助手。发送消息到指定群聊，AI 自动回复。
+        {t("settings.remoteBridgeHint")}
       </Text>
 
       <Stack gap="md">
         <TextInput
-          label="允许的聊天 ID"
-          placeholder="oc_xxx, oc_yyy（留空允许所有）"
+          label={t("settings.allowedChatIds")}
+          placeholder={t("settings.allowedChatIdsPlaceholder")}
           value={chatIdsInput}
           onChange={(e) => setChatIdsInput(e.currentTarget.value)}
-          description="限制 AI 只响应这些群聊的消息（逗号分隔）"
+          description={t("settings.allowedChatIdsHint")}
         />
 
         <TextInput
-          label="轮询间隔 (ms)"
+          label={t("settings.pollInterval")}
           placeholder="3000"
           value={String(bridgeCfg.pollIntervalMs || 3000)}
           onChange={(e) => setBridgeCfg({ ...bridgeCfg, pollIntervalMs: parseInt(e.currentTarget.value) || 3000 })}
-          description="检查新消息的频率（毫秒）"
+          description={t("settings.pollIntervalHint")}
         />
 
         <Button
@@ -1194,7 +1199,7 @@ function RemoteBridgePanel() {
           variant="light"
           fullWidth
         >
-          {running ? "⏹ 停止远程控制" : "▶ 启动远程控制"}
+          {running ? `⏹ ${t("settings.stopRemoteBridge")}` : `▶ ${t("settings.startRemoteBridge")}`}
         </Button>
       </Stack>
     </Paper>

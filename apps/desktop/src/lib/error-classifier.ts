@@ -4,6 +4,9 @@
  * Ported from CodePilot's error-classifier.ts pattern-matching classifier.
  * Produces actionable, user-facing error messages with recovery hints.
  */
+import i18n from "../i18n";
+
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 // ── Error categories ────────────────────────────────────────────
 
@@ -77,8 +80,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'NO_CREDENTIALS',
     patterns: ['no api key', 'missing api key', 'api key required', 'missing credentials', 'ANTHROPIC_API_KEY'],
-    userMessage: (ctx) => `未找到 API 密钥${providerHint(ctx)}`,
-    actionHint: () => '请到设置页面配置 API Key',
+    userMessage: (ctx) => t('errors.noCredentials', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.noCredentialsHint'),
     retryable: false,
   },
 
@@ -86,8 +89,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'AUTH_REJECTED',
     patterns: ['401', 'Unauthorized', 'invalid_api_key', 'invalid api key', 'authentication_error', 'authentication failed'],
-    userMessage: (ctx) => `认证失败${providerHint(ctx)}`,
-    actionHint: () => '请检查 API Key 是否正确且未过期',
+    userMessage: (ctx) => t('errors.authRejected', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.authRejectedHint'),
     retryable: false,
   },
 
@@ -95,8 +98,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'AUTH_FORBIDDEN',
     patterns: ['403', 'Forbidden', 'permission_error', 'access denied'],
-    userMessage: (ctx) => `权限不足${providerHint(ctx)}`,
-    actionHint: () => '您的 API Key 可能缺少相关权限，请检查套餐限额',
+    userMessage: (ctx) => t('errors.authForbidden', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.authForbiddenHint'),
     retryable: false,
   },
 
@@ -104,8 +107,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'RATE_LIMITED',
     patterns: ['429', 'rate limit', 'Rate limit', 'too many requests'],
-    userMessage: () => '请求频率超限',
-    actionHint: () => '请稍候再试。如果持续出现，请考虑升级 API 套餐',
+    userMessage: () => t('errors.rateLimited'),
+    actionHint: () => t('errors.rateLimitedHint'),
     retryable: true,
   },
 
@@ -113,8 +116,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'OVERLOADED',
     patterns: ['overloaded', 'overloaded_error', 'capacity', 'service_unavailable'],
-    userMessage: (ctx) => `服务过载${providerHint(ctx)}`,
-    actionHint: () => '服务暂时繁忙，请稍后重试',
+    userMessage: (ctx) => t('errors.overloaded', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.overloadedHint'),
     retryable: true,
   },
 
@@ -122,8 +125,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'MODEL_NOT_AVAILABLE',
     patterns: ['model_not_found', 'model not found', 'model_not_available', 'invalid model', 'does not exist', /not_found_error.*model/],
-    userMessage: (ctx) => `模型不可用${providerHint(ctx)}${ctx.model ? ` (${ctx.model})` : ''}`,
-    actionHint: () => '所选模型可能不受此提供商支持，请尝试其他模型',
+    userMessage: (ctx) => t('errors.modelNotAvailable', { provider: providerHint(ctx), model: ctx.model || '' }),
+    actionHint: () => t('errors.modelNotAvailableHint'),
     retryable: false,
   },
 
@@ -131,8 +134,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'CONTEXT_TOO_LONG',
     patterns: ['context_length', 'context window', 'too many tokens', 'max_tokens', 'prompt is too long'],
-    userMessage: () => '对话上下文过长',
-    actionHint: () => '请使用 /compact 压缩对话，或开始新对话',
+    userMessage: () => t('errors.contextTooLong'),
+    actionHint: () => t('errors.contextTooLongHint'),
     retryable: false,
   },
 
@@ -140,8 +143,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'INVALID_REQUEST',
     patterns: ['invalid_request_error', 'invalid request', 'bad request', '400'],
-    userMessage: () => '请求格式错误',
-    actionHint: () => '请检查参数配置或尝试其他模型',
+    userMessage: () => t('errors.invalidRequest'),
+    actionHint: () => t('errors.invalidRequestHint'),
     retryable: false,
   },
 
@@ -150,8 +153,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
     category: 'TIMEOUT',
     patterns: ['timeout', 'Timeout', 'ETIMEDOUT', 'timed out', 'deadline exceeded'],
     codes: ['ETIMEDOUT'],
-    userMessage: () => '请求超时',
-    actionHint: () => '服务器响应太慢，请稍后重试',
+    userMessage: () => t('errors.timeout'),
+    actionHint: () => t('errors.timeoutHint'),
     retryable: true,
   },
 
@@ -160,8 +163,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
     category: 'NETWORK_UNREACHABLE',
     patterns: ['ECONNREFUSED', 'ECONNRESET', 'fetch failed', 'Failed to fetch', 'network error', 'DNS', 'ENOTFOUND', 'ERR_'],
     codes: ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND'],
-    userMessage: (ctx) => `网络连接失败${ctx.baseUrl ? ` (${ctx.baseUrl})` : ''}`,
-    actionHint: () => '请检查网络连接或代理设置',
+    userMessage: (ctx) => t('errors.networkUnreachable', { url: ctx.baseUrl || '' }),
+    actionHint: () => t('errors.networkUnreachableHint'),
     retryable: true,
   },
 
@@ -169,8 +172,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'ENDPOINT_NOT_FOUND',
     patterns: ['404', 'Not Found', 'endpoint not found'],
-    userMessage: (ctx) => `API 端点未找到${providerHint(ctx)}`,
-    actionHint: () => 'Base URL 可能不正确，请检查设置',
+    userMessage: (ctx) => t('errors.endpointNotFound', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.endpointNotFoundHint'),
     retryable: false,
   },
 
@@ -178,8 +181,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'SERVER_ERROR',
     patterns: ['500', '502', '503', 'internal server error', 'bad gateway', 'service unavailable'],
-    userMessage: (ctx) => `服务器错误${providerHint(ctx)}`,
-    actionHint: () => '服务器暂时不可用，请稍后重试',
+    userMessage: (ctx) => t('errors.serverError', { provider: providerHint(ctx) }),
+    actionHint: () => t('errors.serverErrorHint'),
     retryable: true,
   },
 
@@ -187,8 +190,8 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'STREAM_ERROR',
     patterns: ['stream error', 'stream closed', 'SSE', 'event source', 'readable stream'],
-    userMessage: () => '数据流中断',
-    actionHint: () => '连接中断，请重试',
+    userMessage: () => t('errors.streamError'),
+    actionHint: () => t('errors.streamErrorHint'),
     retryable: true,
   },
 
@@ -196,7 +199,7 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   {
     category: 'ABORT',
     patterns: ['abort', 'AbortError', 'aborted', 'cancelled', 'canceled'],
-    userMessage: () => '已停止生成',
+    userMessage: () => t('errors.abort'),
     actionHint: () => '',
     retryable: false,
   },
@@ -233,13 +236,13 @@ export function classifyError(ctx: ErrorContext): ClassifiedError {
   // Fallback: unknown error
   return {
     category: 'UNKNOWN',
-    userMessage: `发生未知错误${providerHint(ctx)}`,
-    actionHint: '请查看错误详情。如果持续出现，请检查设置',
+    userMessage: t('errors.unknown', { provider: providerHint(ctx) }),
+    actionHint: t('errors.unknownHint'),
     rawMessage,
     providerName: ctx.providerName,
     details: extraDetail || undefined,
     retryable: false,
-    recoveryActions: [{ label: '打开设置', action: 'open_settings' }],
+    recoveryActions: [{ label: t('errors.openSettings'), action: 'open_settings' }],
   };
 }
 
@@ -248,23 +251,23 @@ function buildRecoveryActions(category: ErrorCategory): RecoveryAction[] {
     case 'AUTH_REJECTED':
     case 'AUTH_FORBIDDEN':
     case 'NO_CREDENTIALS':
-      return [{ label: '打开设置', action: 'open_settings' }];
+      return [{ label: t('errors.openSettings'), action: 'open_settings' }];
     case 'RATE_LIMITED':
     case 'OVERLOADED':
     case 'TIMEOUT':
     case 'NETWORK_UNREACHABLE':
     case 'SERVER_ERROR':
     case 'STREAM_ERROR':
-      return [{ label: '重试', action: 'retry' }];
+      return [{ label: t('errors.retry'), action: 'retry' }];
     case 'MODEL_NOT_AVAILABLE':
     case 'ENDPOINT_NOT_FOUND':
-      return [{ label: '打开设置', action: 'open_settings' }];
+      return [{ label: t('errors.openSettings'), action: 'open_settings' }];
     case 'CONTEXT_TOO_LONG':
-      return [{ label: '新对话', action: 'new_conversation' }];
+      return [{ label: t('errors.newConversation'), action: 'new_conversation' }];
     case 'ABORT':
       return [];
     default:
-      return [{ label: '打开设置', action: 'open_settings' }];
+      return [{ label: t('errors.openSettings'), action: 'open_settings' }];
   }
 }
 
@@ -292,6 +295,6 @@ function buildResult(
 export function formatClassifiedError(err: ClassifiedError): string {
   let msg = err.userMessage;
   if (err.actionHint) msg += `\n${err.actionHint}`;
-  if (err.details) msg += `\n\n详情: ${err.details}`;
+  if (err.details) msg += `\n\n${t('errors.details')}: ${err.details}`;
   return msg;
 }

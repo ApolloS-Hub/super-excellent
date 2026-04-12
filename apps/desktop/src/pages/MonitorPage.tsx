@@ -21,13 +21,13 @@ interface MonitorPageProps {
 }
 
 const WORKFLOW_PHASES = [
-  { id: "think", emoji: "💭", label: "Think", labelZh: "构思", desc: "Clarify goals, challenge assumptions" },
-  { id: "plan", emoji: "📋", label: "Plan", labelZh: "规划", desc: "Architecture, task breakdown" },
-  { id: "build", emoji: "🔨", label: "Build", labelZh: "构建", desc: "Execute, write code" },
-  { id: "review", emoji: "🔍", label: "Review", labelZh: "审查", desc: "Code review, security" },
-  { id: "test", emoji: "🧪", label: "Test", labelZh: "测试", desc: "Verify, validate" },
-  { id: "ship", emoji: "🚀", label: "Ship", labelZh: "交付", desc: "Deploy, deliver" },
-  { id: "reflect", emoji: "🔬", label: "Reflect", labelZh: "复盘", desc: "Extract learnings" },
+  { id: "think", emoji: "💭", label: "Think", labelKey: "monitor.phaseThink", desc: "Clarify goals, challenge assumptions" },
+  { id: "plan", emoji: "📋", label: "Plan", labelKey: "monitor.phasePlan", desc: "Architecture, task breakdown" },
+  { id: "build", emoji: "🔨", label: "Build", labelKey: "monitor.phaseBuild", desc: "Execute, write code" },
+  { id: "review", emoji: "🔍", label: "Review", labelKey: "monitor.phaseReview", desc: "Code review, security" },
+  { id: "test", emoji: "🧪", label: "Test", labelKey: "monitor.phaseTest", desc: "Verify, validate" },
+  { id: "ship", emoji: "🚀", label: "Ship", labelKey: "monitor.phaseShip", desc: "Deploy, deliver" },
+  { id: "reflect", emoji: "🔬", label: "Reflect", labelKey: "monitor.phaseReflect", desc: "Extract learnings" },
 ];
 
 /* Worker 列表现在从 team.ts getTeamConfig() 动态读取 */
@@ -120,12 +120,12 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         case "tool_use": detail = `🔧 ${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`; break;
         case "tool_result": detail = `✅ ${((event.toolOutput as string) || "").slice(0, 80)}`; break;
         case "error": detail = `❌ ${event.text}`; break;
-        case "result": detail = `✓ 完成`; break;
-        case "worker_activate": detail = `🟢 ${event.worker} 开始工作`; break;
-        case "worker_complete": detail = `⚪ ${event.worker} 完成`; break;
+        case "result": detail = `✓ ${t("monitor.completed")}`; break;
+        case "worker_activate": detail = `🟢 ${event.worker} ${t("monitor.startedWorking")}`; break;
+        case "worker_complete": detail = `⚪ ${event.worker} ${t("monitor.completed")}`; break;
         case "user_message": detail = `💬 ${((event.text as string) || "").slice(0, 60)}`; break;
         case "intent_analysis": detail = `🧠 ${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`; break;
-        case "worker_dispatch": detail = `🎯 派发给 ${event.worker}`; break;
+        case "worker_dispatch": detail = `🎯 ${t("monitor.dispatchedTo")} ${event.worker}`; break;
         default: detail = JSON.stringify(event).slice(0, 100);
       }
       setEventLog(prev => [...prev.slice(-99), { time, type, detail }]);
@@ -254,7 +254,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
           {WORKFLOW_PHASES.map(p => (
             <Stepper.Step
               key={p.id}
-              label={`${p.emoji} ${p.labelZh}`}
+              label={`${p.emoji} ${t(p.labelKey)}`}
               description={p.label}
             />
           ))}
@@ -351,7 +351,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {fileChanges.length > 0 && (
         <Paper p="md" radius="md" withBorder>
           <Group justify="space-between" mb="sm">
-            <Text fw={600}>📁 文件变更 / File Changes ({fileChanges.length})</Text>
+            <Text fw={600}>📁 {t("monitor.fileChanges")} ({fileChanges.length})</Text>
             <Button size="xs" variant="light" onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}>{t("monitor.clearLog")}</Button>
           </Group>
           <Stack gap={2}>
@@ -415,18 +415,18 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* Real-time Event Log */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>📋 实时事件日志 / Event Log</Text>
+          <Text fw={600}>📋 {t("monitor.realtimeEventLog")}</Text>
           <Group gap="xs">
             <Badge color={eventLog.length > 0 ? "green" : "gray"} variant="light">
-              {eventLog.length} 条
+              {eventLog.length} {t("monitor.entries")}
             </Badge>
-            <Button size="xs" variant="light" onClick={() => { clearEventLog(); setEventLog([]); }}>清空</Button>
+            <Button size="xs" variant="light" onClick={() => { clearEventLog(); setEventLog([]); }}>{t("monitor.clearLog")}</Button>
           </Group>
         </Group>
         <ScrollArea h={200} viewportRef={logViewport}>
           {eventLog.length === 0 ? (
             <Text size="xs" c="dimmed" ta="center" py="md">
-              等待 Agent 活动...（在聊天中发送消息后，这里会实时显示事件）
+              {t("monitor.waitingForActivity")}
             </Text>
           ) : (
             <Stack gap={2}>
@@ -455,6 +455,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 }
 
 function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
+  const { t } = useTranslation();
   return (
     <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
       {workers.map(w => {
@@ -489,7 +490,7 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
               fullWidth
               variant={isWorking ? "filled" : "light"}
             >
-              {isWorking ? "🔵 工作中" : isDone ? "🟢 完成" : isError ? "🔴 异常" : "⚪ 空闲"}
+              {isWorking ? `🔵 ${t("monitor.working")}` : isDone ? `🟢 ${t("monitor.done")}` : isError ? `🔴 ${t("monitor.error")}` : `⚪ ${t("monitor.idle")}`}
             </Badge>
             {w.currentTask && (
               <Text size="xs" c="blue" mt={2} truncate>📌 {w.currentTask}</Text>
@@ -505,6 +506,7 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
 }
 
 function PermissionOverviewPanel() {
+  const { t } = useTranslation();
   const [level, setLevel] = useState(() => permissionEngine.getLevel());
   const [rules, setRules] = useState(() => permissionEngine.getRules());
   const [stats, setStats] = useState(() => permissionEngine.getDenialStats());
@@ -526,7 +528,7 @@ function PermissionOverviewPanel() {
   return (
     <Paper p="md" radius="md" withBorder>
       <Group justify="space-between" mb="sm">
-        <Text fw={600}>🛡️ 权限概览 / Permission Overview</Text>
+        <Text fw={600}>🛡️ {t("monitor.permissionOverview")}</Text>
         <Badge color={meta.color} variant="light">
           {meta.symbol} {meta.label}
         </Badge>
@@ -535,21 +537,21 @@ function PermissionOverviewPanel() {
       <SimpleGrid cols={3} mb="sm">
         <Stack gap={0} align="center">
           <Text size="xl" fw={700}>{rules.length}</Text>
-          <Text size="xs" c="dimmed">自定义规则</Text>
+          <Text size="xs" c="dimmed">{t("monitor.customRules")}</Text>
         </Stack>
         <Stack gap={0} align="center">
           <Text size="xl" fw={700} c={stats.length > 0 ? "red" : "green"}>{stats.reduce((s, v) => s + v.count, 0)}</Text>
-          <Text size="xs" c="dimmed">总拒绝次数</Text>
+          <Text size="xs" c="dimmed">{t("monitor.totalDenials")}</Text>
         </Stack>
         <Stack gap={0} align="center">
           <Text size="xl" fw={700} c={recentCount > 0 ? "orange" : "green"}>{recentCount}</Text>
-          <Text size="xs" c="dimmed">近5分钟拒绝</Text>
+          <Text size="xs" c="dimmed">{t("monitor.recentDenials")}</Text>
         </Stack>
       </SimpleGrid>
 
       {stats.length > 0 && (
         <Stack gap={4}>
-          <Text size="xs" c="dimmed" fw={600}>拒绝 TOP 工具:</Text>
+          <Text size="xs" c="dimmed" fw={600}>{t("monitor.topDeniedTools")}:</Text>
           {stats.slice(0, 5).map(s => (
             <Group key={s.tool} gap="xs">
               <Badge size="xs" color="red" variant="light">{s.count}×</Badge>
@@ -564,7 +566,7 @@ function PermissionOverviewPanel() {
 
       {rules.length > 0 && (
         <Stack gap={4} mt="xs">
-          <Text size="xs" c="dimmed" fw={600}>活跃规则:</Text>
+          <Text size="xs" c="dimmed" fw={600}>{t("monitor.activeRules")}:</Text>
           {rules.map((r, i) => (
             <Group key={i} gap="xs">
               <Badge size="xs" color={r.action === "allow" ? "green" : r.action === "deny" ? "red" : "yellow"}>
@@ -581,6 +583,7 @@ function PermissionOverviewPanel() {
 }
 
 function MemoryPanel() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<Array<{ key: string; content: string; category: string; timestamp: number; accessCount: number }>>([]);
   const [count, setCount] = useState(0);
 
@@ -603,10 +606,10 @@ function MemoryPanel() {
   return (
     <Stack gap="xs">
       <Group gap="xs">
-        <Badge variant="light" color="blue">{count} 条记忆</Badge>
+        <Badge variant="light" color="blue">{count} {t("monitor.memoryEntries")}</Badge>
       </Group>
       {entries.length === 0 ? (
-        <Text size="xs" c="dimmed">暂无记忆条目。AI 会在对话中自动学习。</Text>
+        <Text size="xs" c="dimmed">{t("monitor.noMemoryEntries")}</Text>
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
@@ -631,6 +634,7 @@ function MemoryPanel() {
 }
 
 function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
+  const { t } = useTranslation();
   const [allTasks, setAllTasks] = useState<Array<{ taskId: string; title: string; status: string; owner: string }>>([]);
 
   useEffect(() => {
@@ -652,11 +656,11 @@ function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
   return (
     <Stack gap="xs">
       <Group gap="xs">
-        <Badge variant="light" color="blue">{allTasks.length} 个任务</Badge>
-        <Badge variant="light" color="green">{tasks.filter(t => t.status === "done" || t.status === "completed").length} 已完成</Badge>
+        <Badge variant="light" color="blue">{allTasks.length} {t("monitor.tasks")}</Badge>
+        <Badge variant="light" color="green">{tasks.filter(tk => tk.status === "done" || tk.status === "completed").length} {t("monitor.done")}</Badge>
       </Group>
       {allTasks.length === 0 ? (
-        <Text size="xs" c="dimmed">暂无任务。使用 AI 创建任务。</Text>
+        <Text size="xs" c="dimmed">{t("monitor.noTasks")}</Text>
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
@@ -675,6 +679,7 @@ function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
 }
 
 function BackgroundTaskPanel() {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<BackgroundTask[]>([]);
 
   useEffect(() => {
@@ -691,12 +696,12 @@ function BackgroundTaskPanel() {
   return (
     <Stack gap="xs">
       <Group gap="xs">
-        <Badge variant="light" color="blue">{tasks.length} 个后台任务</Badge>
-        <Badge variant="light" color="green">{tasks.filter(t => t.status === "completed").length} 已完成</Badge>
-        <Badge variant="light" color="orange">{tasks.filter(t => t.status === "running").length} 运行中</Badge>
+        <Badge variant="light" color="blue">{tasks.length} {t("monitor.backgroundTasks")}</Badge>
+        <Badge variant="light" color="green">{tasks.filter(tk => tk.status === "completed").length} {t("monitor.done")}</Badge>
+        <Badge variant="light" color="orange">{tasks.filter(tk => tk.status === "running").length} {t("monitor.running")}</Badge>
       </Group>
       {tasks.length === 0 ? (
-        <Text size="xs" c="dimmed">暂无后台任务。</Text>
+        <Text size="xs" c="dimmed">{t("monitor.noBackgroundTasks")}</Text>
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
@@ -715,6 +720,7 @@ function BackgroundTaskPanel() {
 }
 
 function ProtocolPanel() {
+  const { t } = useTranslation();
   const [pending, setPending] = useState<ProtocolRequest[]>([]);
 
   useEffect(() => {
@@ -725,19 +731,19 @@ function ProtocolPanel() {
   }, []);
 
   const typeLabel: Record<string, string> = {
-    plan_approval: "📋 计划审批",
-    code_review: "🔍 代码审查",
-    task_handoff: "🤝 任务交接",
+    plan_approval: `📋 ${t("monitor.planApproval")}`,
+    code_review: `🔍 ${t("monitor.codeReview")}`,
+    task_handoff: `🤝 ${t("monitor.taskHandoff")}`,
   };
 
   return (
     <Stack gap="xs">
       <Group gap="xs">
-        <Badge variant="light" color="orange">{pending.length} 待处理</Badge>
-        <Badge variant="light" color="blue">{cronScheduler.getAllSchedules().length} 定时任务</Badge>
+        <Badge variant="light" color="orange">{pending.length} {t("monitor.pending")}</Badge>
+        <Badge variant="light" color="blue">{cronScheduler.getAllSchedules().length} {t("monitor.scheduledTasks")}</Badge>
       </Group>
       {pending.length === 0 ? (
-        <Text size="xs" c="dimmed">暂无待处理的协议请求。</Text>
+        <Text size="xs" c="dimmed">{t("monitor.noPendingProtocols")}</Text>
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
@@ -765,7 +771,7 @@ function SvgBarChart({ data, width = 400, height = 160, barColor = "var(--mantin
   height?: number;
   barColor?: string;
 }) {
-  if (data.length === 0) return <Text size="xs" c="dimmed" ta="center" py="md">暂无数据</Text>;
+  if (data.length === 0) return <Text size="xs" c="dimmed" ta="center" py="md">No data</Text>;
   const maxVal = Math.max(...data.map(d => d.value), 1);
   const barWidth = Math.max(12, Math.min(32, (width - 40) / data.length - 4));
   const chartHeight = height - 30;
@@ -809,6 +815,7 @@ function formatTokenCount(n: number): string {
 
 /** Usage Chart Panel — tabs for daily/weekly/monthly + breakdown by provider/model */
 function UsageChartPanel() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<{
     periods: Array<{ key: string; label: string; tokens: number; estimatedCost: number; requestCount: number }>;
     breakdown: {
@@ -832,7 +839,7 @@ function UsageChartPanel() {
   if (!snapshot) return null;
 
   const periodData = snapshot.periods.map(p => ({
-    label: p.label.replace("今日", "Today").replace("近7天", "7d").replace("近30天", "30d"),
+    label: p.label.replace("今日", t("monitor.today")).replace("近7天", t("monitor.last7d")).replace("近30天", t("monitor.last30d")),
     value: p.tokens,
   }));
 
@@ -857,22 +864,22 @@ function UsageChartPanel() {
   return (
     <Tabs defaultValue="period">
       <Tabs.List>
-        <Tabs.Tab value="period">📊 时段统计</Tabs.Tab>
-        <Tabs.Tab value="model">🧠 按模型</Tabs.Tab>
-        <Tabs.Tab value="provider">🏢 按供应商</Tabs.Tab>
-        <Tabs.Tab value="cost">💵 费用估算</Tabs.Tab>
+        <Tabs.Tab value="period">📊 {t("monitor.periodStats")}</Tabs.Tab>
+        <Tabs.Tab value="model">🧠 {t("monitor.byModel")}</Tabs.Tab>
+        <Tabs.Tab value="provider">🏢 {t("monitor.byProvider")}</Tabs.Tab>
+        <Tabs.Tab value="cost">💵 {t("monitor.costEstimate")}</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="period" pt="sm">
         {periodData.length > 0 ? (
           <SvgBarChart data={periodData} width={320} height={140} barColor="var(--mantine-color-blue-5)" />
         ) : (
-          <Text size="xs" c="dimmed" ta="center" py="md">暂无使用记录。发送消息后这里会显示统计图。</Text>
+          <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noUsageRecords")}</Text>
         )}
         <SimpleGrid cols={3} mt="xs">
           {snapshot.periods.map(p => (
             <Stack key={p.key} gap={0} align="center">
               <Text size="sm" fw={600}>{formatTokenCount(p.tokens)}</Text>
-              <Text size="xs" c="dimmed">{p.label} ({p.requestCount} 次)</Text>
+              <Text size="xs" c="dimmed">{p.label} ({p.requestCount} {t("monitor.requests")})</Text>
               <Text size="xs" c="blue">${p.estimatedCost.toFixed(4)}</Text>
             </Stack>
           ))}
@@ -882,24 +889,24 @@ function UsageChartPanel() {
         {modelData.length > 0 ? (
           <SvgBarChart data={modelData} width={380} height={140} barColor="var(--mantine-color-violet-5)" />
         ) : (
-          <Text size="xs" c="dimmed" ta="center" py="md">暂无按模型的使用数据</Text>
+          <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noModelData")}</Text>
         )}
       </Tabs.Panel>
       <Tabs.Panel value="provider" pt="sm">
         {providerData.length > 0 ? (
           <SvgBarChart data={providerData} width={380} height={140} barColor="var(--mantine-color-green-5)" />
         ) : (
-          <Text size="xs" c="dimmed" ta="center" py="md">暂无按供应商的使用数据</Text>
+          <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noProviderData")}</Text>
         )}
       </Tabs.Panel>
       <Tabs.Panel value="cost" pt="sm">
         {costByModel.length > 0 ? (
           <>
-            <Text size="xs" c="dimmed" ta="center" mb="xs">单位: $0.0001</Text>
+            <Text size="xs" c="dimmed" ta="center" mb="xs">{t("monitor.costUnit")}: $0.0001</Text>
             <SvgBarChart data={costByModel} width={380} height={140} barColor="var(--mantine-color-orange-5)" />
           </>
         ) : (
-          <Text size="xs" c="dimmed" ta="center" py="md">暂无费用数据</Text>
+          <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noCostData")}</Text>
         )}
         <Text size="xs" c="dimmed" ta="center" mt="xs">{snapshot.budget.message}</Text>
       </Tabs.Panel>

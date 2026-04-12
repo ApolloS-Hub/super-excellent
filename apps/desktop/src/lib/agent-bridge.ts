@@ -20,6 +20,8 @@ import {
   type AnthropicCacheBlock,
 } from "./prompt-cache";
 import { fetchWithRetry } from "./api-retry";
+import i18n from "../i18n";
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 export interface AgentConfig {
   provider: "anthropic" | "openai" | "google" | "kimi" | "ollama" | "deepseek" | "qwen" | "minimax" | "zhipu" | "compatible";
@@ -107,7 +109,9 @@ function shouldContinueLoop(state: LoopState): boolean {
 }
 
 /** 基础 system prompt — AI 自主执行引擎 */
-const BASE_SYSTEM_PROMPT = `你是一个自主执行任务的 AI Agent。
+function getBaseSystemPrompt(): string {
+  if (i18n.language.startsWith("zh")) {
+    return `你是一个自主执行任务的 AI Agent。
 
 重要规则：
 1. 收到任务后直接执行，不要只描述步骤
@@ -121,6 +125,22 @@ const BASE_SYSTEM_PROMPT = `你是一个自主执行任务的 AI Agent。
 3. 每次回复只调用一个工具
 4. 工具执行后根据结果继续下一步
 5. 全部完成后告诉用户结果`;
+  }
+  return `You are an autonomous AI Agent that executes tasks directly.
+
+Important rules:
+1. Execute tasks immediately upon receiving them — do not just describe steps
+2. Use JSON code blocks to call tools:
+\`\`\`json
+{"tool": "bash", "args": {"command": "mkdir -p /tmp/test"}}
+\`\`\`
+\`\`\`json
+{"tool": "file_write", "args": {"path": "/tmp/test/index.html", "content": "HTML content (use \\n for newlines)"}}
+\`\`\`
+3. Call only one tool per response
+4. After tool execution, continue with the next step based on results
+5. When all steps are complete, report the results to the user`;
+}
 
 /** 模型上下文窗口限制（tokens） */
 const MODEL_TOKEN_LIMITS: Record<string, number> = {
@@ -222,8 +242,9 @@ function autoCompactMessages(
     }
   }
 
+  const toolList = [...new Set(toolSummaries)].join(", ");
   const summaryLine = toolSummaries.length > 0
-    ? `（涉及工具：${[...new Set(toolSummaries)].join(", ")}）`
+    ? (i18n.language.startsWith("zh") ? `（涉及工具：${toolList}）` : ` (tools involved: ${toolList})`)
     : "";
 
   tokenState.compactCount++;
@@ -232,7 +253,9 @@ function autoCompactMessages(
     sys,
     {
       role: "user",
-      content: `[系统: 已压缩 ${removed} 条消息，保留关键上下文]${summaryLine}`,
+      content: i18n.language.startsWith("zh")
+        ? `[系统: 已压缩 ${removed} 条消息，保留关键上下文]${summaryLine}`
+        : `[System: Compacted ${removed} messages, key context retained]${summaryLine}`,
     },
     ...recent,
   );
@@ -294,7 +317,11 @@ export interface PromptParts {
 function buildIdentityPart(): string {
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-  return BASE_SYSTEM_PROMPT + `\n\n今天的日期是 ${dateStr}。当用户要求搜索新闻或最新信息时，不要在搜索词里加年份数字，直接搜索主题关键词即可。`;
+  const isZh = i18n.language.startsWith("zh");
+  const dateLine = isZh
+    ? `今天的日期是 ${dateStr}。当用户要求搜索新闻或最新信息时，不要在搜索词里加年份数字，直接搜索主题关键词即可。`
+    : `Today's date is ${dateStr}. When the user asks to search for news or latest information, do not include year numbers in search keywords — just search for the topic directly.`;
+  return getBaseSystemPrompt() + `\n\n${dateLine}`;
 }
 
 /** 构建 tools 部分 — 从 tool-registry 动态获取 */
@@ -302,9 +329,11 @@ async function buildToolsPart(): Promise<string> {
   try {
     const { getAllTools } = await import("./tool-registry");
     const toolNames = getAllTools().map(t => t.name);
-    return `可用工具：${toolNames.join(", ")}`;
+    const label = i18n.language.startsWith("zh") ? "可用工具" : "Available tools";
+    return `${label}：${toolNames.join(", ")}`;
   } catch {
-    return `可用工具：bash, file_write, file_read, file_edit, list_dir, web_search, web_fetch, grep, glob, browser_open, todo_write, memory_write, memory_read, diff_view, undo, project_detect`;
+    const label = i18n.language.startsWith("zh") ? "可用工具" : "Available tools";
+    return `${label}：bash, file_write, file_read, file_edit, list_dir, web_search, web_fetch, grep, glob, browser_open, todo_write, memory_write, memory_read, diff_view, undo, project_detect`;
   }
 }
 
@@ -314,7 +343,10 @@ async function buildContextPart(): Promise<string> {
   const sections: string[] = [];
 
   if (config.workDir) {
-    sections.push(`当前工作目录: ${config.workDir}\n所有文件操作和 bash 命令默认在此目录下执行。创建新项目时请在此目录下创建子目录。`);
+    const isZh = i18n.language.startsWith("zh");
+    sections.push(isZh
+      ? `当前工作目录: ${config.workDir}\n所有文件操作和 bash 命令默认在此目录下执行。创建新项目时请在此目录下创建子目录。`
+      : `Current working directory: ${config.workDir}\nAll file operations and bash commands run in this directory by default. Create subdirectories here for new projects.`);
   }
 
   if (config.workDir) {
@@ -324,18 +356,19 @@ async function buildContextPart(): Promise<string> {
       if (pkgResult) {
         try {
           const pkg = JSON.parse(pkgResult) as { name?: string; description?: string; scripts?: Record<string, string> };
+          const isZh = i18n.language.startsWith("zh");
           const parts: string[] = [];
-          if (pkg.name) parts.push(`项目: ${pkg.name}`);
-          if (pkg.description) parts.push(`描述: ${pkg.description}`);
-          if (pkg.scripts) parts.push(`可用脚本: ${Object.keys(pkg.scripts).join(", ")}`);
-          if (parts.length > 0) sections.push(`## 项目上下文\n${parts.join("\n")}`);
+          if (pkg.name) parts.push(`${isZh ? "项目" : "Project"}: ${pkg.name}`);
+          if (pkg.description) parts.push(`${isZh ? "描述" : "Description"}: ${pkg.description}`);
+          if (pkg.scripts) parts.push(`${isZh ? "可用脚本" : "Available scripts"}: ${Object.keys(pkg.scripts).join(", ")}`);
+          if (parts.length > 0) sections.push(`## ${isZh ? "项目上下文" : "Project Context"}\n${parts.join("\n")}`);
         } catch { /* JSON 解析失败，跳过 */ }
       }
       const agentsResult = await executeTool("file_read", { path: `${config.workDir}/AGENTS.md` }).catch(() => "");
       if (agentsResult && agentsResult.length < 2000) {
-        sections.push(`## 项目规范 (AGENTS.md)\n${agentsResult}`);
+        sections.push(`## ${i18n.language.startsWith("zh") ? "项目规范" : "Project Standards"} (AGENTS.md)\n${agentsResult}`);
       } else if (agentsResult) {
-        sections.push(`## 项目规范 (AGENTS.md, 摘要)\n${agentsResult.slice(0, 1500)}...`);
+        sections.push(`## ${i18n.language.startsWith("zh") ? "项目规范" : "Project Standards"} (AGENTS.md, ${i18n.language.startsWith("zh") ? "摘要" : "summary"})\n${agentsResult.slice(0, 1500)}...`);
       }
     } catch { /* 文件读取失败，跳过 */ }
   }
@@ -346,9 +379,10 @@ async function buildContextPart(): Promise<string> {
     if (todoRaw) {
       const todo = JSON.parse(todoRaw) as { title?: string; steps?: string[] };
       if (todo.title) {
-        let taskSection = `## 当前任务\n标题: ${todo.title}`;
+        const isZh = i18n.language.startsWith("zh");
+        let taskSection = `## ${isZh ? "当前任务" : "Current Task"}\n${isZh ? "标题" : "Title"}: ${todo.title}`;
         if (todo.steps?.length) {
-          taskSection += `\n步骤:\n${todo.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}`;
+          taskSection += `\n${isZh ? "步骤" : "Steps"}:\n${todo.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}`;
         }
         sections.push(taskSection);
       }
@@ -374,17 +408,18 @@ async function buildMemoryPart(): Promise<string> {
   // Fallback: legacy memory layers
   if (sections.length === 0) {
     const shortTerm = _getShortTermSummary();
+    const isZh = i18n.language.startsWith("zh");
     if (shortTerm) {
-      sections.push(`## 当前会话上下文（短期记忆）\n${shortTerm}`);
+      sections.push(`## ${isZh ? "当前会话上下文（短期记忆）" : "Current Session Context (Short-term Memory)"}\n${shortTerm}`);
     }
 
     if (_cachedMidTermPrompt) {
-      sections.push(`## 用户偏好与习惯（中期记忆）\n${_cachedMidTermPrompt}`);
+      sections.push(`## ${isZh ? "用户偏好与习惯（中期记忆）" : "User Preferences & Habits (Mid-term Memory)"}\n${_cachedMidTermPrompt}`);
     }
 
     const longTerm = _getLongTermMemory();
     if (longTerm) {
-      sections.push(`## 长期记忆\n${longTerm}`);
+      sections.push(`## ${isZh ? "长期记忆" : "Long-term Memory"}\n${longTerm}`);
     }
   }
 
@@ -393,7 +428,7 @@ async function buildMemoryPart(): Promise<string> {
     const { memoryStore } = await import("./memory-store");
     const storeSection = await memoryStore.buildPromptSection();
     if (storeSection) {
-      sections.push(`## 跨会话记忆\n${storeSection}`);
+      sections.push(`## ${i18n.language.startsWith("zh") ? "跨会话记忆" : "Cross-session Memory"}\n${storeSection}`);
     }
   } catch { /* memory-store not available */ }
 
@@ -515,19 +550,20 @@ export async function sendMessage(
     emitBusEvent({ type: "user_message", text: message });
 
     // 秘书意图分析 — 决定消息路由策略
-    const intent = skipWorkerDispatch ? { type: "chat" as const, workers: [] as string[], plan: "直连对话" } : analyzeIntent(message);
+    const intent = skipWorkerDispatch ? { type: "chat" as const, workers: [] as string[], plan: i18n.language.startsWith("zh") ? "直连对话" : "Direct chat" } : analyzeIntent(message);
 
     // Emit intent_analysis event for event log
     emitBusEvent({ type: "intent_analysis", intentType: intent.type, workers: intent.workers, plan: intent.plan });
 
     const watchdogState = getWatchdogState();
     if (watchdogState.isDegraded) {
-      onEvent({ type: "thinking", text: `⚠️ 降级模式：${watchdogState.currentProvider}/${watchdogState.currentModel}\n` });
+      const isZh = i18n.language.startsWith("zh");
+      onEvent({ type: "thinking", text: `⚠️ ${isZh ? "降级模式" : "Degraded mode"}：${watchdogState.currentProvider}/${watchdogState.currentModel}\n` });
     }
 
     if (intent.type === "task" && intent.workers.length === 1) {
       // 单步任务 — 派发给对应 Worker
-      onEvent({ type: "thinking", text: `🎯 秘书识别为任务型消息，派发给 ${intent.workers[0]}\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 秘书识别为任务型消息，派发给 ${intent.workers[0]}\n` : `🎯 Secretary identified task, dispatching to ${intent.workers[0]}\n` });
       await watchdogWrap(
         async (provider, model) => {
           const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
@@ -537,17 +573,17 @@ export async function sendMessage(
           provider: config.provider,
           model: config.model,
           onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 自动降级：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
           },
           onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 尝试恢复：${p}/${m}\n` });
+            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
             markRecovered();
           },
         },
       );
     } else if (intent.type === "multi_step") {
       // 多步骤任务 — 编排多个 Worker 协作
-      onEvent({ type: "thinking", text: `📋 秘书识别为多步骤任务: ${intent.plan}\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `📋 秘书识别为多步骤任务: ${intent.plan}\n` : `📋 Secretary identified multi-step task: ${intent.plan}\n` });
       await watchdogWrap(
         async (provider, model) => {
           const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
@@ -557,10 +593,10 @@ export async function sendMessage(
           provider: config.provider,
           model: config.model,
           onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 自动降级：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
           },
           onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 尝试恢复：${p}/${m}\n` });
+            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
             markRecovered();
           },
         },
@@ -585,10 +621,10 @@ export async function sendMessage(
           provider: config.provider,
           model: config.model,
           onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 自动降级：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
           },
           onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 尝试恢复：${p}/${m}\n` });
+            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
             markRecovered();
           },
         },
@@ -605,7 +641,7 @@ export async function sendMessage(
 
     // Don't emit error for user-initiated aborts
     if (classified.category === 'ABORT') {
-      onEvent({ type: "result", text: "⏹ 已停止" });
+      onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "⏹ 已停止" : "⏹ Stopped" });
     } else {
       onEvent({ type: "error", text: formatClassifiedError(classified) });
     }
@@ -681,11 +717,11 @@ async function callAnthropic(
 
   // ── Main loop: run until phase != continue/tool_executed ──
   while (loop.phase === 'continue' || loop.phase === 'tool_executed') {
-    if (signal.aborted) { loop.phase = 'done'; onEvent({ type: "result", text: "⏹ 已停止" }); break; }
+    if (signal.aborted) { loop.phase = 'done'; onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "⏹ 已停止" : "⏹ Stopped" }); break; }
     loop.turnCount++;
 
     if (loop.turnCount > 1) {
-      onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount} 轮\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `\n🔄 第 ${loop.turnCount} 轮\n` : `\n🔄 Round ${loop.turnCount}\n` });
     }
 
     // ── Check cache ──
@@ -695,7 +731,7 @@ async function callAnthropic(
     })));
     const cached = getCached<{ content: AnthropicContentBlock[]; usage?: Record<string, number> }>(cacheKey);
     if (cached) {
-      onEvent({ type: "thinking", text: "📦 命中缓存\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "📦 命中缓存\n" : "📦 Cache hit\n" });
       const hasToolUse = cached.content.some(b => b.type === "tool_use");
       if (hasToolUse) {
         const toolNames = await processAnthropicToolBlocks(cached.content, loop.messages, executeTool, onEvent, signal);
@@ -708,14 +744,14 @@ async function callAnthropic(
       break;
     }
 
-    // ── API call with per-turn timeout ──
+    // ── API call with per-turn timeout (streaming enabled) ──
     const body: Record<string, unknown> = {
       model: config.model || "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: systemBlocks,
       messages: loop.messages,
       tools: anthropicTools,
-      stream: false,
+      stream: true,
     };
 
     const turnAbort = new AbortController();
@@ -741,14 +777,13 @@ async function callAnthropic(
     } catch (fetchErr) {
       clearTimeout(turnTimer);
       if (turnAbort.signal.aborted && !signal.aborted) {
-        // Turn timeout (not user abort)
         const { classifyError, formatClassifiedError } = await import("./error-classifier");
         const classified = classifyError({ error: new Error("Request timeout"), providerName: "anthropic", baseUrl: baseURL, model: config.model });
         onEvent({ type: "error", text: formatClassifiedError(classified) });
         loop.phase = 'error';
         break;
       }
-      throw fetchErr; // Re-throw for outer handler
+      throw fetchErr;
     }
     clearTimeout(turnTimer);
 
@@ -761,32 +796,105 @@ async function callAnthropic(
         baseUrl: baseURL,
         model: config.model,
       });
-      // Retryable errors: attempt one more time
       if (classified.retryable && loop.turnCount <= 2) {
-        onEvent({ type: "thinking", text: `⚠️ ${classified.userMessage}，正在重试...\n` });
+        onEvent({ type: "thinking", text: `⚠️ ${classified.userMessage}\n` });
         await new Promise(r => setTimeout(r, 2000));
         continue;
       }
       throw new Error(formatClassifiedError(classified));
     }
 
-    const data = await response.json() as {
-      content: AnthropicContentBlock[];
-      stop_reason: string;
-      usage?: { input_tokens?: number; output_tokens?: number };
-    };
+    // ── Parse SSE stream and accumulate content blocks ──
+    const content: AnthropicContentBlock[] = [];
+    let stopReason = "end_turn";
+    let usageData: { input_tokens?: number; output_tokens?: number } | undefined;
+    // Track current content block being streamed
+    let currentBlockIndex = -1;
+    let currentToolId = "";
+    let currentToolName = "";
+    let currentToolJson = "";
+
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      let sseBuffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (signal.aborted) { loop.phase = 'done'; break; }
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(raw);
+            switch (evt.type) {
+              case "content_block_start":
+                currentBlockIndex = evt.index ?? content.length;
+                if (evt.content_block?.type === "text") {
+                  content[currentBlockIndex] = { type: "text", text: "" };
+                } else if (evt.content_block?.type === "tool_use") {
+                  currentToolId = evt.content_block.id || "";
+                  currentToolName = evt.content_block.name || "";
+                  currentToolJson = "";
+                  content[currentBlockIndex] = {
+                    type: "tool_use", id: currentToolId,
+                    name: currentToolName, input: {},
+                  } as AnthropicToolUseBlock;
+                } else if (evt.content_block?.type === "thinking") {
+                  content[currentBlockIndex] = { type: "thinking", thinking: "" } as AnthropicThinkingBlock;
+                }
+                break;
+              case "content_block_delta":
+                if (evt.delta?.type === "text_delta" && evt.delta.text) {
+                  const block = content[currentBlockIndex];
+                  if (block?.type === "text") {
+                    (block as AnthropicTextBlock).text += evt.delta.text;
+                    onEvent({ type: "text", text: evt.delta.text });
+                  }
+                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
+                  currentToolJson += evt.delta.partial_json;
+                } else if (evt.delta?.type === "thinking_delta" && evt.delta.thinking) {
+                  const block = content[currentBlockIndex];
+                  if (block?.type === "thinking") {
+                    (block as AnthropicThinkingBlock).thinking += evt.delta.thinking;
+                  }
+                }
+                break;
+              case "content_block_stop":
+                if (content[currentBlockIndex]?.type === "tool_use" && currentToolJson) {
+                  try {
+                    (content[currentBlockIndex] as AnthropicToolUseBlock).input = JSON.parse(currentToolJson);
+                  } catch { /* partial JSON */ }
+                  currentToolJson = "";
+                }
+                break;
+              case "message_delta":
+                if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason;
+                if (evt.usage) usageData = { ...usageData, ...evt.usage };
+                break;
+              case "message_start":
+                if (evt.message?.usage) usageData = evt.message.usage;
+                break;
+            }
+          } catch { /* skip unparseable SSE */ }
+        }
+      }
+    }
 
     // ── Usage tracking ──
-    if (data.usage) {
+    if (usageData) {
       const { recordUsage } = await import("./cost-tracker");
       const record = recordUsage(config.model || "unknown", config.model || "unknown", {
-        prompt_tokens: data.usage.input_tokens,
-        completion_tokens: data.usage.output_tokens,
+        prompt_tokens: usageData.input_tokens,
+        completion_tokens: usageData.output_tokens,
       });
       if (record) onEvent({ type: "thinking", text: `💰 ${record.inputTokens}+${record.outputTokens} tokens ≈ $${record.estimatedCost.toFixed(4)}\n` });
     }
 
-    const content = data.content;
     const hasToolUse = content.some(b => b.type === "tool_use");
 
     // Cache tool call rounds
@@ -820,7 +928,7 @@ async function callAnthropic(
       await new Promise(r => setTimeout(r, 8));
     }
     if (loop.toolCallCount > 0) {
-      onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
+      onEvent({ type: "text", text: i18n.language.startsWith("zh") ? `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` : `\n\n---\n📊 ${loop.toolCallCount} tool calls, ${loop.turnCount} rounds` });
     }
     onEvent({ type: "result", text: loop.lastText });
   } else if (loop.phase === 'done') {
@@ -834,7 +942,7 @@ async function callAnthropic(
       onEvent({ type: "text", text: summary });
       onEvent({ type: "result", text: summary });
     } else {
-      onEvent({ type: "result", text: "工具调用完成" });
+      onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "工具调用完成" : "Tool calls complete" });
     }
   }
 
@@ -942,7 +1050,7 @@ async function callGemini(
   // messages → Gemini contents 格式
   const contents: Array<{ role: string; parts: Array<{ text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: { result: string } } }> }> = [
     { role: "user", parts: [{ text: systemPrompt }] },
-    { role: "model", parts: [{ text: "好的，我准备好执行任务了。" }] },
+    { role: "model", parts: [{ text: i18n.language.startsWith("zh") ? "好的，我准备好执行任务了。" : "OK, I'm ready to execute tasks." }] },
     ...(history || []).map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -955,10 +1063,10 @@ async function callGemini(
   let totalToolCalls = 0;
 
   while (iteration < MAX_ITERATIONS) {
-    if (signal.aborted) { onEvent({ type: "result", text: "⏹ 已停止" }); return; }
+    if (signal.aborted) { onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "⏹ 已停止" : "⏹ Stopped" }); return; }
     iteration++;
 
-    if (iteration > 1) onEvent({ type: "thinking", text: `\n🔄 Gemini 第 ${iteration}/${MAX_ITERATIONS} 轮\n` });
+    if (iteration > 1) onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `\n🔄 Gemini 第 ${iteration}/${MAX_ITERATIONS} 轮\n` : `\n🔄 Gemini round ${iteration}/${MAX_ITERATIONS}\n` });
 
     const response = await fetchWithRetry(
       `${baseURL}/v1beta/models/${model}:generateContent?key=${config.apiKey}`,
@@ -1038,7 +1146,7 @@ async function callGemini(
 
       contents.push({ role: "user", parts: responseParts as typeof contents[0]["parts"] });
       if (totalToolCalls >= 3) {
-        onEvent({ type: "result", text: "\u5de5\u5177\u8c03\u7528\u5b8c\u6210" });
+        onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "工具调用完成" : "Tool calls complete" });
         break;
       }
       continue;
@@ -1054,13 +1162,13 @@ async function callGemini(
       }
     }
 
-    if (totalToolCalls > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${totalToolCalls} 次工具调用，${iteration} 轮` });
+    if (totalToolCalls > 0) onEvent({ type: "text", text: i18n.language.startsWith("zh") ? `\n\n---\n📊 ${totalToolCalls} 次工具调用，${iteration} 轮` : `\n\n---\n📊 ${totalToolCalls} tool calls, ${iteration} rounds` });
     onEvent({ type: "result", text: fullText });
     currentAbortController = null;
     return;
   }
 
-  onEvent({ type: "error", text: `⚠️ Gemini 达到 ${MAX_ITERATIONS} 轮上限` });
+  onEvent({ type: "error", text: i18n.language.startsWith("zh") ? `⚠️ Gemini 达到 ${MAX_ITERATIONS} 轮上限` : `⚠️ Gemini reached ${MAX_ITERATIONS} round limit` });
   currentAbortController = null;
 }
 
@@ -1096,7 +1204,7 @@ async function _callOpenAINonStream(
   const noTools = config.enableTools === false;
 
   const systemPrompt = noTools
-    ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
+    ? (i18n.language.startsWith("zh") ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。" : "You are a helpful AI assistant. Answer the user's questions directly in natural language. If the user asks to search or find information, do your best to answer using your own knowledge.")
     : await buildSystemPrompt({ skipTools: config.provider === "compatible", userMessage: message });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
@@ -1126,12 +1234,12 @@ async function _callOpenAINonStream(
 
     // 智能 auto-compact：基于 token 使用量
     if (shouldAutoCompact(tokenState, config.model)) {
-      onEvent({ type: "thinking", text: "⚠️ Token 接近上限，自动压缩中...\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "⚠️ Token 接近上限，自动压缩中...\n" : "⚠️ Token limit approaching, auto-compacting...\n" });
       autoCompactMessages(loop.messages, tokenState);
-      onEvent({ type: "thinking", text: `📦 已压缩，当前 ${loop.messages.length} 条消息\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `📦 已压缩，当前 ${loop.messages.length} 条消息\n` : `📦 Compacted, ${loop.messages.length} messages remaining\n` });
     }
 
-    if (loop.turnCount > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` });
+    if (loop.turnCount > 1) onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` : `\n🔄 Round ${loop.turnCount}/${loop.maxTurns}\n` });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -1158,7 +1266,7 @@ async function _callOpenAINonStream(
       if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
       // Error Recovery: 不 throw，设 api_error + 展示已有结果
       const errMsg = e instanceof Error ? e.message : String(e);
-      onEvent({ type: "error", text: `⚠️ API 请求失败: ${errMsg.slice(0, 200)}` });
+      onEvent({ type: "error", text: i18n.language.startsWith("zh") ? `⚠️ API 请求失败: ${errMsg.slice(0, 200)}` : `⚠️ API request failed: ${errMsg.slice(0, 200)}` });
       loop.transitionReason = 'api_error';
       break;
     }
@@ -1182,7 +1290,7 @@ async function _callOpenAINonStream(
 
     const choice = data.choices?.[0];
     if (!choice) {
-      onEvent({ type: "error", text: "⚠️ API 无响应" });
+      onEvent({ type: "error", text: i18n.language.startsWith("zh") ? "⚠️ API 无响应" : "⚠️ No API response" });
       loop.transitionReason = 'api_error';
       break;
     }
@@ -1208,13 +1316,13 @@ async function _callOpenAINonStream(
           const result = await executeTool(fn.name, args);
           onEvent({ type: "thinking", text: `✅ ${fn.name}: ${result.slice(0, 120)}\n` });
           loop.messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
-          toolResults.push(`**${fn.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
+          toolResults.push(i18n.language.startsWith("zh") ? `**${fn.name}** 执行完成：\n\n${result.slice(0, 3000)}` : `**${fn.name}** completed:\n\n${result.slice(0, 3000)}`);
           loop.lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${fn.name}: ${err}\n` });
           loop.messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
-          toolResults.push(`**${fn.name}** 执行失败：${err}`);
+          toolResults.push(i18n.language.startsWith("zh") ? `**${fn.name}** 执行失败：${err}` : `**${fn.name}** failed: ${err}`);
         }
       }
 
@@ -1243,15 +1351,15 @@ async function _callOpenAINonStream(
         const result = await executeTool(parsed.name, parsed.args);
         onEvent({ type: "thinking", text: `✅ ${parsed.name}: ${result.slice(0, 120)}\n` });
         loop.messages.push({ role: "assistant", content: text });
-        loop.messages.push({ role: "user", content: `工具结果:\n${result.slice(0, 15000)}\n\n继续执行。完成则总结。` });
+        loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? `工具结果:\n${result.slice(0, 15000)}\n\n继续执行。完成则总结。` : `Tool result:\n${result.slice(0, 15000)}\n\nContinue execution. Summarize when done.` });
       } catch (e) {
         loop.messages.push({ role: "assistant", content: text });
-        loop.messages.push({ role: "user", content: `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` });
+        loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? `工具失败: ${e instanceof Error ? e.message : String(e)}。换个方式继续。` : `Tool failed: ${e instanceof Error ? e.message : String(e)}. Try another approach.` });
       }
       // Compatible: output result immediately, no 2nd API call
       if (config.provider === "compatible") {
-        const toolMsgs = loop.messages.filter(m => m.role === "user" && m.content?.startsWith("工具结果:")).map(m => m.content?.replace("工具结果:\n", "").replace("\n\n继续执行。完成则总结。", "") || "");
-        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : "工具执行完成";
+        const toolMsgs = loop.messages.filter(m => m.role === "user" && (m.content?.startsWith("工具结果:") || m.content?.startsWith("Tool result:"))).map(m => m.content?.replace("工具结果:\n", "").replace("Tool result:\n", "").replace("\n\n继续执行。完成则总结。", "").replace("\n\nContinue execution. Summarize when done.", "") || "");
+        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : (i18n.language.startsWith("zh") ? "工具执行完成" : "Tool execution complete");
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
         loop.transitionReason = "done";
@@ -1267,9 +1375,9 @@ async function _callOpenAINonStream(
       onEvent({ type: "tool_use", toolName: "file_write", toolInput: autoSave.path });
       try {
         await executeTool("file_write", { path: autoSave.path, content: autoSave.content });
-        onEvent({ type: "thinking", text: `✅ 自动保存: ${autoSave.path}\n` });
+        onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `✅ 自动保存: ${autoSave.path}\n` : `✅ Auto-saved: ${autoSave.path}\n` });
         loop.messages.push({ role: "assistant", content: text });
-        loop.messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` : `File saved to ${autoSave.path}. Tell the user how to open it.` });
         loop.transitionReason = 'tool_executed';
         continue;
       } catch { /* 忽略 */ }
@@ -1277,9 +1385,9 @@ async function _callOpenAINonStream(
 
     const planning = /让我创建|我应该|接下来|我将|让我|我来|我需要|下一步|首先.*然后|步骤/;
     if (text && planning.test(text) && !text.includes("已完成") && !text.includes("已创建") && loop.turnCount < loop.maxTurns - 1) {
-      onEvent({ type: "thinking", text: "🔄 推动执行...\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "🔄 推动执行...\n" : "🔄 Pushing execution...\n" });
       loop.messages.push({ role: "assistant", content: text });
-      loop.messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" : "Don't plan, execute now! Use ```json {\"tool\": \"...\", \"args\": {...}} ``` to call tools." });
       loop.transitionReason = 'continue';
       continue;
     }
@@ -1293,7 +1401,7 @@ async function _callOpenAINonStream(
       }
     }
     if (msg.reasoning_content) onEvent({ type: "thinking", text: msg.reasoning_content });
-    if (loop.toolCallCount > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
+    if (loop.toolCallCount > 0) onEvent({ type: "text", text: i18n.language.startsWith("zh") ? `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` : `\n\n---\n📊 ${loop.toolCallCount} tool calls, ${loop.turnCount} rounds` });
     onEvent({ type: "result", text });
     loop.transitionReason = 'done';
     break;
@@ -1301,7 +1409,7 @@ async function _callOpenAINonStream(
 
   // ── 循环结束后处理 ──
   if (loop.transitionReason === 'aborted') {
-    onEvent({ type: "result", text: "⏹ 已停止" });
+    onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "⏹ 已停止" : "⏹ Stopped" });
     currentAbortController = null;
     return;
   }
@@ -1322,7 +1430,7 @@ async function _callOpenAINonStream(
       return;
     }
   }
-  onEvent({ type: "error", text: `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` });
+  onEvent({ type: "error", text: i18n.language.startsWith("zh") ? `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` : `⚠️ Reached ${loop.maxTurns} round limit. ${loop.toolCallCount} tool calls.` });
   currentAbortController = null;
 }
 
@@ -1392,7 +1500,7 @@ async function callOpenAI(
   const noTools = config.enableTools === false;
 
   const systemPrompt = noTools
-    ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。"
+    ? (i18n.language.startsWith("zh") ? "你是一个智能助手。直接回答用户的问题，用自然语言回复。如果用户要求搜索或查找信息，请利用你自己的知识尽力回答。" : "You are a helpful AI assistant. Answer the user's questions directly in natural language. If the user asks to search or find information, do your best to answer using your own knowledge.")
     : await buildSystemPrompt({ skipTools: config.provider === "compatible", userMessage: message });
   const messages: Array<{ role: string; content: string | null; tool_call_id?: string; tool_calls?: unknown[] }> = [
     { role: "system", content: systemPrompt },
@@ -1422,12 +1530,12 @@ async function callOpenAI(
 
     // 智能 auto-compact
     if (shouldAutoCompact(tokenState, config.model)) {
-      onEvent({ type: "thinking", text: "⚠️ Token 接近上限，自动压缩中..." });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "⚠️ Token 接近上限，自动压缩中..." : "⚠️ Token limit approaching, auto-compacting..." });
       autoCompactMessages(loop.messages, tokenState);
-      onEvent({ type: "thinking", text: `📦 第 ${tokenState.compactCount} 次压缩完成，保留 ${loop.messages.length} 条消息\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `📦 第 ${tokenState.compactCount} 次压缩完成，保留 ${loop.messages.length} 条消息\n` : `📦 Compaction #${tokenState.compactCount} done, ${loop.messages.length} messages retained\n` });
     }
 
-    if (loop.turnCount > 1) onEvent({ type: "thinking", text: `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` });
+    if (loop.turnCount > 1) onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `\n🔄 第 ${loop.turnCount}/${loop.maxTurns} 轮\n` : `\n🔄 Round ${loop.turnCount}/${loop.maxTurns}\n` });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -1454,7 +1562,7 @@ async function callOpenAI(
     } catch (e) {
       if (signal.aborted) { loop.transitionReason = 'aborted'; break; }
       // 流式失败 → 降级到非流式
-      onEvent({ type: "thinking", text: "⚠️ SSE 流式连接失败，降级为非流式\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "⚠️ SSE 流式连接失败，降级为非流式\n" : "⚠️ SSE stream connection failed, falling back to non-streaming\n" });
       await _callOpenAINonStream(message, config, onEvent, conversationHistory);
       return;
     }
@@ -1462,7 +1570,7 @@ async function callOpenAI(
     if (!response.ok) {
       const err = await response.text();
       // Error Recovery: 流式 API 错误 → 降级到非流式
-      onEvent({ type: "thinking", text: `⚠️ 流式 API ${response.status}，降级为非流式\n` });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `⚠️ 流式 API ${response.status}，降级为非流式\n` : `⚠️ Streaming API ${response.status}, falling back to non-streaming\n` });
       try {
         await _callOpenAINonStream(message, config, onEvent, conversationHistory);
         return;
@@ -1476,7 +1584,7 @@ async function callOpenAI(
 
     if (!response.body) {
       // Error Recovery: 无 ReadableStream → 降级为非流式
-      onEvent({ type: "thinking", text: "⚠️ 无 ReadableStream，降级为非流式\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "⚠️ 无 ReadableStream，降级为非流式\n" : "⚠️ No ReadableStream, falling back to non-streaming\n" });
       try {
         await _callOpenAINonStream(message, config, onEvent, conversationHistory);
         return;
@@ -1533,7 +1641,7 @@ async function callOpenAI(
           const limit = getModelTokenLimit(config.model);
           const used = tokenState.lastPromptTokens + (chunk.usage.completion_tokens ?? 0);
           if (used > limit * 0.7 && used <= limit * COMPACT_THRESHOLD_RATIO) {
-            onEvent({ type: "thinking", text: `⚠️ Token 使用已达 ${Math.round((used / limit) * 100)}%，接近上限\n` });
+            onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `⚠️ Token 使用已达 ${Math.round((used / limit) * 100)}%，接近上限\n` : `⚠️ Token usage at ${Math.round((used / limit) * 100)}%, approaching limit\n` });
           }
         }
 
@@ -1606,13 +1714,13 @@ async function callOpenAI(
           const result = await executeTool(tc.function.name, args);
           onEvent({ type: "thinking", text: `✅ ${tc.function.name}: ${result.slice(0, 120)}\n` });
           loop.messages.push({ role: "tool", content: result.slice(0, 15000), tool_call_id: tc.id });
-          streamToolResults.push(`**${tc.function.name}** 执行完成：\n\n${result.slice(0, 3000)}`);
+          streamToolResults.push(i18n.language.startsWith("zh") ? `**${tc.function.name}** 执行完成：\n\n${result.slice(0, 3000)}` : `**${tc.function.name}** completed:\n\n${result.slice(0, 3000)}`);
           loop.lastToolOutput = result.slice(0, 5000);
         } catch (e) {
           const err = e instanceof Error ? e.message : String(e);
           onEvent({ type: "thinking", text: `❌ ${tc.function.name}: ${err}\n` });
           loop.messages.push({ role: "tool", content: `Error: ${err}`, tool_call_id: tc.id });
-          streamToolResults.push(`**${tc.function.name}** 执行失败：${err}`);
+          streamToolResults.push(i18n.language.startsWith("zh") ? `**${tc.function.name}** 执行失败：${err}` : `**${tc.function.name}** failed: ${err}`);
         }
       }
 
@@ -1639,12 +1747,12 @@ async function callOpenAI(
       try {
         const result = await executeTool(parsed.name, parsed.args);
         onEvent({ type: "thinking", text: `✅ ${parsed.name}: ${result.slice(0, 120)}\n` });
-        const summary = `**${parsed.name}** 执行完成：\n\n${result.slice(0, 3000)}`;
+        const summary = i18n.language.startsWith("zh") ? `**${parsed.name}** 执行完成：\n\n${result.slice(0, 3000)}` : `**${parsed.name}** completed:\n\n${result.slice(0, 3000)}`;
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
-        const summary = `**${parsed.name}** 执行失败：${err}`;
+        const summary = i18n.language.startsWith("zh") ? `**${parsed.name}** 执行失败：${err}` : `**${parsed.name}** failed: ${err}`;
         onEvent({ type: "text", text: summary });
         onEvent({ type: "result", text: summary });
       }
@@ -1659,9 +1767,9 @@ async function callOpenAI(
       onEvent({ type: "tool_use", toolName: "file_write", toolInput: autoSave.path });
       try {
         await executeTool("file_write", { path: autoSave.path, content: autoSave.content });
-        onEvent({ type: "thinking", text: `✅ 自动保存: ${autoSave.path}\n` });
+        onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `✅ 自动保存: ${autoSave.path}\n` : `✅ Auto-saved: ${autoSave.path}\n` });
         loop.messages.push({ role: "assistant", content: fullText });
-        loop.messages.push({ role: "user", content: `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` });
+        loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? `文件已保存到 ${autoSave.path}。告诉用户怎么打开。` : `File saved to ${autoSave.path}. Tell the user how to open it.` });
         loop.transitionReason = 'tool_executed';
         continue;
       } catch { /* 忽略 */ }
@@ -1670,16 +1778,16 @@ async function callOpenAI(
     // 规划推动
     const planning = /让我创建|我应该|接下来|我将|让我|我来|我需要|下一步|首先.*然后|步骤/;
     if (fullText && planning.test(fullText) && !fullText.includes("已完成") && !fullText.includes("已创建") && loop.turnCount < loop.maxTurns - 1) {
-      onEvent({ type: "thinking", text: "🔄 推动执行...\n" });
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? "🔄 推动执行...\n" : "🔄 Pushing execution...\n" });
       loop.messages.push({ role: "assistant", content: fullText });
-      loop.messages.push({ role: "user", content: "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" });
+      loop.messages.push({ role: "user", content: i18n.language.startsWith("zh") ? "不要计划，立刻执行！用 ```json {\"tool\": \"...\", \"args\": {...}} ``` 调用工具。" : "Don't plan, execute now! Use ```json {\"tool\": \"...\", \"args\": {...}} ``` to call tools." });
       loop.transitionReason = 'continue';
       continue;
     }
 
     // 最终输出
     if (reasoningContent) onEvent({ type: "thinking", text: reasoningContent });
-    if (loop.toolCallCount > 0) onEvent({ type: "text", text: `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` });
+    if (loop.toolCallCount > 0) onEvent({ type: "text", text: i18n.language.startsWith("zh") ? `\n\n---\n📊 ${loop.toolCallCount} 次工具调用，${loop.turnCount} 轮` : `\n\n---\n📊 ${loop.toolCallCount} tool calls, ${loop.turnCount} rounds` });
     onEvent({ type: "result", text: fullText });
     loop.transitionReason = 'done';
     break;
@@ -1687,7 +1795,7 @@ async function callOpenAI(
 
   // ── 循环结束后处理 ──
   if (loop.transitionReason === 'aborted') {
-    onEvent({ type: "result", text: "⏹ 已停止" });
+    onEvent({ type: "result", text: i18n.language.startsWith("zh") ? "⏹ 已停止" : "⏹ Stopped" });
     currentAbortController = null;
     return;
   }
@@ -1714,7 +1822,7 @@ async function callOpenAI(
       return;
     }
   }
-  onEvent({ type: "error", text: `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` });
+  onEvent({ type: "error", text: i18n.language.startsWith("zh") ? `⚠️ 达到 ${loop.maxTurns} 轮上限。${loop.toolCallCount} 次工具调用。` : `⚠️ Reached ${loop.maxTurns} round limit. ${loop.toolCallCount} tool calls.` });
   currentAbortController = null;
 }
 
@@ -1879,7 +1987,7 @@ export async function validateApiKey(
 ): Promise<{ valid: boolean; error?: string }> {
   try {
     if (!config.apiKey) {
-      return { valid: false, error: "API Key 不能为空" };
+      return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 不能为空" : "API Key cannot be empty" };
     }
 
     // 10s timeout for validation
@@ -1913,10 +2021,10 @@ export async function validateApiKey(
     const msg = err instanceof Error ? err.message : String(err);
     const name = err instanceof Error ? err.name : "";
     if (name === "AbortError" || msg.includes("abort") || msg.includes("Abort")) {
-      return { valid: false, error: "验证超时（10s），请检查网络或代理设置" };
+      return { valid: false, error: i18n.language.startsWith("zh") ? "验证超时（10s），请检查网络或代理设置" : "Validation timed out (10s), check network or proxy settings" };
     }
     if (msg.includes("fetch") || msg.includes("network") || msg.includes("Failed") || msg.includes("TIMED_OUT")) {
-      return { valid: false, error: "网络连接失败，请检查网络或代理设置" };
+      return { valid: false, error: i18n.language.startsWith("zh") ? "网络连接失败，请检查网络或代理设置" : "Network connection failed, check network or proxy settings" };
     }
     return { valid: false, error: msg };
   }
@@ -1941,10 +2049,10 @@ async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Prom
   });
 
   if (resp.status === 401) {
-    return { valid: false, error: "API Key 无效（401 Unauthorized）" };
+    return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 无效（401 Unauthorized）" : "Invalid API Key (401 Unauthorized)" };
   }
   if (resp.status === 403) {
-    return { valid: false, error: "API Key 权限不足（403 Forbidden）" };
+    return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 权限不足（403 Forbidden）" : "Insufficient API Key permissions (403 Forbidden)" };
   }
   if (resp.status === 429) {
     // Rate limited but key is valid
@@ -1956,7 +2064,7 @@ async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Prom
     if (body.includes("model") || body.includes("overloaded")) {
       return { valid: true };
     }
-    return { valid: false, error: `API 错误 (${resp.status}): ${body.slice(0, 200)}` };
+    return { valid: false, error: i18n.language.startsWith("zh") ? `API 错误 (${resp.status}): ${body.slice(0, 200)}` : `API error (${resp.status}): ${body.slice(0, 200)}` };
   }
   return { valid: true };
 }
@@ -1972,17 +2080,17 @@ async function validateOpenAI(config: AgentConfig, signal: AbortSignal): Promise
   });
 
   if (resp.status === 401) {
-    return { valid: false, error: "API Key 无效（401 Unauthorized）" };
+    return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 无效（401 Unauthorized）" : "Invalid API Key (401 Unauthorized)" };
   }
   if (resp.status === 403) {
-    return { valid: false, error: "API Key 权限不足（403 Forbidden）" };
+    return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 权限不足（403 Forbidden）" : "Insufficient API Key permissions (403 Forbidden)" };
   }
   if (resp.status === 429) {
     return { valid: true };
   }
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
-    return { valid: false, error: `API 错误 (${resp.status}): ${body.slice(0, 200)}` };
+    return { valid: false, error: i18n.language.startsWith("zh") ? `API 错误 (${resp.status}): ${body.slice(0, 200)}` : `API error (${resp.status}): ${body.slice(0, 200)}` };
   }
   return { valid: true };
 }
@@ -1994,16 +2102,16 @@ async function validateGoogle(config: AgentConfig, signal: AbortSignal): Promise
   if (resp.status === 400 || resp.status === 403) {
     const body = await resp.text().catch(() => "");
     if (body.includes("API_KEY_INVALID") || body.includes("PERMISSION_DENIED")) {
-      return { valid: false, error: "API Key 无效" };
+      return { valid: false, error: i18n.language.startsWith("zh") ? "API Key 无效" : "Invalid API Key" };
     }
-    return { valid: false, error: `API 错误 (${resp.status}): ${body.slice(0, 200)}` };
+    return { valid: false, error: i18n.language.startsWith("zh") ? `API 错误 (${resp.status}): ${body.slice(0, 200)}` : `API error (${resp.status}): ${body.slice(0, 200)}` };
   }
   if (resp.status === 429) {
     return { valid: true };
   }
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
-    return { valid: false, error: `API 错误 (${resp.status}): ${body.slice(0, 200)}` };
+    return { valid: false, error: i18n.language.startsWith("zh") ? `API 错误 (${resp.status}): ${body.slice(0, 200)}` : `API error (${resp.status}): ${body.slice(0, 200)}` };
   }
   return { valid: true };
 }

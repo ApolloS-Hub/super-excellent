@@ -17,6 +17,9 @@ import {
   type ToolCategory,
   type PermissionLevel,
 } from "./tool-registry";
+import i18n from "../i18n";
+
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 // ═══════════ OpenAI Tool Definitions ═══════════
 
@@ -34,11 +37,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "web_search",
-      description: "搜索互联网获取最新信息。用于回答需要实时数据的问题。",
+      description: t("tools.webSearchDesc"),
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "搜索关键词" },
+          query: { type: "string", description: t("tools.webSearchQuery") },
         },
         required: ["query"],
       },
@@ -48,11 +51,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "web_fetch",
-      description: "获取指定 URL 的网页内容并提取主要文本。",
+      description: t("tools.webFetchDesc"),
       parameters: {
         type: "object",
         properties: {
-          url: { type: "string", description: "要获取的网页 URL" },
+          url: { type: "string", description: t("tools.webFetchUrl") },
         },
         required: ["url"],
       },
@@ -62,13 +65,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "bash",
-      description: "执行 shell 命令。可用于运行脚本、查看文件、安装包等。支持超时控制和输出截断。",
+      description: t("tools.bashDesc"),
       parameters: {
         type: "object",
         properties: {
-          command: { type: "string", description: "要执行的 shell 命令" },
-          timeout: { type: "number", description: "超时时间（秒），默认 120，最大 600" },
-          truncate_output: { type: "number", description: "输出最大字符数，超出则截断，默认 100000" },
+          command: { type: "string", description: t("tools.bashCommand") },
+          timeout: { type: "number", description: t("tools.bashTimeout") },
+          truncate_output: { type: "number", description: t("tools.bashTruncate") },
         },
         required: ["command"],
       },
@@ -78,13 +81,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "file_read",
-      description: "读取文件内容。",
+      description: t("tools.fileReadDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "文件路径" },
-          offset: { type: "number", description: "起始行号" },
-          limit: { type: "number", description: "读取行数" },
+          path: { type: "string", description: t("tools.filePath") },
+          offset: { type: "number", description: t("tools.fileReadOffset") },
+          limit: { type: "number", description: t("tools.fileReadLimit") },
         },
         required: ["path"],
       },
@@ -94,12 +97,12 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "file_write",
-      description: "写入文件内容（覆盖）。",
+      description: t("tools.fileWriteDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "文件路径" },
-          content: { type: "string", description: "要写入的内容" },
+          path: { type: "string", description: t("tools.filePath") },
+          content: { type: "string", description: t("tools.fileWriteContent") },
         },
         required: ["path", "content"],
       },
@@ -109,13 +112,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "file_edit",
-      description: "编辑文件中的指定文本（查找并替换）。",
+      description: t("tools.fileEditDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "文件路径" },
-          old_text: { type: "string", description: "要查找的原文本" },
-          new_text: { type: "string", description: "替换后的新文本" },
+          path: { type: "string", description: t("tools.filePath") },
+          old_text: { type: "string", description: t("tools.fileEditOldText") },
+          new_text: { type: "string", description: t("tools.fileEditNewText") },
         },
         required: ["path", "old_text", "new_text"],
       },
@@ -125,12 +128,12 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "glob",
-      description: "按模式匹配搜索文件路径。",
+      description: t("tools.globDesc"),
       parameters: {
         type: "object",
         properties: {
-          pattern: { type: "string", description: "glob 模式，如 **/*.ts" },
-          path: { type: "string", description: "搜索根目录" },
+          pattern: { type: "string", description: t("tools.globPattern") },
+          path: { type: "string", description: t("tools.searchRootDir") },
         },
         required: ["pattern"],
       },
@@ -140,13 +143,13 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "grep",
-      description: "在文件中搜索文本内容。",
+      description: t("tools.grepDesc"),
       parameters: {
         type: "object",
         properties: {
-          pattern: { type: "string", description: "搜索正则表达式" },
-          path: { type: "string", description: "搜索目录或文件" },
-          include: { type: "string", description: "文件名过滤模式" },
+          pattern: { type: "string", description: t("tools.grepPattern") },
+          path: { type: "string", description: t("tools.grepPath") },
+          include: { type: "string", description: t("tools.grepInclude") },
         },
         required: ["pattern"],
       },
@@ -156,11 +159,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "list_dir",
-      description: "列出目录内容。",
+      description: t("tools.listDirDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "目录路径" },
+          path: { type: "string", description: t("tools.dirPath") },
         },
         required: ["path"],
       },
@@ -170,11 +173,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "browser_open",
-      description: "在用户的默认浏览器中打开 URL。",
+      description: t("tools.browserOpenDesc"),
       parameters: {
         type: "object",
         properties: {
-          url: { type: "string", description: "要打开的 URL" },
+          url: { type: "string", description: t("tools.browserOpenUrl") },
         },
         required: ["url"],
       },
@@ -184,29 +187,29 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "todo_write",
-      description: "管理任务清单。创建、更新、标记完成 TODO 项目。支持优先级、依赖关系和状态流转。",
+      description: t("tools.todoWriteDesc"),
       parameters: {
         type: "object",
         properties: {
           action: {
             type: "string",
             enum: ["list", "add", "done", "remove", "clear", "update", "get"],
-            description: "操作类型",
+            description: t("tools.todoAction"),
           },
-          item: { type: "string", description: "TODO 内容（add/done/remove 时必填）" },
-          id: { type: "string", description: "任务 ID（update/get/done/remove 时可用）" },
-          priority: { type: "string", enum: ["high", "medium", "low"], description: "优先级，默认 medium" },
+          item: { type: "string", description: t("tools.todoItem") },
+          id: { type: "string", description: t("tools.todoId") },
+          priority: { type: "string", enum: ["high", "medium", "low"], description: t("tools.todoPriority") },
           status: {
             type: "string",
             enum: ["pending", "in_progress", "completed", "blocked"],
-            description: "状态（update 时可用）",
+            description: t("tools.todoStatus"),
           },
           blocked_by: {
             type: "array",
             items: { type: "string" },
-            description: "依赖的其他任务 ID 列表",
+            description: t("tools.todoBlockedBy"),
           },
-          description: { type: "string", description: "任务详细描述" },
+          description: { type: "string", description: t("tools.todoDescription") },
         },
         required: ["action"],
       },
@@ -216,11 +219,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "memory_write",
-      description: "保存用户偏好和重要信息到持久记忆。记住用户说的重要事情，下次对话时可以使用。",
+      description: t("tools.memoryWriteDesc"),
       parameters: {
         type: "object",
         properties: {
-          content: { type: "string", description: "要记住的内容" },
+          content: { type: "string", description: t("tools.memoryWriteContent") },
         },
         required: ["content"],
       },
@@ -230,7 +233,7 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "memory_read",
-      description: "读取用户的持久记忆，了解用户偏好和历史上下文。",
+      description: t("tools.memoryReadDesc"),
       parameters: { type: "object", properties: {} },
     },
   },
@@ -238,11 +241,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "diff_view",
-      description: "查看文件的修改历史和 diff。显示文件在本次会话中被如何修改。",
+      description: t("tools.diffViewDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "文件路径" },
+          path: { type: "string", description: t("tools.filePath") },
         },
         required: ["path"],
       },
@@ -252,11 +255,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "undo",
-      description: "撤销对文件的最近一次修改，恢复到修改前的内容。",
+      description: t("tools.undoDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "要撤销修改的文件路径" },
+          path: { type: "string", description: t("tools.undoPath") },
         },
         required: ["path"],
       },
@@ -266,11 +269,11 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "project_detect",
-      description: "检测并分析当前项目的类型、依赖、脚本等信息。",
+      description: t("tools.projectDetectDesc"),
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "项目根目录路径" },
+          path: { type: "string", description: t("tools.projectDetectPath") },
         },
         required: ["path"],
       },
@@ -280,17 +283,17 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "agent_spawn",
-      description: "派生子 agent 执行独立子任务。子 agent 有独立上下文，完成后返回结果摘要。适用于复杂的多步骤任务拆分。",
+      description: t("tools.agentSpawnDesc"),
       parameters: {
         type: "object",
         properties: {
-          prompt: { type: "string", description: "子 agent 的任务描述，需提供完整上下文" },
-          name: { type: "string", description: "子 agent 名称（1-2 个词，小写），用于显示" },
-          description: { type: "string", description: "子 agent 用途的简短描述（3-5 个词）" },
+          prompt: { type: "string", description: t("tools.agentSpawnPrompt") },
+          name: { type: "string", description: t("tools.agentSpawnName") },
+          description: { type: "string", description: t("tools.agentSpawnDescription") },
           allowed_tools: {
             type: "array",
             items: { type: "string" },
-            description: "允许子 agent 使用的工具列表，省略则允许全部",
+            description: t("tools.agentSpawnAllowedTools"),
           },
         },
         required: ["prompt"],
@@ -301,15 +304,15 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
     type: "function",
     function: {
       name: "notebook_edit",
-      description: "编辑 Jupyter notebook (.ipynb) 的单元格。支持替换、插入、删除单元格。",
+      description: t("tools.notebookEditDesc"),
       parameters: {
         type: "object",
         properties: {
-          notebook_path: { type: "string", description: "notebook 文件的绝对路径" },
-          cell_id: { type: "string", description: "要编辑的单元格 ID。插入模式时新单元格插入到此 ID 之后" },
-          new_source: { type: "string", description: "单元格的新内容" },
-          cell_type: { type: "string", enum: ["code", "markdown"], description: "单元格类型" },
-          edit_mode: { type: "string", enum: ["replace", "insert", "delete"], description: "编辑模式，默认 replace" },
+          notebook_path: { type: "string", description: t("tools.notebookEditPath") },
+          cell_id: { type: "string", description: t("tools.notebookEditCellId") },
+          new_source: { type: "string", description: t("tools.notebookEditNewSource") },
+          cell_type: { type: "string", enum: ["code", "markdown"], description: t("tools.notebookEditCellType") },
+          edit_mode: { type: "string", enum: ["replace", "insert", "delete"], description: t("tools.notebookEditMode") },
         },
         required: ["notebook_path", "new_source"],
       },
@@ -359,7 +362,7 @@ const PRIORITY_ICONS: Record<TaskPriority, string> = { high: "🔴", medium: "�
 const STATUS_ICONS: Record<TaskStatus, string> = { pending: "⬜", in_progress: "🔄", completed: "✅", blocked: "🚫" };
 
 function resolveBlockedTasks(): void {
-  const completedIds = new Set(taskList.filter(t => t.status === "completed").map(t => t.id));
+  const completedIds = new Set(taskList.filter(tk => tk.status === "completed").map(tk => tk.id));
   for (const task of taskList) {
     if (task.status === "blocked" && task.blockedBy.every(id => completedIds.has(id))) {
       task.status = "pending";
@@ -378,79 +381,79 @@ function executeTodoTool(args: Record<string, unknown>): string {
 
   switch (action) {
     case "add": {
-      if (!item) return "❌ 请提供任务内容";
+      if (!item) return `❌ ${t("tools.todoProvideContent")}`;
       const id = generateTaskId();
       const status: TaskStatus = blockedBy.length > 0 ? "blocked" : "pending";
       taskList.push({
         id, subject: item, description, priority, status,
         blockedBy, createdAt: Date.now(), updatedAt: Date.now(),
       });
-      return `✅ 创建任务 [${id}]: ${item}\n\n${formatTodoList()}`;
+      return `✅ ${t("tools.todoCreated", { id, item })}\n\n${formatTodoList()}`;
     }
     case "done": {
       const target = taskId
-        ? taskList.find(t => t.id === taskId)
-        : taskList.find(t => t.subject.includes(item) && t.status !== "completed");
-      if (!target) return `❌ 未找到匹配的未完成任务: ${taskId || item}`;
+        ? taskList.find(tk => tk.id === taskId)
+        : taskList.find(tk => tk.subject.includes(item) && tk.status !== "completed");
+      if (!target) return `❌ ${t("tools.todoNotFoundIncomplete", { query: taskId || item })}`;
       target.status = "completed";
       target.updatedAt = Date.now();
       resolveBlockedTasks();
-      return `✅ 完成: [${target.id}] ${target.subject}\n\n${formatTodoList()}`;
+      return `✅ ${t("tools.todoDone", { id: target.id, subject: target.subject })}\n\n${formatTodoList()}`;
     }
     case "update": {
-      const t = taskList.find(tk => tk.id === taskId);
-      if (!t) return `❌ 未找到任务: ${taskId}`;
-      if (args.status) t.status = args.status as TaskStatus;
-      if (args.priority) t.priority = args.priority as TaskPriority;
-      if (item) t.subject = item;
-      if (description) t.description = description;
-      if (blockedBy.length > 0) t.blockedBy = blockedBy;
-      t.updatedAt = Date.now();
+      const task = taskList.find(tk => tk.id === taskId);
+      if (!task) return `❌ ${t("tools.todoNotFound", { id: taskId })}`;
+      if (args.status) task.status = args.status as TaskStatus;
+      if (args.priority) task.priority = args.priority as TaskPriority;
+      if (item) task.subject = item;
+      if (description) task.description = description;
+      if (blockedBy.length > 0) task.blockedBy = blockedBy;
+      task.updatedAt = Date.now();
       resolveBlockedTasks();
-      return `✅ 已更新任务 [${t.id}]\n\n${formatTodoList()}`;
+      return `✅ ${t("tools.todoUpdated", { id: task.id })}\n\n${formatTodoList()}`;
     }
     case "get": {
       const found = taskList.find(tk => tk.id === taskId);
-      if (!found) return `❌ 未找到任务: ${taskId}`;
+      if (!found) return `❌ ${t("tools.todoNotFound", { id: taskId })}`;
       return formatTaskDetail(found);
     }
     case "remove": {
       const before = taskList.length;
-      taskList = taskList.filter(t =>
-        taskId ? t.id !== taskId : !t.subject.includes(item),
+      taskList = taskList.filter(tk =>
+        taskId ? tk.id !== taskId : !tk.subject.includes(item),
       );
       resolveBlockedTasks();
-      return `✅ 删除了 ${before - taskList.length} 项\n\n${formatTodoList()}`;
+      return `✅ ${t("tools.todoRemoved", { count: before - taskList.length })}\n\n${formatTodoList()}`;
     }
     case "clear":
       taskList = [];
       taskIdCounter = 1;
-      return "✅ 清单已清空";
+      return `✅ ${t("tools.todoCleared")}`;
     case "list":
     default:
       return formatTodoList();
   }
 }
 
-function formatTaskDetail(t: Task): string {
-  const deps = t.blockedBy.length > 0 ? `\n  依赖: ${t.blockedBy.join(", ")}` : "";
-  const desc = t.description ? `\n  描述: ${t.description}` : "";
-  return `📌 [${t.id}] ${t.subject}\n  状态: ${STATUS_ICONS[t.status]} ${t.status} | 优先级: ${PRIORITY_ICONS[t.priority]} ${t.priority}${deps}${desc}\n  创建: ${new Date(t.createdAt).toLocaleString()} | 更新: ${new Date(t.updatedAt).toLocaleString()}`;
+function formatTaskDetail(task: Task): string {
+  const deps = task.blockedBy.length > 0 ? `\n  ${t("tools.taskDependsOn")}: ${task.blockedBy.join(", ")}` : "";
+  const desc = task.description ? `\n  ${t("tools.taskDescription")}: ${task.description}` : "";
+  return `📌 [${task.id}] ${task.subject}\n  ${t("tools.taskStatusLabel")}: ${STATUS_ICONS[task.status]} ${task.status} | ${t("tools.taskPriorityLabel")}: ${PRIORITY_ICONS[task.priority]} ${task.priority}${deps}${desc}\n  ${t("tools.taskCreated")}: ${new Date(task.createdAt).toLocaleString()} | ${t("tools.taskUpdated")}: ${new Date(task.updatedAt).toLocaleString()}`;
 }
 
 function formatTodoList(): string {
-  if (taskList.length === 0) return "📋 清单为空";
-  const completed = taskList.filter(t => t.status === "completed").length;
+  if (taskList.length === 0) return `📋 ${t("tools.todoListEmpty")}`;
+  const completed = taskList.filter(tk => tk.status === "completed").length;
   const sorted = [...taskList].sort((a, b) => {
     const pOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
     const sOrder: Record<TaskStatus, number> = { in_progress: 0, pending: 1, blocked: 2, completed: 3 };
     const sd = sOrder[a.status] - sOrder[b.status];
     return sd !== 0 ? sd : pOrder[a.priority] - pOrder[b.priority];
   });
-  let out = `📋 任务清单 (${completed}/${taskList.length} 完成)\n`;
-  for (const t of sorted) {
-    const deps = t.blockedBy.length > 0 ? ` ⛓️[${t.blockedBy.join(",")}]` : "";
-    out += `${STATUS_ICONS[t.status]} ${PRIORITY_ICONS[t.priority]} [${t.id}] ${t.subject}${deps}\n`;
+  let out = `📋 ${t("tools.todoListTitle", { completed, total: taskList.length })}\n`;
+  for (const tk of sorted) {
+    const deps = tk.blockedBy.length > 0 ? ` ⛓️[${tk.blockedBy.join(",")}]` : "";
+    out += `${STATUS_ICONS[tk.status]} ${PRIORITY_ICONS[tk.priority]} [${tk.id}] ${tk.subject}${deps}\n`;
   }
   return out;
 }
@@ -471,12 +474,12 @@ function isDangerousCommand(command: string): boolean {
 }
 
 function getDangerDescription(command: string): string {
-  if (/rm\s/.test(command)) return "删除文件/目录";
-  if (/sudo/.test(command)) return "需要管理员权限";
-  if (/git\s+push.*(-f|--force)/.test(command)) return "强制推送 Git";
-  if (/DROP|DELETE|TRUNCATE/i.test(command)) return "数据库破坏性操作";
-  if (/curl.*\|\s*(sh|bash)/.test(command)) return "远程脚本执行";
-  return "潜在危险操作";
+  if (/rm\s/.test(command)) return t("tools.dangerDeleteFiles");
+  if (/sudo/.test(command)) return t("tools.dangerSudo");
+  if (/git\s+push.*(-f|--force)/.test(command)) return t("tools.dangerForcePush");
+  if (/DROP|DELETE|TRUNCATE/i.test(command)) return t("tools.dangerDbDestruct");
+  if (/curl.*\|\s*(sh|bash)/.test(command)) return t("tools.dangerRemoteScript");
+  return t("tools.dangerPotential");
 }
 
 // Permission callback — set by ChatPage
@@ -491,22 +494,22 @@ export function describeToolAction(toolName: string, args: Record<string, unknow
     case "bash": {
       const cmd = typeof args.command === "string" ? args.command : "";
       const danger = isDangerousCommand(cmd) ? ` [⚠️ ${getDangerDescription(cmd)}]` : "";
-      return `执行命令${danger}: ${cmd.slice(0, 150)}`;
+      return `${t("tools.actionExecCommand")}${danger}: ${cmd.slice(0, 150)}`;
     }
     case "file_write":
-      return `写入文件: ${args.path ?? ""}`;
+      return `${t("tools.actionWriteFile")}: ${args.path ?? ""}`;
     case "file_edit":
-      return `编辑文件: ${args.path ?? ""}`;
+      return `${t("tools.actionEditFile")}: ${args.path ?? ""}`;
     case "notebook_edit":
-      return `编辑 Notebook: ${args.notebook_path ?? ""}`;
+      return `${t("tools.actionEditNotebook")}: ${args.notebook_path ?? ""}`;
     case "browser_open":
-      return `打开 URL: ${args.url ?? ""}`;
+      return `${t("tools.actionOpenUrl")}: ${args.url ?? ""}`;
     case "agent_spawn":
-      return `派生子 Agent: ${(args.name as string) ?? ""}`;
+      return `${t("tools.actionSpawnAgent")}: ${(args.name as string) ?? ""}`;
     case "memory_write":
-      return `写入记忆: ${(args.content as string)?.slice(0, 80) ?? ""}`;
+      return `${t("tools.actionWriteMemory")}: ${(args.content as string)?.slice(0, 80) ?? ""}`;
     default:
-      return `使用工具: ${toolName}`;
+      return `${t("tools.actionUseTool")}: ${toolName}`;
   }
 }
 
@@ -518,7 +521,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     const { executeHooks } = await import("./hooks");
     const hookResult = await executeHooks("before_tool", { toolName: name, toolInput: args });
     if (hookResult.blocked) {
-      return `⛔ Hook 拦截: ${hookResult.reason || "操作被阻止"}`;
+      return `⛔ ${t("tools.hookBlocked")}: ${hookResult.reason || t("tools.operationBlocked")}`;
     }
     if (hookResult.modifiedInput) {
       Object.assign(args, hookResult.modifiedInput);
@@ -552,16 +555,16 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
   if (name === "bash" && typeof args.command === "string" && isDangerousCommand(args.command)) {
     const desc = getDangerDescription(args.command);
     if (permissionCallback) {
-      const allowed = await permissionCallback("bash", `${desc}\n命令: ${args.command}`);
-      if (!allowed) return `⛔ 用户拒绝执行: ${desc}`;
+      const allowed = await permissionCallback("bash", `${desc}\n${t("tools.command")}: ${args.command}`);
+      if (!allowed) return `⛔ ${t("tools.userDeniedExec")}: ${desc}`;
     }
   }
   if ((name === "file_write" || name === "file_edit") && typeof args.path === "string") {
     const sensitivePaths = ["/etc/", "/usr/", "/System/", "/bin/", "/sbin/", "~/.ssh/", "~/.config/"];
     if (sensitivePaths.some(p => (args.path as string).startsWith(p))) {
       if (permissionCallback) {
-        const allowed = await permissionCallback(name, `写入敏感路径: ${args.path}`);
-        if (!allowed) return `⛔ 用户拒绝写入: ${args.path}`;
+        const allowed = await permissionCallback(name, `${t("tools.writeSensitivePath")}: ${args.path}`);
+        if (!allowed) return `⛔ ${t("tools.userDeniedWrite")}: ${args.path}`;
       }
     }
   }
@@ -580,9 +583,9 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
   if (name === "agent_spawn") {
     const prompt = String(args.prompt || "");
     const agentName = String(args.name || `sub-${Date.now()}`);
-    const description = String(args.description || "子任务");
-    if (!prompt) return "❌ 请提供子 agent 的任务描述 (prompt)";
-    return `🤖 子 Agent「${agentName}」已启动\n📝 任务: ${description}\n\n子 agent 正在独立执行任务，完成后将返回结果摘要。\n\n---\n提示: ${prompt.slice(0, 200)}${prompt.length > 200 ? "..." : ""}`;
+    const description = String(args.description || t("tools.subTask"));
+    if (!prompt) return `❌ ${t("tools.agentSpawnNoPrompt")}`;
+    return `🤖 ${t("tools.agentSpawnStarted", { name: agentName })}\n📝 ${t("tools.taskLabel")}: ${description}\n\n${t("tools.agentSpawnRunning")}\n\n---\n${t("tools.promptLabel")}: ${prompt.slice(0, 200)}${prompt.length > 200 ? "..." : ""}`;
   }
 
   // ═══════ Notebook Edit (inspired by Claude Code NotebookEditTool) ═══════
@@ -597,7 +600,7 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
   if (name === "memory_write") {
     const { appendMemory } = await import("./memory");
     appendMemory(String(args.content || ""));
-    return "✅ 已保存到记忆";
+    return `✅ ${t("tools.memorySaved")}`;
   }
   if (name === "memory_read") {
     const { formatMemory } = await import("./memory");
@@ -606,7 +609,7 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
   if (name === "diff_view") {
     const { getFileBackups, formatDiff, computeDiff } = await import("./file-history");
     const backups = getFileBackups(String(args.path || ""));
-    if (backups.length === 0) return "无修改记录";
+    if (backups.length === 0) return t("tools.noModificationRecords");
     const last = backups[backups.length - 1];
     return formatDiff(computeDiff(last.originalContent, last.newContent));
   }
@@ -614,20 +617,20 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
     const path = String(args.path || "");
     const { getRewindContent } = await import("./file-history");
     const original = getRewindContent(path);
-    if (!original) return "无法撤销：没有备份记录";
+    if (!original) return t("tools.undoNoBackup");
     // Write original content back via Rust
     const tReady = isTauriAvailable();
     if (tReady) {
       const { agentExecuteTool } = await import("./tauri-bridge");
       await agentExecuteTool("Write", { path, content: original });
-      return `✅ 已撤销 ${path} 的修改`;
+      return `✅ ${t("tools.undoSuccess", { path })}`;
     }
-    return "⚠️ 撤销需要 Tauri 环境";
+    return `⚠️ ${t("tools.undoRequiresTauri")}`;
   }
   if (name === "project_detect") {
     const { detectProject, buildProjectPrompt } = await import("./project-context");
     const project = await detectProject(String(args.path || "/tmp"));
-    if (!project) return "未检测到项目";
+    if (!project) return t("tools.noProjectDetected");
     return buildProjectPrompt(project);
   }
 
@@ -661,12 +664,12 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
       const msg = e instanceof Error ? e.message : String(e);
       // Return detailed error for debugging
       if (name !== "browser_open") {
-        return `工具 ${rustName} 执行失败: ${msg}\n\n调试信息:\n- 工具名: ${rustName}\n- 参数: ${JSON.stringify(args).slice(0, 500)}\n- Tauri: ${tauriReady}`;
+        return `${t("tools.toolExecFailed", { tool: rustName })}: ${msg}\n\n${t("tools.debugInfo")}:\n- ${t("tools.toolName")}: ${rustName}\n- ${t("tools.toolArgs")}: ${JSON.stringify(args).slice(0, 500)}\n- Tauri: ${tauriReady}`;
       }
     }
   }
   if (!tauriReady) {
-    return `⚠️ Tauri 运行时不可用。此工具需要桌面 App 环境。\n请使用打包后的 .app 而不是浏览器 dev server。`;
+    return `⚠️ ${t("tools.tauriNotAvailable")}`;
   }
 
   // Minimal JS fallbacks (only for dev/browser mode without Tauri)
@@ -675,11 +678,11 @@ async function _executeToolInner(name: string, args: Record<string, unknown>): P
       case "browser_open":
         return jsBrowserOpen(args.url as string);
       default:
-        return `⚠️ 此工具需要桌面 App 环境。请使用打包后的 App 以获得完整工具支持。`;
+        return `⚠️ ${t("tools.requiresDesktopApp")}`;
     }
   }
 
-  return `未知工具: ${name}`;
+  return `${t("tools.unknownTool")}: ${name}`;
 }
 
 // ═══════════ Notebook Edit Implementation ═══════════
@@ -707,11 +710,11 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
   const cellType = String(args.cell_type || "code");
   const cellId = args.cell_id ? String(args.cell_id) : undefined;
 
-  if (!notebookPath) return "❌ 请提供 notebook 文件路径";
-  if (!notebookPath.endsWith(".ipynb")) return "❌ 文件必须是 .ipynb 格式";
+  if (!notebookPath) return `❌ ${t("tools.notebookProvidePathError")}`;
+  if (!notebookPath.endsWith(".ipynb")) return `❌ ${t("tools.notebookMustBeIpynb")}`;
 
   const tauriReady = isTauriAvailable();
-  if (!tauriReady) return "⚠️ notebook_edit 需要 Tauri 环境";
+  if (!tauriReady) return `⚠️ ${t("tools.notebookRequiresTauri")}`;
 
   try {
     const { agentExecuteTool } = await import("./tauri-bridge");
@@ -719,7 +722,7 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
     const notebook: NotebookContent = JSON.parse(raw);
 
     if (!notebook.cells || !Array.isArray(notebook.cells)) {
-      return "❌ 无效的 notebook 格式";
+      return `❌ ${t("tools.notebookInvalidFormat")}`;
     }
 
     const sourceLines = newSource.split("\n").map((line, i, arr) =>
@@ -736,7 +739,7 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
     switch (editMode) {
       case "replace": {
         if (targetIdx < 0) {
-          if (notebook.cells.length === 0) return "❌ notebook 没有单元格可替换";
+          if (notebook.cells.length === 0) return `❌ ${t("tools.notebookNoCells")}`;
           targetIdx = 0;
         }
         notebook.cells[targetIdx].source = sourceLines;
@@ -755,7 +758,7 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
         break;
       }
       case "delete": {
-        if (targetIdx < 0) return "❌ 未找到要删除的单元格";
+        if (targetIdx < 0) return `❌ ${t("tools.notebookCellNotFound")}`;
         notebook.cells.splice(targetIdx, 1);
         break;
       }
@@ -764,11 +767,11 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
     const updated = JSON.stringify(notebook, null, 1) + "\n";
     await agentExecuteTool("Write", { path: notebookPath, content: updated });
 
-    const modeLabel = editMode === "replace" ? "替换" : editMode === "insert" ? "插入" : "删除";
-    const cellLabel = cellId ? `单元格 ${cellId}` : `第 ${(targetIdx + 1)} 个单元格`;
-    return `✅ Notebook ${modeLabel}成功: ${cellLabel} (${cellType})\n路径: ${notebookPath}`;
+    const modeLabel = editMode === "replace" ? t("tools.notebookReplace") : editMode === "insert" ? t("tools.notebookInsert") : t("tools.notebookDelete");
+    const cellLabel = cellId ? `${t("tools.notebookCell")} ${cellId}` : `${t("tools.notebookCell")} ${(targetIdx + 1)}`;
+    return `✅ Notebook ${modeLabel}: ${cellLabel} (${cellType})\n${t("tools.pathLabel")}: ${notebookPath}`;
   } catch (e) {
-    return `❌ notebook 编辑失败: ${e instanceof Error ? e.message : String(e)}`;
+    return `❌ ${t("tools.notebookEditFailed")}: ${e instanceof Error ? e.message : String(e)}`;
   }
 }
 
@@ -777,9 +780,9 @@ async function executeNotebookEdit(args: Record<string, unknown>): Promise<strin
 function jsBrowserOpen(url: string): string {
   try {
     window.open(url, "_blank");
-    return `✅ 已在浏览器中打开: ${url}`;
+    return `✅ ${t("tools.browserOpened", { url })}`;
   } catch {
-    return `打开失败，请手动访问: ${url}`;
+    return `${t("tools.browserOpenFailed", { url })}`;
   }
 }
 
@@ -945,7 +948,7 @@ export {
 
 async function executeWebSearch(args: Record<string, unknown>): Promise<string> {
   const query = String(args.query || "");
-  if (!query) return "❌ 缺少 query 参数";
+  if (!query) return `❌ ${t("tools.missingQueryParam")}`;
 
   try {
     const enOnly = query.replace(/[一-鿿]/g, " ").replace(/\d{4}/g, "")
@@ -958,8 +961,8 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
       return await invoke("web_search", { query: enOnly }) as string;
     }
 
-    return "⚠️ 搜索需要桌面 App 环境";
+    return `⚠️ ${t("tools.searchRequiresDesktop")}`;
   } catch (e) {
-    return "搜索失败: " + (e instanceof Error ? e.message : String(e));
+    return `${t("tools.searchFailed")}: ` + (e instanceof Error ? e.message : String(e));
   }
 }

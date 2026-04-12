@@ -144,7 +144,7 @@ describe("Memory Bridge — Three-Layer Memory System", () => {
 
     it("autoLearn can be disabled via config", async () => {
       // Create a bridge with autoLearn disabled
-      const { MemoryBridge: MemoryBridgeClass } = await import("../../lib/memory-bridge") as any;
+      const { MemoryBridge: _MemoryBridgeClass } = await import("../../lib/memory-bridge") as any;
 
       // The memoryBridge has autoLearn enabled by default
       // We just verify the default behavior calls autoLearn
