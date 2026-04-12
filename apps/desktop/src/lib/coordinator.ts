@@ -4,6 +4,7 @@
  */
 
 import type { AgentConfig, AgentEvent } from "./agent-bridge";
+import { PROVIDER_DEFAULT_BASE_URLS } from "./agent-bridge";
 import { fetchWithRetry } from "./api-retry";
 import {
   getWorker,
@@ -306,7 +307,7 @@ async function callWorkerLLMInner(
   onEvent: EventCallback,
   _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
-  const rawBaseURL = config.baseURL || "https://api.openai.com";
+  const rawBaseURL = config.baseURL || PROVIDER_DEFAULT_BASE_URLS[config.provider] || "https://api.openai.com/v1";
   const baseURL = rawBaseURL.replace(/\/v1\/?$/, "");
   const { getAllToolDefinitions, executeTool } = await import("./tools");
   const TOOL_DEFINITIONS = getAllToolDefinitions();
