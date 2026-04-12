@@ -8,7 +8,7 @@
  * Phase 2: All API calls now route through Rust when running as Tauri app.
  */
 import { isTauriAvailable, validateApiKeyRust } from "./tauri-bridge";
-import { analyzeIntent, dispatchToWorker, orchestrateMultiStep } from "./coordinator";
+import { analyzeIntent } from "./coordinator";
 import { emitAgentEvent as emitBusEvent } from "./event-bus";
 import { watchdogWrap, getWatchdogState, markRecovered } from "./watchdog";
 import { recordUsage as recordRuntimeUsage } from "./runtime";
@@ -561,45 +561,114 @@ export async function sendMessage(
     }
 
     if (intent.type === "task" && intent.workers.length === 1) {
-      // 单步任务 — 派发给对应 Worker
-      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 秘书识别为任务型消息，派发给 ${intent.workers[0]}\n` : `🎯 Secretary identified task, dispatching to ${intent.workers[0]}\n` });
-      await watchdogWrap(
-        async (provider, model) => {
-          const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          await dispatchToWorker(intent.workers[0], message, effectiveConfig, onEvent, history);
-        },
-        {
-          provider: config.provider,
-          model: config.model,
-          onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+      // 单步任务 — 用 Worker 的角色 prompt 增强主 LLM 调用路径（复用已验证的流式代码）
+      const workerId = intent.workers[0];
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 秘书识别为任务型消息，派发给 ${workerId}\n` : `🎯 Secretary identified task, dispatching to ${workerId}\n` });
+
+      // Get worker info for prompt enhancement
+      const { getWorker } = await import("./team");
+      const { getLocalizedName, getLocalizedPrompt } = await import("./team");
+      const worker = getWorker(workerId);
+      if (worker) {
+        const workerName = getLocalizedName(worker);
+        const workerPrompt = getLocalizedPrompt(worker);
+        const team = ["product", "architect", "developer", "frontend", "code_reviewer", "tester", "devops", "security", "writer", "researcher", "ux_designer", "data_analyst"].includes(workerId)
+          ? (i18n.language.startsWith("zh") ? "研发团队" : "Engineering") : (i18n.language.startsWith("zh") ? "业务团队" : "Business");
+        onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 派给 ${worker.emoji} ${workerName}（${team}）\n` : `🎯 Dispatching to ${worker.emoji} ${workerName} (${team})\n` });
+        emitBusEvent({ type: "worker_activate", worker: workerName, workerId, team });
+        emitBusEvent({ type: "worker_dispatch", worker: workerName, workerId, team });
+
+        // Enhance the message with worker role context
+        const enhancedMessage = `[Role: ${workerName}]\n${workerPrompt}\n\n[User Request]\n${message}`;
+
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(enhancedMessage, effectiveConfig, onEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(enhancedMessage, effectiveConfig, onEvent, history);
+            } else {
+              const finalConfig = effectiveConfig.provider === "kimi"
+                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
+                : effectiveConfig;
+              await callOpenAI(enhancedMessage, finalConfig, onEvent, history);
+            }
           },
-          onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
-            markRecovered();
+          {
+            provider: config.provider,
+            model: config.model,
+            onDegraded: (info) => {
+              onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+            },
+            onRecoveryAttempt: (p, m) => {
+              onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
+              markRecovered();
+            },
           },
-        },
-      );
+        );
+
+        emitBusEvent({ type: "worker_complete", worker: workerName, workerId, team, success: true });
+      } else {
+        // Worker not found, fall back to direct chat
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(message, effectiveConfig, onEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(message, effectiveConfig, onEvent, history);
+            } else {
+              await callOpenAI(message, effectiveConfig, onEvent, history);
+            }
+          },
+          { provider: config.provider, model: config.model },
+        );
+      }
     } else if (intent.type === "multi_step") {
-      // 多步骤任务 — 编排多个 Worker 协作
-      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `📋 秘书识别为多步骤任务: ${intent.plan}\n` : `📋 Secretary identified multi-step task: ${intent.plan}\n` });
-      await watchdogWrap(
-        async (provider, model) => {
-          const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          await orchestrateMultiStep(message, intent.workers, effectiveConfig, onEvent, history);
-        },
-        {
-          provider: config.provider,
-          model: config.model,
-          onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+      // 多步骤任务 — 按顺序用各 Worker 角色增强主 LLM 调用
+      const isZh = i18n.language.startsWith("zh");
+      onEvent({ type: "thinking", text: isZh ? `📋 秘书识别为多步骤任务: ${intent.plan}\n` : `📋 Secretary identified multi-step task: ${intent.plan}\n` });
+
+      const { getWorker, getLocalizedName, getLocalizedPrompt } = await import("./team");
+      let prevOutput = "";
+
+      for (let wi = 0; wi < intent.workers.length; wi++) {
+        const wid = intent.workers[wi];
+        const worker = getWorker(wid);
+        const wName = worker ? getLocalizedName(worker) : wid;
+        onEvent({ type: "thinking", text: isZh ? `📌 步骤 ${wi + 1}/${intent.workers.length}: ${wName}\n` : `📌 Step ${wi + 1}/${intent.workers.length}: ${wName}\n` });
+
+        const wPrompt = worker ? getLocalizedPrompt(worker) : "";
+        let taskMsg = `[Role: ${wName}]\n${wPrompt}\n\n[User Request]\n${message}`;
+        if (prevOutput) {
+          taskMsg += `\n\n[Previous worker output for context]\n${prevOutput.slice(0, 3000)}`;
+        }
+
+        let stepOutput = "";
+        const captureEvent = (event: AgentEvent) => {
+          onEvent(event);
+          if (event.type === "text" && event.text) stepOutput += event.text;
+        };
+
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(taskMsg, effectiveConfig, captureEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(taskMsg, effectiveConfig, captureEvent, history);
+            } else {
+              const finalConfig = effectiveConfig.provider === "kimi"
+                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
+                : effectiveConfig;
+              await callOpenAI(taskMsg, finalConfig, captureEvent, history);
+            }
           },
-          onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
-            markRecovered();
-          },
-        },
-      );
+          { provider: config.provider, model: config.model },
+        );
+        prevOutput = stepOutput;
+      }
     } else {
       // 闲聊或兜底 — 直接走 LLM（不经过 Worker）
       await watchdogWrap(
