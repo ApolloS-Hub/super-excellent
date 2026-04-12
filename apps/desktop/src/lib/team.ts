@@ -993,7 +993,7 @@ export class TeammateManager {
   getTeamStatus(): TeamStatus[] {
     return teamConfig.workers.map(w => ({
       id: w.id,
-      name: w.name,
+      name: getLocalizedName(w),
       emoji: w.emoji,
       role: w.role,
       status: w.status,
