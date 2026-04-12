@@ -36,8 +36,8 @@ export interface WorkflowInstance {
 const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   {
     id: "product_launch",
-    name: "产品发布 / Product Launch",
-    description: "从需求到部署的完整产品交付流程",
+    name: "Product Launch",
+    description: "End-to-end product delivery from requirements to deployment",
     steps: [
       { role: "product", action: "define_requirements", input: "business_goal", output: "prd_document" },
       { role: "ux_designer", action: "design_ux", input: "prd_document", output: "design_spec" },
@@ -48,8 +48,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "code_review_flow",
-    name: "代码审查 / Code Review Flow",
-    description: "开发→审查→测试的代码质量保障流程",
+    name: "Code Review Flow",
+    description: "Dev → Review → Test code quality assurance pipeline",
     steps: [
       { role: "developer", action: "write_code", input: "task_description", output: "pull_request" },
       { role: "code_reviewer", action: "review", input: "pull_request", output: "review_feedback" },
@@ -58,8 +58,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "content_publish",
-    name: "内容发布 / Content Publish",
-    description: "内容创作→合规审核→发布的完整流程",
+    name: "Content Publish",
+    description: "Create → Compliance review → Publish pipeline",
     steps: [
       { role: "content_ops", action: "create_content", input: "content_brief", output: "draft" },
       { role: "legal_compliance", action: "compliance_review", input: "draft", output: "compliance_report" },
@@ -68,8 +68,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "incident_response",
-    name: "事件响应 / Incident Response",
-    description: "安全事件检测→评估→修复→复盘",
+    name: "Incident Response",
+    description: "Detect → Assess → Hotfix → Post-mortem",
     steps: [
       { role: "security", action: "detect_and_assess", input: "alert", output: "assessment_report" },
       { role: "developer", action: "hotfix", input: "assessment_report", output: "patch" },
@@ -79,8 +79,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "data_pipeline",
-    name: "数据管线 / Data Pipeline",
-    description: "数据采集→分析→可视化→决策",
+    name: "Data Pipeline",
+    description: "Collect → Analyze → Visualize → Decide",
     steps: [
       { role: "data_analyst", action: "collect_data", input: "data_source", output: "raw_data" },
       { role: "data_analyst", action: "analyze", input: "raw_data", output: "analysis_report" },
@@ -89,8 +89,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "requirement_analysis",
-    name: "需求分析 / Requirement Analysis",
-    description: "需求收集→竞品分析→方案评估→PRD输出",
+    name: "Requirement Analysis",
+    description: "Gather → Competitive analysis → Feasibility → PRD",
     steps: [
       { role: "product", action: "gather_requirements", input: "stakeholder_input", output: "requirement_list" },
       { role: "researcher", action: "competitive_analysis", input: "requirement_list", output: "market_report" },
@@ -100,8 +100,8 @@ const BUILTIN_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: "data_report",
-    name: "数据报告 / Data Report",
-    description: "数据采集→清洗分析→可视化→报告生成",
+    name: "Data Report",
+    description: "Collect → Clean & Analyze → Visualize → Generate report",
     steps: [
       { role: "data_analyst", action: "collect_data", input: "data_source", output: "raw_data" },
       { role: "data_analyst", action: "clean_and_analyze", input: "raw_data", output: "analysis_result" },

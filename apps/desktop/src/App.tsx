@@ -494,7 +494,7 @@ function App() {
                 conversations={conversations}
                 selectedId={activeConvId}
                 onSelect={setActiveConvId}
-                label="左"
+                label="L"
               />
               <div style={{ flex: 1, overflow: "hidden" }}>
                 <ChatPage
@@ -513,7 +513,7 @@ function App() {
                 conversations={conversations}
                 selectedId={splitConvId}
                 onSelect={setSplitConvId}
-                label="右"
+                label="R"
               />
               <div style={{ flex: 1, overflow: "hidden" }}>
                 <ChatPage

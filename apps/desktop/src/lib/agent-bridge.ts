@@ -21,7 +21,6 @@ import {
 } from "./prompt-cache";
 import { fetchWithRetry } from "./api-retry";
 import i18n from "../i18n";
-const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 export interface AgentConfig {
   provider: "anthropic" | "openai" | "google" | "kimi" | "ollama" | "deepseek" | "qwen" | "minimax" | "zhipu" | "compatible";
@@ -806,7 +805,7 @@ async function callAnthropic(
 
     // ── Parse SSE stream and accumulate content blocks ──
     const content: AnthropicContentBlock[] = [];
-    let stopReason = "end_turn";
+    let _stopReason = "end_turn";
     let usageData: { input_tokens?: number; output_tokens?: number } | undefined;
     // Track current content block being streamed
     let currentBlockIndex = -1;
@@ -873,7 +872,7 @@ async function callAnthropic(
                 }
                 break;
               case "message_delta":
-                if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason;
+                if (evt.delta?.stop_reason) _stopReason = evt.delta.stop_reason;
                 if (evt.usage) usageData = { ...usageData, ...evt.usage };
                 break;
               case "message_start":
@@ -898,7 +897,7 @@ async function callAnthropic(
     const hasToolUse = content.some(b => b.type === "tool_use");
 
     // Cache tool call rounds
-    if (hasToolUse) setCache(cacheKey, { content, usage: data.usage });
+    if (hasToolUse) setCache(cacheKey, { content, usage: usageData });
 
     // ── Emit thinking blocks ──
     for (const block of content) {
@@ -908,7 +907,7 @@ async function callAnthropic(
     }
 
     // ── Handle tool use: execute tools, then decide loop continuation ──
-    if (hasToolUse && data.stop_reason === "tool_use") {
+    if (hasToolUse && _stopReason === "tool_use") {
       const toolNames = await processAnthropicToolBlocks(content, loop.messages, executeTool, onEvent, signal);
       loop.toolCallCount += toolNames.length;
       updateLoopPhaseFromTools(loop, toolNames);
