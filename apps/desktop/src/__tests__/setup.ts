@@ -72,7 +72,8 @@ Object.defineProperty(globalThis, "localStorage", {
 // ═══════════ IndexedDB noop mock ═══════════
 
 function createIndexedDBMock() {
-  const _noop = () => {};
+  // @ts-ignore
+const _noop = () => {};
 
   const mockObjectStore = {
     put: vi.fn(),
