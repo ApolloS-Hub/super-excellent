@@ -8,6 +8,7 @@ import {
   Stack, Text, Paper, Group, Badge, Button, Select,
   ScrollArea, useMantineColorScheme,
 } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 import {
   getTemplates, getAllWorkflowInstances, startWorkflow,
   type WorkflowTemplate, type WorkflowInstance,
@@ -44,15 +45,15 @@ const ROLE_EMOJI: Record<string, string> = {
   customer_support: "🎧", risk_analyst: "🛡️",
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  product: "产品经理", architect: "架构师", developer: "开发工程师",
-  frontend: "前端工程师", code_reviewer: "代码审查", tester: "测试工程师",
-  devops: "DevOps", security: "安全工程师", writer: "文档工程师",
-  researcher: "研究员", ux_designer: "UX 设计", data_analyst: "数据分析",
-  ops_director: "运营总监", growth_hacker: "增长专家", content_ops: "内容运营",
-  legal_compliance: "法务合规", financial_analyst: "财务分析",
-  project_manager: "项目经理", customer_support: "客户支持",
-  risk_analyst: "风险分析",
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  product: "workflow.roleProduct", architect: "workflow.roleArchitect", developer: "workflow.roleDeveloper",
+  frontend: "workflow.roleFrontend", code_reviewer: "workflow.roleCodeReviewer", tester: "workflow.roleTester",
+  devops: "workflow.roleDevops", security: "workflow.roleSecurity", writer: "workflow.roleWriter",
+  researcher: "workflow.roleResearcher", ux_designer: "workflow.roleUxDesigner", data_analyst: "workflow.roleDataAnalyst",
+  ops_director: "workflow.roleOpsDirector", growth_hacker: "workflow.roleGrowthHacker", content_ops: "workflow.roleContentOps",
+  legal_compliance: "workflow.roleLegalCompliance", financial_analyst: "workflow.roleFinancialAnalyst",
+  project_manager: "workflow.roleProjectManager", customer_support: "workflow.roleCustomerSupport",
+  risk_analyst: "workflow.roleRiskAnalyst",
 };
 
 // ═══════════ SVG Layout Constants ═══════════
@@ -66,7 +67,7 @@ const ARROW_HEAD_SIZE = 8;
 
 // ═══════════ Helpers ═══════════
 
-function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | null, workers: TeamWorker[]): {
+function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | null, workers: TeamWorker[], t: (key: string, opts?: Record<string, unknown>) => string): {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
 } {
@@ -89,7 +90,7 @@ function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | nul
       action: step.action,
       status,
       emoji: ROLE_EMOJI[step.role] || "🤖",
-      label: ROLE_LABEL[step.role] || step.role,
+      label: ROLE_LABEL_KEYS[step.role] ? t(ROLE_LABEL_KEYS[step.role]) : step.role,
       result: instance?.stepResults[i],
     };
   });
@@ -123,19 +124,20 @@ function StatusBgColor(status: NodeStatus, isDark: boolean): string {
   }
 }
 
-function StatusLabel(status: NodeStatus): string {
+function StatusLabel(status: NodeStatus, t: (key: string) => string): string {
   switch (status) {
-    case "working": return "工作中";
-    case "done": return "已完成";
-    case "error": return "异常";
-    default: return "空闲";
+    case "working": return t("workflow.statusWorking");
+    case "done": return t("workflow.statusDone");
+    case "error": return t("workflow.statusError");
+    default: return t("workflow.statusIdle");
   }
 }
 
-function WorkflowSVG({ nodes, edges, isDark }: {
+function WorkflowSVG({ nodes, edges, isDark, t }: {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   isDark: boolean;
+  t: (key: string) => string;
 }) {
   const totalWidth = nodes.length * (NODE_WIDTH + NODE_GAP_X) - NODE_GAP_X + NODE_PADDING_X * 2;
   const totalHeight = NODE_HEIGHT + NODE_PADDING_Y * 2 + 28; // extra for edge labels
@@ -264,7 +266,7 @@ function WorkflowSVG({ nodes, edges, isDark }: {
               fill={node.status === "idle" ? dimColor : borderColor}
               fontFamily="system-ui, sans-serif"
             >
-              {StatusLabel(node.status)}
+              {StatusLabel(node.status, t)}
             </text>
           </g>
         );
