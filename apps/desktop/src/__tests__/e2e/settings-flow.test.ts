@@ -7,7 +7,7 @@
  * - API key storage and validation
  * - Default values and config structure
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { AgentConfig } from "../../lib/agent-bridge";
 import { PROVIDER_DEFAULT_BASE_URLS } from "../../lib/agent-bridge";
 

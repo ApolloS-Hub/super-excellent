@@ -454,10 +454,10 @@ async function callWorkerLLMInner(
         }
       }
       workerToolCalls += msg.tool_calls!.length;
-      // Force stop after 3 total tool calls
-      if (workerToolCalls >= 1) {
+      // Force stop after 5 total tool calls to prevent runaway loops
+      if (workerToolCalls >= 5) {
         const toolMsgs = isolatedMessages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
-        const summary = toolMsgs.length > 0 ? (toolMsgs as string[]).join("\n\n").slice(0, 5000) : "工具调用完成";
+        const summary = toolMsgs.length > 0 ? (toolMsgs as string[]).join("\n\n").slice(0, 5000) : "Tool calls completed";
         onEvent({ type: "text", text: summary });
         fullOutput = summary;
         break;

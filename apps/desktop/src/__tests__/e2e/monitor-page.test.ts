@@ -19,10 +19,10 @@ import {
   getHealthLog,
   isMonitorRunning,
 } from "../../lib/health-monitor";
-import type { HealthReport, HealthCheckResult } from "../../lib/health-monitor";
+import type { HealthReport as _HealthReport, HealthCheckResult as _HealthCheckResult } from "../../lib/health-monitor";
 import {
   emitAgentEvent,
-  onAgentEvent,
+  onAgentEvent as _onAgentEvent,
   getEventLog,
   clearEventLog,
 } from "../../lib/event-bus";
@@ -383,7 +383,7 @@ describe("Monitor Page — Health Monitoring System", () => {
 
   describe("event log — worker grid and events", () => {
     it("records events emitted via event bus", () => {
-      const { emitAgentEvent: realEmit, getEventLog: getLog, clearEventLog: clearLog } =
+      const _imported =
         vi.importActual<typeof import("../../lib/event-bus")>("../../lib/event-bus") as any;
 
       clearEventLog();

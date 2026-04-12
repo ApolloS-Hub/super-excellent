@@ -708,14 +708,14 @@ async function callAnthropic(
       break;
     }
 
-    // ── API call with per-turn timeout ──
+    // ── API call with per-turn timeout (streaming enabled) ──
     const body: Record<string, unknown> = {
       model: config.model || "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: systemBlocks,
       messages: loop.messages,
       tools: anthropicTools,
-      stream: false,
+      stream: true,
     };
 
     const turnAbort = new AbortController();
@@ -741,14 +741,13 @@ async function callAnthropic(
     } catch (fetchErr) {
       clearTimeout(turnTimer);
       if (turnAbort.signal.aborted && !signal.aborted) {
-        // Turn timeout (not user abort)
         const { classifyError, formatClassifiedError } = await import("./error-classifier");
         const classified = classifyError({ error: new Error("Request timeout"), providerName: "anthropic", baseUrl: baseURL, model: config.model });
         onEvent({ type: "error", text: formatClassifiedError(classified) });
         loop.phase = 'error';
         break;
       }
-      throw fetchErr; // Re-throw for outer handler
+      throw fetchErr;
     }
     clearTimeout(turnTimer);
 
@@ -761,32 +760,105 @@ async function callAnthropic(
         baseUrl: baseURL,
         model: config.model,
       });
-      // Retryable errors: attempt one more time
       if (classified.retryable && loop.turnCount <= 2) {
-        onEvent({ type: "thinking", text: `⚠️ ${classified.userMessage}，正在重试...\n` });
+        onEvent({ type: "thinking", text: `⚠️ ${classified.userMessage}\n` });
         await new Promise(r => setTimeout(r, 2000));
         continue;
       }
       throw new Error(formatClassifiedError(classified));
     }
 
-    const data = await response.json() as {
-      content: AnthropicContentBlock[];
-      stop_reason: string;
-      usage?: { input_tokens?: number; output_tokens?: number };
-    };
+    // ── Parse SSE stream and accumulate content blocks ──
+    const content: AnthropicContentBlock[] = [];
+    let stopReason = "end_turn";
+    let usageData: { input_tokens?: number; output_tokens?: number } | undefined;
+    // Track current content block being streamed
+    let currentBlockIndex = -1;
+    let currentToolId = "";
+    let currentToolName = "";
+    let currentToolJson = "";
+
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      let sseBuffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (signal.aborted) { loop.phase = 'done'; break; }
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(raw);
+            switch (evt.type) {
+              case "content_block_start":
+                currentBlockIndex = evt.index ?? content.length;
+                if (evt.content_block?.type === "text") {
+                  content[currentBlockIndex] = { type: "text", text: "" };
+                } else if (evt.content_block?.type === "tool_use") {
+                  currentToolId = evt.content_block.id || "";
+                  currentToolName = evt.content_block.name || "";
+                  currentToolJson = "";
+                  content[currentBlockIndex] = {
+                    type: "tool_use", id: currentToolId,
+                    name: currentToolName, input: {},
+                  } as AnthropicToolUseBlock;
+                } else if (evt.content_block?.type === "thinking") {
+                  content[currentBlockIndex] = { type: "thinking", thinking: "" } as AnthropicThinkingBlock;
+                }
+                break;
+              case "content_block_delta":
+                if (evt.delta?.type === "text_delta" && evt.delta.text) {
+                  const block = content[currentBlockIndex];
+                  if (block?.type === "text") {
+                    (block as AnthropicTextBlock).text += evt.delta.text;
+                    onEvent({ type: "text", text: evt.delta.text });
+                  }
+                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
+                  currentToolJson += evt.delta.partial_json;
+                } else if (evt.delta?.type === "thinking_delta" && evt.delta.thinking) {
+                  const block = content[currentBlockIndex];
+                  if (block?.type === "thinking") {
+                    (block as AnthropicThinkingBlock).thinking += evt.delta.thinking;
+                  }
+                }
+                break;
+              case "content_block_stop":
+                if (content[currentBlockIndex]?.type === "tool_use" && currentToolJson) {
+                  try {
+                    (content[currentBlockIndex] as AnthropicToolUseBlock).input = JSON.parse(currentToolJson);
+                  } catch { /* partial JSON */ }
+                  currentToolJson = "";
+                }
+                break;
+              case "message_delta":
+                if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason;
+                if (evt.usage) usageData = { ...usageData, ...evt.usage };
+                break;
+              case "message_start":
+                if (evt.message?.usage) usageData = evt.message.usage;
+                break;
+            }
+          } catch { /* skip unparseable SSE */ }
+        }
+      }
+    }
 
     // ── Usage tracking ──
-    if (data.usage) {
+    if (usageData) {
       const { recordUsage } = await import("./cost-tracker");
       const record = recordUsage(config.model || "unknown", config.model || "unknown", {
-        prompt_tokens: data.usage.input_tokens,
-        completion_tokens: data.usage.output_tokens,
+        prompt_tokens: usageData.input_tokens,
+        completion_tokens: usageData.output_tokens,
       });
       if (record) onEvent({ type: "thinking", text: `💰 ${record.inputTokens}+${record.outputTokens} tokens ≈ $${record.estimatedCost.toFixed(4)}\n` });
     }
 
-    const content = data.content;
     const hasToolUse = content.some(b => b.type === "tool_use");
 
     // Cache tool call rounds

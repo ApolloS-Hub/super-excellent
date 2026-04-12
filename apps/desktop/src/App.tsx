@@ -53,6 +53,8 @@ function App() {
     });
     startMonitor();
     startHealthMonitor();
+    // Migrate API keys to secure store
+    import("./lib/secure-store").then(m => m.migrateApiKeyFromConfig()).catch(console.warn);
     // Load MCP config and connect servers on startup
     import("./lib/mcp-client").then(m => m.loadMCPConfig()).catch(console.warn);
     // Initialize Lark integration

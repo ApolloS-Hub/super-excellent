@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { analyzeIntent } from "../../lib/coordinator";
-import type { IntentResult } from "../../lib/coordinator";
+import type { IntentResult as _IntentResult } from "../../lib/coordinator";
 
 describe("Coordinator — Intent Analysis & Routing", () => {
   describe("simple greetings stay as chat type", () => {

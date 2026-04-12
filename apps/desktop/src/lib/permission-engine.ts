@@ -102,7 +102,7 @@ export interface DenialStat {
 
 const SAFE_READ_TOOLS = new Set([
   "file_read", "glob", "grep", "list_dir", "memory_read",
-  "diff_view", "project_detect", "todo_write",
+  "diff_view", "project_detect",
 ]);
 
 const FILE_EDIT_TOOLS = new Set(["file_write", "file_edit", "notebook_edit"]);
