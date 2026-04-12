@@ -198,20 +198,20 @@ const larkCalendarTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "agenda":
         return lark.calendarAgenda(args.days ? Number(args.days) : undefined);
       case "create":
-        if (!args.title || !args.start || !args.end) return "❌ 创建日程需要 title, start, end";
+        if (!args.title || !args.start || !args.end) return "❌ create requires title, start, end";
         return lark.calendarCreate(String(args.title), String(args.start), String(args.end),
           args.attendees ? String(args.attendees).split(",") : undefined);
       case "freebusy":
-        if (!args.user_ids || !args.start || !args.end) return "❌ 查询空闲需要 user_ids, start, end";
+        if (!args.user_ids || !args.start || !args.end) return "❌ freebusy requires user_ids, start, end";
         return lark.calendarFreebusy(String(args.user_ids).split(","), String(args.start), String(args.end));
       default:
-        return `❌ 未知操作: ${action}。可用: agenda, create, freebusy`;
+        return `❌ Unknown action: ${action}. Available: agenda, create, freebusy`;
     }
   },
 };
@@ -237,19 +237,19 @@ const larkImTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "send":
-        if (!args.chat_id || !args.text) return "❌ 发送消息需要 chat_id 和 text";
+        if (!args.chat_id || !args.text) return "❌ send requires chat_id and text";
         return lark.imSendMessage(String(args.chat_id), String(args.text));
       case "search":
-        if (!args.query) return "❌ 搜索需要 query";
+        if (!args.query) return "❌ search requires query";
         return lark.imSearchMessages(String(args.query), args.chat_id ? String(args.chat_id) : undefined);
       case "list_chats":
         return lark.imListChats();
       default:
-        return `❌ 未知操作: ${action}。可用: send, search, list_chats`;
+        return `❌ Unknown action: ${action}. Available: send, search, list_chats`;
     }
   },
 };
@@ -276,20 +276,20 @@ const larkDocTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "create":
-        if (!args.title) return "❌ 创建文档需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.docCreate(String(args.title), args.content ? String(args.content) : undefined);
       case "read":
-        if (!args.doc_token) return "❌ 读取文档需要 doc_token";
+        if (!args.doc_token) return "❌ read requires doc_token";
         return lark.docRead(String(args.doc_token));
       case "search":
-        if (!args.query) return "❌ 搜索需要 query";
+        if (!args.query) return "❌ search requires query";
         return lark.docSearch(String(args.query));
       default:
-        return `❌ 未知操作: ${action}。可用: create, read, search`;
+        return `❌ Unknown action: ${action}. Available: create, read, search`;
     }
   },
 };
@@ -315,19 +315,19 @@ const larkTaskTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "create":
-        if (!args.title) return "❌ 创建任务需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.taskCreate(String(args.title), args.due_date ? String(args.due_date) : undefined);
       case "list":
         return lark.taskList();
       case "complete":
-        if (!args.task_id) return "❌ 完成任务需要 task_id";
+        if (!args.task_id) return "❌ complete requires task_id";
         return lark.taskComplete(String(args.task_id));
       default:
-        return `❌ 未知操作: ${action}。可用: create, list, complete`;
+        return `❌ Unknown action: ${action}. Available: create, list, complete`;
     }
   },
 };
@@ -353,19 +353,19 @@ const larkApprovalTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "query":
         return lark.approvalQuery(args.status ? String(args.status) : undefined);
       case "approve":
-        if (!args.instance_id) return "❌ 审批需要 instance_id";
+        if (!args.instance_id) return "❌ approve requires instance_id";
         return lark.approvalApprove(String(args.instance_id), args.comment ? String(args.comment) : undefined);
       case "reject":
-        if (!args.instance_id) return "❌ 驳回需要 instance_id";
+        if (!args.instance_id) return "❌ reject requires instance_id";
         return lark.approvalReject(String(args.instance_id), args.comment ? String(args.comment) : undefined);
       default:
-        return `❌ 未知操作: ${action}。可用: query, approve, reject`;
+        return `❌ Unknown action: ${action}. Available: query, approve, reject`;
     }
   },
 };
@@ -392,20 +392,20 @@ const larkSheetTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "read":
-        if (!args.spreadsheet_token) return "❌ 读取需要 spreadsheet_token";
+        if (!args.spreadsheet_token) return "❌ read requires spreadsheet_token";
         return lark.sheetRead(String(args.spreadsheet_token), args.range ? String(args.range) : undefined);
       case "write":
-        if (!args.spreadsheet_token || !args.range || !args.values) return "❌ 写入需要 spreadsheet_token, range, values";
+        if (!args.spreadsheet_token || !args.range || !args.values) return "❌ write requires spreadsheet_token, range, values";
         return lark.sheetWrite(String(args.spreadsheet_token), String(args.range), String(args.values));
       case "create":
-        if (!args.title) return "❌ 创建表格需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.sheetCreate(String(args.title));
       default:
-        return `❌ 未知操作: ${action}。可用: read, write, create`;
+        return `❌ Unknown action: ${action}. Available: read, write, create`;
     }
   },
 };

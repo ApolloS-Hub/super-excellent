@@ -693,7 +693,7 @@ function ConversationItem({
       onClick={() => !editing && onSelect(conv.id)}
       onContextMenu={e => {
         e.preventDefault();
-        const action = window.prompt("操作: 输入新名称(改名) 或输入 delete(删除)", conv.title);
+        const action = window.prompt(t("nav.renameOrDeletePrompt"), conv.title);
         if (action === null) return;
         if (action.toLowerCase() === "delete") {
           onDelete(conv.id);
