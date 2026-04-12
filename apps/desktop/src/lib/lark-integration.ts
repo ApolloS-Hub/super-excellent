@@ -334,7 +334,7 @@ const larkTaskTool: ToolDefinition = {
 
 const larkApprovalTool: ToolDefinition = {
   name: "lark_approval",
-  description: "飞书审批处理 — 查询/审批/驳回审批单。示例：帮我看看待审批的单子",
+  description: "Lark Approval — query, approve, or reject approval requests / 飞书审批处理",
   searchHint: "approval approve reject feishu lark 审批",
   category: "web",
   permission: "high",
@@ -344,11 +344,11 @@ const larkApprovalTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["query", "approve", "reject"],
-        description: "query=查询审批, approve=通过, reject=驳回",
+        description: "query=list approvals, approve=approve, reject=reject",
       },
-      status: { type: "string", description: "query: 筛选状态 (pending/approved/rejected)" },
-      instance_id: { type: "string", description: "approve/reject: 审批实例ID" },
-      comment: { type: "string", description: "approve/reject: 审批意见" },
+      status: { type: "string", description: "query: filter by status (pending/approved/rejected)" },
+      instance_id: { type: "string", description: "approve/reject: approval instance ID" },
+      comment: { type: "string", description: "approve/reject: comment" },
     },
     required: ["action"],
   },
@@ -372,7 +372,7 @@ const larkApprovalTool: ToolDefinition = {
 
 const larkSheetTool: ToolDefinition = {
   name: "lark_sheet",
-  description: "飞书表格数据 — 读写电子表格数据、创建表格。示例：帮我读取XX表格的数据",
+  description: "Lark Sheets — read/write spreadsheet data, create sheets / 飞书表格数据",
   searchHint: "sheet spreadsheet read write data feishu lark 表格 数据",
   category: "web",
   permission: "medium",
@@ -382,12 +382,12 @@ const larkSheetTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["read", "write", "create"],
-        description: "read=读取数据, write=写入数据, create=创建表格",
+        description: "read=read data, write=write data, create=new sheet",
       },
-      spreadsheet_token: { type: "string", description: "read/write: 表格Token" },
-      range: { type: "string", description: "read/write: 单元格范围 (如 Sheet1!A1:C10)" },
-      values: { type: "string", description: "write: JSON 格式的数据" },
-      title: { type: "string", description: "create: 表格标题" },
+      spreadsheet_token: { type: "string", description: "read/write: spreadsheet token" },
+      range: { type: "string", description: "read/write: cell range (e.g. Sheet1!A1:C10)" },
+      values: { type: "string", description: "write: data in JSON format" },
+      title: { type: "string", description: "create: sheet title" },
     },
     required: ["action"],
   },
