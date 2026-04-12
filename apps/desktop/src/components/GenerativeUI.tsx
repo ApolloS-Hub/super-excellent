@@ -11,6 +11,7 @@ import {
   Select, Textarea, Table, ScrollArea, Box,
   useMantineColorScheme,
 } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 
 // ═══════════ Types ═══════════
 
@@ -225,7 +226,7 @@ interface FormData {
   submitLabel?: string;
 }
 
-function FormWidget({ data, isDark }: { data: FormData; isDark: boolean }) {
+function FormWidget({ data, isDark, t }: { data: FormData; isDark: boolean; t: (key: string) => string }) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const f of data.fields) {
@@ -246,17 +247,17 @@ function FormWidget({ data, isDark }: { data: FormData; isDark: boolean }) {
   if (submitted) {
     return (
       <Paper p="sm" radius="md" withBorder bg={isDark ? "dark.7" : "green.0"}>
-        <Text size="sm" fw={600} mb="xs">✅ 表单已提交</Text>
+        <Text size="sm" fw={600} mb="xs">✅ {t("common.formSubmitted")}</Text>
         <Stack gap={2}>
           {data.fields.map(f => (
             <Group key={f.name} gap="xs">
               <Text size="xs" fw={500}>{f.label}:</Text>
-              <Text size="xs" c="dimmed">{values[f.name] || "(空)"}</Text>
+              <Text size="xs" c="dimmed">{values[f.name] || `(${t("common.empty")})`}</Text>
             </Group>
           ))}
         </Stack>
         <Button size="xs" variant="subtle" mt="xs" onClick={() => setSubmitted(false)}>
-          重新填写
+          {t("common.refill")}
         </Button>
       </Paper>
     );
@@ -308,7 +309,7 @@ function FormWidget({ data, isDark }: { data: FormData; isDark: boolean }) {
               );
           }
         })}
-        <Button size="xs" onClick={handleSubmit}>{data.submitLabel || "提交"}</Button>
+        <Button size="xs" onClick={handleSubmit}>{data.submitLabel || t("common.submit")}</Button>
       </Stack>
     </Paper>
   );
@@ -324,7 +325,7 @@ interface TableData {
   filterable?: boolean;
 }
 
-function TableWidget({ data }: { data: TableData; isDark: boolean }) {
+function TableWidget({ data, t }: { data: TableData; isDark: boolean; t: (key: string, opts?: Record<string, unknown>) => string }) {
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [filter, setFilter] = useState("");
@@ -363,7 +364,7 @@ function TableWidget({ data }: { data: TableData; isDark: boolean }) {
       {data.filterable !== false && (
         <TextInput
           size="xs"
-          placeholder="筛选..."
+          placeholder={t("common.filter")}
           value={filter}
           onChange={(e) => setFilter(e.currentTarget.value)}
           mb="xs"
@@ -395,7 +396,7 @@ function TableWidget({ data }: { data: TableData; isDark: boolean }) {
           </Table.Tbody>
         </Table>
       </ScrollArea>
-      <Text size="xs" c="dimmed" mt="xs">{filteredRows.length} 行</Text>
+      <Text size="xs" c="dimmed" mt="xs">{t("common.rowCount", { count: filteredRows.length })}</Text>
     </Paper>
   );
 }
@@ -405,6 +406,7 @@ function TableWidget({ data }: { data: TableData; isDark: boolean }) {
 export function WidgetRenderer({ widget }: { widget: WidgetBlock }) {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useTranslation();
 
   if (!widget.parsed) {
     return (
@@ -429,14 +431,14 @@ export function WidgetRenderer({ widget }: { widget: WidgetBlock }) {
       return (
         <Box>
           <Badge size="xs" variant="light" color="violet" mb="xs">Form</Badge>
-          <FormWidget data={widget.parsed as FormData} isDark={isDark} />
+          <FormWidget data={widget.parsed as FormData} isDark={isDark} t={t} />
         </Box>
       );
     case "table":
       return (
         <Box>
           <Badge size="xs" variant="light" color="green" mb="xs">Table</Badge>
-          <TableWidget data={widget.parsed as TableData} isDark={isDark} />
+          <TableWidget data={widget.parsed as TableData} isDark={isDark} t={t} />
         </Box>
       );
     default:

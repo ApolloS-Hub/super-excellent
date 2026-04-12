@@ -8,6 +8,7 @@ import {
   Box, Text, Group, Badge, Stack, UnstyledButton,
   Progress, Paper, useMantineColorScheme, Collapse,
 } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 
 export type ToolCallStatus = "running" | "success" | "error";
 
@@ -27,10 +28,10 @@ interface ToolProgressProps {
   calls: ToolCallEntry[];
 }
 
-const STATUS_CONFIG: Record<ToolCallStatus, { color: string; icon: string; label: string }> = {
-  running: { color: "blue", icon: "🔄", label: "运行中" },
-  success: { color: "green", icon: "✅", label: "成功" },
-  error: { color: "red", icon: "❌", label: "失败" },
+const STATUS_CONFIG: Record<ToolCallStatus, { color: string; icon: string; labelKey: string }> = {
+  running: { color: "blue", icon: "🔄", labelKey: "tools.statusRunning" },
+  success: { color: "green", icon: "✅", labelKey: "tools.statusSuccess" },
+  error: { color: "red", icon: "❌", labelKey: "tools.statusError" },
 };
 
 function paramSummary(input: string): string {
@@ -58,6 +59,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: ToolCallEntry 
   const elapsed = useElapsed(call);
   const cfg = STATUS_CONFIG[call.status];
   const summary = paramSummary(call.input);
+  const { t } = useTranslation();
 
   return (
     <Paper
@@ -85,7 +87,7 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: ToolCallEntry 
               {elapsed}
             </Text>
             <Badge size="xs" variant="dot" color={cfg.color}>
-              {cfg.label}
+              {t(cfg.labelKey)}
             </Badge>
           </Group>
         </Group>
@@ -108,13 +110,13 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: ToolCallEntry 
       <Collapse in={expanded}>
         <Box mt="xs" p="xs" style={{ borderRadius: 4, fontSize: 11, fontFamily: "monospace", overflowX: "auto" }}
           bg={isDark ? "dark.8" : "gray.1"}>
-          <Text size="xs" fw={600} mb={4}>参数:</Text>
+          <Text size="xs" fw={600} mb={4}>{t("tools.paramsLabel")}:</Text>
           <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
             {formatInput(call.input)}
           </Text>
           {call.output && (
             <>
-              <Text size="xs" fw={600} mt="xs" mb={4}>输出:</Text>
+              <Text size="xs" fw={600} mt="xs" mb={4}>{t("tools.outputLabel")}:</Text>
               <Text size="xs" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                 {call.output.length > 500 ? call.output.slice(0, 500) + "..." : call.output}
               </Text>
@@ -155,6 +157,7 @@ function useElapsed(call: ToolCallEntry): string {
 }
 
 export default function ToolProgress({ calls }: ToolProgressProps) {
+  const { t } = useTranslation();
   if (calls.length === 0) return null;
 
   const running = calls.filter(c => c.status === "running").length;
@@ -164,12 +167,12 @@ export default function ToolProgress({ calls }: ToolProgressProps) {
   return (
     <Stack gap={4}>
       <Group gap="xs">
-        <Text size="xs" fw={600}>🔧 工具调用</Text>
+        <Text size="xs" fw={600}>🔧 {t("tools.toolCalls")}</Text>
         <Text size="xs" c="dimmed">
-          {running > 0 && `${running} 运行中`}
+          {running > 0 && t("tools.summaryRunning", { count: running })}
           {running > 0 && succeeded > 0 && " · "}
-          {succeeded > 0 && `${succeeded} 成功`}
-          {failed > 0 && ` · ${failed} 失败`}
+          {succeeded > 0 && t("tools.summarySuccess", { count: succeeded })}
+          {failed > 0 && ` · ${t("tools.summaryFailed", { count: failed })}`}
         </Text>
       </Group>
       {calls.map(call => (

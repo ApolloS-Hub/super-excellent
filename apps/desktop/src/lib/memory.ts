@@ -6,6 +6,9 @@
  * Long-term:  local persisted memory + semantic retrieval in agent-core.
  */
 
+import i18n from "../i18n";
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
+
 // ────────────────────────── Types ──────────────────────────
 
 export interface MemoryEntry {
@@ -194,11 +197,11 @@ export async function buildMidTermSummary(): Promise<string> {
 
   const sections: string[] = [];
   const labels: Record<string, string> = {
-    preference: "用户偏好",
-    path: "常用路径",
-    command: "常用命令",
-    pattern: "模式",
-    style: "编码风格",
+    preference: t("memory.catPreference"),
+    path: t("memory.catPath"),
+    command: t("memory.catCommand"),
+    pattern: t("memory.catPattern"),
+    style: t("memory.catStyle"),
   };
   for (const [cat, items] of Object.entries(grouped)) {
     sections.push(`### ${labels[cat] || cat}\n${items.map((i) => `- ${i}`).join("\n")}`);
@@ -220,10 +223,10 @@ export function saveMemory(content: string): void {
   const lines = content.split("\n");
   let truncated = content;
   if (lines.length > MAX_MEMORY_LINES) {
-    truncated = lines.slice(0, MAX_MEMORY_LINES).join("\n") + "\n\n[...已截断]";
+    truncated = lines.slice(0, MAX_MEMORY_LINES).join("\n") + `\n\n[...${t("memory.truncated")}]`;
   }
   if (truncated.length > MAX_MEMORY_BYTES) {
-    truncated = truncated.slice(0, MAX_MEMORY_BYTES) + "\n\n[...已截断]";
+    truncated = truncated.slice(0, MAX_MEMORY_BYTES) + `\n\n[...${t("memory.truncated")}]`;
   }
   localStorage.setItem(MEMORY_KEY, truncated);
 }
@@ -233,7 +236,7 @@ export function appendMemory(entry: string): void {
   const timestamp = new Date().toISOString().split("T")[0];
   const newContent = existing
     ? `${existing}\n- [${timestamp}] ${entry}`
-    : `# 用户记忆\n\n- [${timestamp}] ${entry}`;
+    : `# ${t("memory.userMemoryHeader")}\n\n- [${timestamp}] ${entry}`;
   saveMemory(newContent);
 }
 
@@ -251,41 +254,41 @@ export function searchMemory(query: string): string[] {
 export function buildMemoryPrompt(): string {
   const content = loadMemory();
   if (!content) return "";
-  return `\n\n## 用户记忆\n以下是用户的偏好和历史上下文，请参考：\n${content}`;
+  return `\n\n## ${t("memory.userMemoryHeader")}\n${t("memory.memoryPromptHint")}\n${content}`;
 }
 
 export function formatMemory(): string {
   const content = loadMemory();
-  if (!content) return "📭 暂无记忆";
+  if (!content) return `📭 ${t("memory.noMemory")}`;
   const lines = content.split("\n").filter((l) => l.trim());
-  return `📝 ${lines.length} 条记忆\n\n${content}`;
+  return `📝 ${t("memory.memoryCount", { count: lines.length })}\n\n${content}`;
 }
 
 // ────────────────────────── Auto-learn (extracts patterns into mid-term) ──────────────────────────
 
 export function autoLearn(userMessage: string, _assistantResponse?: string): void {
   if (/请用英文/.test(userMessage)) {
-    appendMemory("用户偏好：回复使用英文");
-    void saveMidTerm({ category: "preference", content: "回复使用英文" });
+    appendMemory(t("memory.prefReplyEnglish"));
+    void saveMidTerm({ category: "preference", content: t("memory.prefReplyEnglish") });
   }
   if (/用中文/.test(userMessage)) {
-    appendMemory("用户偏好：回复使用中文");
-    void saveMidTerm({ category: "preference", content: "回复使用中文" });
+    appendMemory(t("memory.prefReplyChinese"));
+    void saveMidTerm({ category: "preference", content: t("memory.prefReplyChinese") });
   }
 
   const pathMatch = userMessage.match(/(?:项目|project).*?([/~][\w/.-]+)/);
   if (pathMatch) {
-    appendMemory(`常用项目路径: ${pathMatch[1]}`);
+    appendMemory(`${t("memory.commonProjectPath")}: ${pathMatch[1]}`);
     void saveMidTerm({ category: "path", content: pathMatch[1] });
   }
 
   if (/不要用.*?bash/i.test(userMessage)) {
-    appendMemory("用户偏好：避免使用 bash");
-    void saveMidTerm({ category: "preference", content: "避免使用 bash" });
+    appendMemory(t("memory.prefAvoidBash"));
+    void saveMidTerm({ category: "preference", content: t("memory.prefAvoidBash") });
   }
   if (/直接执行/.test(userMessage)) {
-    appendMemory("用户偏好：直接执行不需确认");
-    void saveMidTerm({ category: "preference", content: "直接执行不需确认" });
+    appendMemory(t("memory.prefDirectExec"));
+    void saveMidTerm({ category: "preference", content: t("memory.prefDirectExec") });
   }
 }
 
@@ -296,17 +299,17 @@ export async function buildFullMemoryContext(): Promise<string> {
 
   const shortTerm = buildShortTermSummary();
   if (shortTerm) {
-    parts.push(`## 当前会话上下文\n${shortTerm}`);
+    parts.push(`## ${t("memory.currentSessionContext")}\n${shortTerm}`);
   }
 
   const midTerm = await buildMidTermSummary();
   if (midTerm) {
-    parts.push(`## 用户偏好与习惯\n${midTerm}`);
+    parts.push(`## ${t("memory.userPrefsAndHabits")}\n${midTerm}`);
   }
 
   const longTerm = loadMemory();
   if (longTerm) {
-    parts.push(`## 长期记忆\n${longTerm}`);
+    parts.push(`## ${t("memory.longTermMemory")}\n${longTerm}`);
   }
 
   return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";

@@ -11,6 +11,8 @@
  * Inspired by Claude Code's permission pipeline and the Rust PermissionPolicy.
  */
 
+import i18n from "../i18n";
+
 export type PermissionLevel =
   | "default"
   | "acceptEdits"
@@ -33,6 +35,16 @@ export interface PermissionLevelMeta {
   descriptionEn: string;
   color: string;
   symbol: string;
+}
+
+/** Pick the right localized label from a PermissionLevelMeta entry based on current language. */
+export function getPermissionLabel(meta: PermissionLevelMeta): string {
+  return i18n.language?.startsWith("en") ? meta.labelEn : meta.label;
+}
+
+/** Pick the right localized description from a PermissionLevelMeta entry based on current language. */
+export function getPermissionDescription(meta: PermissionLevelMeta): string {
+  return i18n.language?.startsWith("en") ? meta.descriptionEn : meta.description;
 }
 
 export const PERMISSION_LEVEL_META: Record<PermissionLevel, PermissionLevelMeta> = {
