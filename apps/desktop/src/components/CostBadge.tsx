@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Group, Text, Badge, Tooltip, useMantineColorScheme,
 } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 import { getConversationUsage, formatCost, formatTokens } from "../lib/cost-tracker";
 
 interface CostBadgeProps {
@@ -20,6 +21,7 @@ export default function CostBadge({ conversationId, compact }: CostBadgeProps) {
   const [outputTokens, setOutputTokens] = useState(0);
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useTranslation();
 
   const refresh = useCallback(async () => {
     if (!conversationId) return;
@@ -41,9 +43,9 @@ export default function CostBadge({ conversationId, compact }: CostBadgeProps) {
   if (total === 0 && totalCost === 0) return null;
 
   const tooltipContent = [
-    `输入: ${formatTokens(inputTokens)} tokens`,
-    `输出: ${formatTokens(outputTokens)} tokens`,
-    `费用: ${formatCost(totalCost)}`,
+    `${t("common.input")}: ${formatTokens(inputTokens)} tokens`,
+    `${t("common.output")}: ${formatTokens(outputTokens)} tokens`,
+    `${t("common.cost")}: ${formatCost(totalCost)}`,
   ].join("\n");
 
   if (compact) {

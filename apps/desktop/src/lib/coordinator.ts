@@ -284,12 +284,19 @@ async function callWorkerLLM(
   onEvent: EventCallback,
   _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
-  // 60-second overall timeout for worker execution
-  const timeoutMs = 60000;
+  // 90-second overall timeout for worker execution
+  const timeoutMs = 90000;
   const timeoutPromise = new Promise<string>((_, reject) =>
-    setTimeout(() => reject(new Error(t("coordinator.workerTimeout"))), timeoutMs)
+    setTimeout(() => reject(new Error(`Worker ${worker.name} timeout (${timeoutMs / 1000}s)`)), timeoutMs)
   );
-  return Promise.race([callWorkerLLMInner(worker, task, config, onEvent, _history), timeoutPromise]);
+  try {
+    return await Promise.race([callWorkerLLMInner(worker, task, config, onEvent, _history), timeoutPromise]);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    // Surface error to UI so user doesn't see infinite "thinking"
+    onEvent({ type: "error", text: `Worker error: ${errMsg}` });
+    throw err;
+  }
 }
 
 async function callWorkerLLMInner(
@@ -340,6 +347,7 @@ async function callWorkerLLMInner(
     if (isAnthropic) {
       headers["x-api-key"] = config.apiKey;
       headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerous-direct-browser-access"] = "true";
       apiUrl = `${baseURL}/v1/messages`;
       const anthropicMsgs = isolatedMessages.filter(m => m.role !== "system").map(m => ({
         role: m.role, content: m.content || "",
@@ -437,7 +445,11 @@ async function callWorkerLLMInner(
         });
 
         try {
-          const result = await executeTool(fn.name, args);
+          // Per-tool timeout: 30s to prevent individual tools from hanging
+          const toolTimeout = new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error(`Tool ${fn.name} timeout (30s)`)), 30000)
+          );
+          const result = await Promise.race([executeTool(fn.name, args), toolTimeout]);
           onEvent({
             type: "thinking",
             text: `✅ ${worker.emoji} ${fn.name}: ${result.slice(0, 100)}\n`,
@@ -449,6 +461,7 @@ async function callWorkerLLMInner(
           });
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
+          onEvent({ type: "thinking", text: `❌ ${worker.emoji} ${fn.name}: ${errMsg}\n` });
           isolatedMessages.push({
             role: "tool",
             content: `Error: ${errMsg}`,

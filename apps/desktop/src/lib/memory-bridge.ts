@@ -23,6 +23,8 @@ import {
   autoLearn,
 } from "./memory";
 import { memoryStore } from "./memory-store";
+import i18n from "../i18n";
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 // ────────────────────────── Types ──────────────────────────
 
@@ -354,7 +356,7 @@ class MemoryBridge {
     });
 
     // And to localStorage long-term memory for backward compatibility
-    appendMemory(`偏好: ${key} = ${value}`);
+    appendMemory(`${t("memory.preferenceLabel")}: ${key} = ${value}`);
   }
 
   // ═══════════ Stats ═══════════

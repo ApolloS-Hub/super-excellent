@@ -3,6 +3,9 @@
  * Aligned with ref-s05: SkillMeta with trigger-based matching + system prompt injection.
  */
 
+import i18n from "../i18n";
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
+
 // ═══════════ Types ═══════════
 
 export interface SkillMeta {
@@ -131,5 +134,5 @@ export function buildSkillPrompt(userMessage: string): string {
   // Inject at most 2 skills to keep prompt manageable
   const injected = matched.slice(0, 2);
   const sections = injected.map(s => s.content);
-  return "\n\n# 已激活技能\n" + sections.join("\n\n");
+  return `\n\n# ${t("skills.activatedSkills")}\n` + sections.join("\n\n");
 }

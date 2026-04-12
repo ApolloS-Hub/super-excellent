@@ -8,6 +8,7 @@ import {
   Stack, Text, Paper, Group, Badge, Button, Select,
   ScrollArea, useMantineColorScheme,
 } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 import {
   getTemplates, getAllWorkflowInstances, startWorkflow,
   type WorkflowTemplate, type WorkflowInstance,
@@ -44,15 +45,15 @@ const ROLE_EMOJI: Record<string, string> = {
   customer_support: "🎧", risk_analyst: "🛡️",
 };
 
-const ROLE_LABEL: Record<string, string> = {
-  product: "产品经理", architect: "架构师", developer: "开发工程师",
-  frontend: "前端工程师", code_reviewer: "代码审查", tester: "测试工程师",
-  devops: "DevOps", security: "安全工程师", writer: "文档工程师",
-  researcher: "研究员", ux_designer: "UX 设计", data_analyst: "数据分析",
-  ops_director: "运营总监", growth_hacker: "增长专家", content_ops: "内容运营",
-  legal_compliance: "法务合规", financial_analyst: "财务分析",
-  project_manager: "项目经理", customer_support: "客户支持",
-  risk_analyst: "风险分析",
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  product: "workflow.roleProduct", architect: "workflow.roleArchitect", developer: "workflow.roleDeveloper",
+  frontend: "workflow.roleFrontend", code_reviewer: "workflow.roleCodeReviewer", tester: "workflow.roleTester",
+  devops: "workflow.roleDevops", security: "workflow.roleSecurity", writer: "workflow.roleWriter",
+  researcher: "workflow.roleResearcher", ux_designer: "workflow.roleUxDesigner", data_analyst: "workflow.roleDataAnalyst",
+  ops_director: "workflow.roleOpsDirector", growth_hacker: "workflow.roleGrowthHacker", content_ops: "workflow.roleContentOps",
+  legal_compliance: "workflow.roleLegalCompliance", financial_analyst: "workflow.roleFinancialAnalyst",
+  project_manager: "workflow.roleProjectManager", customer_support: "workflow.roleCustomerSupport",
+  risk_analyst: "workflow.roleRiskAnalyst",
 };
 
 // ═══════════ SVG Layout Constants ═══════════
@@ -66,7 +67,7 @@ const ARROW_HEAD_SIZE = 8;
 
 // ═══════════ Helpers ═══════════
 
-function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | null, workers: TeamWorker[]): {
+function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | null, workers: TeamWorker[], t: (key: string, opts?: Record<string, unknown>) => string): {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
 } {
@@ -89,7 +90,7 @@ function buildGraph(template: WorkflowTemplate, instance: WorkflowInstance | nul
       action: step.action,
       status,
       emoji: ROLE_EMOJI[step.role] || "🤖",
-      label: ROLE_LABEL[step.role] || step.role,
+      label: ROLE_LABEL_KEYS[step.role] ? t(ROLE_LABEL_KEYS[step.role]) : step.role,
       result: instance?.stepResults[i],
     };
   });
@@ -123,19 +124,20 @@ function StatusBgColor(status: NodeStatus, isDark: boolean): string {
   }
 }
 
-function StatusLabel(status: NodeStatus): string {
+function StatusLabel(status: NodeStatus, t: (key: string) => string): string {
   switch (status) {
-    case "working": return "工作中";
-    case "done": return "已完成";
-    case "error": return "异常";
-    default: return "空闲";
+    case "working": return t("workflow.statusWorking");
+    case "done": return t("workflow.statusDone");
+    case "error": return t("workflow.statusError");
+    default: return t("workflow.statusIdle");
   }
 }
 
-function WorkflowSVG({ nodes, edges, isDark }: {
+function WorkflowSVG({ nodes, edges, isDark, t }: {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   isDark: boolean;
+  t: (key: string) => string;
 }) {
   const totalWidth = nodes.length * (NODE_WIDTH + NODE_GAP_X) - NODE_GAP_X + NODE_PADDING_X * 2;
   const totalHeight = NODE_HEIGHT + NODE_PADDING_Y * 2 + 28; // extra for edge labels
@@ -264,7 +266,7 @@ function WorkflowSVG({ nodes, edges, isDark }: {
               fill={node.status === "idle" ? dimColor : borderColor}
               fontFamily="system-ui, sans-serif"
             >
-              {StatusLabel(node.status)}
+              {StatusLabel(node.status, t)}
             </text>
           </g>
         );
@@ -275,14 +277,14 @@ function WorkflowSVG({ nodes, edges, isDark }: {
 
 // ═══════════ Template Selector ═══════════
 
-const TEMPLATE_LABELS: Record<string, string> = {
-  product_launch: "🚀 产品发布",
-  code_review_flow: "🔍 代码审查",
-  content_publish: "📝 内容发布",
-  incident_response: "🚨 事件响应",
-  data_pipeline: "📊 数据管线",
-  requirement_analysis: "📋 需求分析",
-  data_report: "📈 数据报告",
+const TEMPLATE_LABEL_KEYS: Record<string, { emoji: string; key: string }> = {
+  product_launch: { emoji: "🚀", key: "workflow.tplProductLaunch" },
+  code_review_flow: { emoji: "🔍", key: "workflow.tplCodeReview" },
+  content_publish: { emoji: "📝", key: "workflow.tplContentPublish" },
+  incident_response: { emoji: "🚨", key: "workflow.tplIncidentResponse" },
+  data_pipeline: { emoji: "📊", key: "workflow.tplDataPipeline" },
+  requirement_analysis: { emoji: "📋", key: "workflow.tplRequirementAnalysis" },
+  data_report: { emoji: "📈", key: "workflow.tplDataReport" },
 };
 
 // ═══════════ Main Component ═══════════
@@ -290,6 +292,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
 export default function WorkflowViewer() {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === "dark";
+  const { t } = useTranslation();
 
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
@@ -326,15 +329,18 @@ export default function WorkflowViewer() {
 
   const graph = useMemo(() => {
     if (!selectedTemplate) return { nodes: [], edges: [] };
-    return buildGraph(selectedTemplate, activeInstance, workers);
-  }, [selectedTemplate, activeInstance, workers]);
+    return buildGraph(selectedTemplate, activeInstance, workers, t);
+  }, [selectedTemplate, activeInstance, workers, t]);
 
   const templateSelectData = useMemo(
-    () => templates.map(t => ({
-      value: t.id,
-      label: TEMPLATE_LABELS[t.id] || t.name,
-    })),
-    [templates],
+    () => templates.map(tmpl => {
+      const meta = TEMPLATE_LABEL_KEYS[tmpl.id];
+      return {
+        value: tmpl.id,
+        label: meta ? `${meta.emoji} ${t(meta.key)}` : tmpl.name,
+      };
+    }),
+    [templates, t],
   );
 
   const handleStart = () => {
@@ -351,20 +357,20 @@ export default function WorkflowViewer() {
       {/* Header */}
       <Group justify="space-between">
         <Group gap="xs">
-          <Badge variant="light" color="violet">{templates.length} 模板</Badge>
-          <Badge variant="light" color="blue">{runningCount} 运行中</Badge>
-          <Badge variant="light" color="green">{completedCount} 已完成</Badge>
+          <Badge variant="light" color="violet">{t("workflow.templateCount", { count: templates.length })}</Badge>
+          <Badge variant="light" color="blue">{t("workflow.runningCount", { count: runningCount })}</Badge>
+          <Badge variant="light" color="green">{t("workflow.completedCount", { count: completedCount })}</Badge>
         </Group>
         <Button size="xs" variant="light" color="violet" onClick={handleStart}
           disabled={!selectedTemplateId}>
-          启动工作流
+          {t("workflow.startWorkflow")}
         </Button>
       </Group>
 
       {/* Template selector */}
       <Select
         size="xs"
-        placeholder="选择工作流模板..."
+        placeholder={t("workflow.selectTemplate")}
         data={templateSelectData}
         value={selectedTemplateId}
         onChange={setSelectedTemplateId}
@@ -379,19 +385,19 @@ export default function WorkflowViewer() {
       {selectedTemplate && graph.nodes.length > 0 ? (
         <Paper p="sm" radius="md" withBorder style={{ overflow: "hidden" }}>
           <ScrollArea>
-            <WorkflowSVG nodes={graph.nodes} edges={graph.edges} isDark={isDark} />
+            <WorkflowSVG nodes={graph.nodes} edges={graph.edges} isDark={isDark} t={t} />
           </ScrollArea>
         </Paper>
       ) : (
         <Text size="xs" c="dimmed" ta="center" py="md">
-          选择一个工作流模板以查看流程图
+          {t("workflow.selectTemplateHint")}
         </Text>
       )}
 
       {/* Step detail list */}
       {selectedTemplate && (
         <Stack gap={4}>
-          <Text size="xs" fw={600} c="dimmed">步骤详情</Text>
+          <Text size="xs" fw={600} c="dimmed">{t("workflow.stepDetails")}</Text>
           {selectedTemplate.steps.map((step, i) => {
             const node = graph.nodes[i];
             return (
@@ -405,7 +411,7 @@ export default function WorkflowViewer() {
                   {i + 1}
                 </Badge>
                 <Text size="xs">{ROLE_EMOJI[step.role] || "🤖"}</Text>
-                <Text size="xs" fw={500}>{ROLE_LABEL[step.role] || step.role}</Text>
+                <Text size="xs" fw={500}>{ROLE_LABEL_KEYS[step.role] ? t(ROLE_LABEL_KEYS[step.role]) : step.role}</Text>
                 <Text size="xs" c="dimmed">{step.action.replace(/_/g, " ")}</Text>
                 <Text size="xs" c="dimmed" style={{ marginLeft: "auto" }}>
                   {step.input.replace(/_/g, " ")} → {step.output.replace(/_/g, " ")}
@@ -419,7 +425,7 @@ export default function WorkflowViewer() {
       {/* Instance history */}
       {instances.length > 0 && (
         <Stack gap={4}>
-          <Text size="xs" fw={600} c="dimmed">工作流实例 ({instances.length})</Text>
+          <Text size="xs" fw={600} c="dimmed">{t("workflow.instanceHistory", { count: instances.length })}</Text>
           <ScrollArea h={120}>
             <Stack gap={4}>
               {instances.slice(0, 20).map(ins => {
@@ -431,9 +437,9 @@ export default function WorkflowViewer() {
                     } variant="light">
                       {ins.status}
                     </Badge>
-                    <Text size="xs" fw={500}>{TEMPLATE_LABELS[ins.templateId] || tmpl?.name || ins.templateId}</Text>
+                    <Text size="xs" fw={500}>{TEMPLATE_LABEL_KEYS[ins.templateId] ? `${TEMPLATE_LABEL_KEYS[ins.templateId].emoji} ${t(TEMPLATE_LABEL_KEYS[ins.templateId].key)}` : tmpl?.name || ins.templateId}</Text>
                     <Text size="xs" c="dimmed">
-                      步骤 {ins.currentStep}/{tmpl?.steps.length || "?"}
+                      {t("workflow.stepProgress", { current: ins.currentStep, total: tmpl?.steps.length || "?" })}
                     </Text>
                     <Text size="xs" c="dimmed" style={{ marginLeft: "auto" }}>
                       {new Date(ins.startedAt).toLocaleTimeString()}
