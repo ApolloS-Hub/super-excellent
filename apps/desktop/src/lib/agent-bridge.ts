@@ -812,20 +812,21 @@ async function callAnthropic(
       break;
     }
 
-    // ── API call with per-turn timeout (streaming enabled) ──
+    // ── API call with per-turn timeout ──
+    // NOTE: Use stream:false because Tauri plugin-http does not support ReadableStream.
+    // Text is emitted to UI after full response arrives.
     const body: Record<string, unknown> = {
       model: config.model || "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: systemBlocks,
       messages: loop.messages,
       tools: anthropicTools,
-      stream: true,
+      stream: false,
     };
 
     const turnAbort = new AbortController();
     const turnTimer = setTimeout(() => turnAbort.abort(), TURN_TIMEOUT_MS);
 
-    // Combine user abort + turn timeout
     const combinedSignal = signal.aborted ? signal : turnAbort.signal;
     signal.addEventListener("abort", () => turnAbort.abort(), { once: true });
 
@@ -872,93 +873,22 @@ async function callAnthropic(
       throw new Error(formatClassifiedError(classified));
     }
 
-    // ── Parse SSE stream and accumulate content blocks ──
-    const content: AnthropicContentBlock[] = [];
-    let _stopReason = "end_turn";
-    let usageData: { input_tokens?: number; output_tokens?: number } | undefined;
-    // Track current content block being streamed
-    let currentBlockIndex = -1;
-    let currentToolId = "";
-    let currentToolName = "";
-    let currentToolJson = "";
+    // ── Parse JSON response (reliable in Tauri environment) ──
+    const data = await response.json() as {
+      content: AnthropicContentBlock[];
+      stop_reason: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
 
-    const reader = response.body?.getReader();
-    if (reader) {
-      const decoder = new TextDecoder();
-      let sseBuffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (signal.aborted) { loop.phase = 'done'; break; }
-        sseBuffer += decoder.decode(value, { stream: true });
-        const lines = sseBuffer.split("\n");
-        sseBuffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (raw === "[DONE]") continue;
-          try {
-            const evt = JSON.parse(raw);
-            switch (evt.type) {
-              case "content_block_start":
-                currentBlockIndex = evt.index ?? content.length;
-                if (evt.content_block?.type === "text") {
-                  content[currentBlockIndex] = { type: "text", text: "" };
-                } else if (evt.content_block?.type === "tool_use") {
-                  currentToolId = evt.content_block.id || "";
-                  currentToolName = evt.content_block.name || "";
-                  currentToolJson = "";
-                  content[currentBlockIndex] = {
-                    type: "tool_use", id: currentToolId,
-                    name: currentToolName, input: {},
-                  } as AnthropicToolUseBlock;
-                } else if (evt.content_block?.type === "thinking") {
-                  content[currentBlockIndex] = { type: "thinking", thinking: "" } as AnthropicThinkingBlock;
-                }
-                break;
-              case "content_block_delta":
-                if (evt.delta?.type === "text_delta" && evt.delta.text) {
-                  const block = content[currentBlockIndex];
-                  if (block?.type === "text") {
-                    (block as AnthropicTextBlock).text += evt.delta.text;
-                    onEvent({ type: "text", text: evt.delta.text });
-                  }
-                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
-                  currentToolJson += evt.delta.partial_json;
-                } else if (evt.delta?.type === "thinking_delta" && evt.delta.thinking) {
-                  const block = content[currentBlockIndex];
-                  if (block?.type === "thinking") {
-                    (block as AnthropicThinkingBlock).thinking += evt.delta.thinking;
-                  }
-                }
-                break;
-              case "content_block_stop":
-                if (content[currentBlockIndex]?.type === "tool_use" && currentToolJson) {
-                  try {
-                    (content[currentBlockIndex] as AnthropicToolUseBlock).input = JSON.parse(currentToolJson);
-                  } catch { /* partial JSON */ }
-                  currentToolJson = "";
-                }
-                break;
-              case "message_delta":
-                if (evt.delta?.stop_reason) _stopReason = evt.delta.stop_reason;
-                if (evt.usage) usageData = { ...usageData, ...evt.usage };
-                break;
-              case "message_start":
-                if (evt.message?.usage) usageData = evt.message.usage;
-                break;
-            }
-          } catch { /* skip unparseable SSE */ }
-        }
-      }
-    }
+    const content = data.content || [];
+    const _stopReason = data.stop_reason || "end_turn";
 
     // ── Usage tracking ──
-    if (usageData) {
+    if (data.usage) {
       const { recordUsage } = await import("./cost-tracker");
       const record = recordUsage(config.model || "unknown", config.model || "unknown", {
-        prompt_tokens: usageData.input_tokens,
-        completion_tokens: usageData.output_tokens,
+        prompt_tokens: data.usage.input_tokens,
+        completion_tokens: data.usage.output_tokens,
       });
       if (record) onEvent({ type: "thinking", text: `💰 ${record.inputTokens}+${record.outputTokens} tokens ≈ $${record.estimatedCost.toFixed(4)}\n` });
     }
@@ -966,7 +896,7 @@ async function callAnthropic(
     const hasToolUse = content.some(b => b.type === "tool_use");
 
     // Cache tool call rounds
-    if (hasToolUse) setCache(cacheKey, { content, usage: usageData });
+    if (hasToolUse) setCache(cacheKey, { content, usage: data.usage });
 
     // ── Emit thinking blocks ──
     for (const block of content) {
