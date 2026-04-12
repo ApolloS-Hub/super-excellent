@@ -161,6 +161,32 @@ const CATEGORY_COLORS: Record<string, string> = {
   "数据": "cyan",
 };
 
+const CATEGORY_I18N_KEYS: Record<string, string> = {
+  "效率": "skills.catEfficiency",
+  "协作": "skills.catCollaboration",
+  "市场": "skills.catMarket",
+  "内容": "skills.catContent",
+  "数据": "skills.catData",
+};
+
+const TAG_I18N_KEYS: Record<string, string> = {
+  "报告": "skills.tagReport",
+  "汇总": "skills.tagSummary",
+  "日常": "skills.tagDaily",
+  "会议": "skills.tagMeeting",
+  "纪要": "skills.tagMinutes",
+  "转录": "skills.tagTranscription",
+  "竞品": "skills.tagCompetitor",
+  "分析": "skills.tagAnalysis",
+  "市场": "skills.tagMarket",
+  "排期": "skills.tagSchedule",
+  "内容": "skills.tagContent",
+  "规划": "skills.tagPlanning",
+  "数据": "skills.tagData",
+  "报表": "skills.tagDashboard",
+  "可视化": "skills.tagVisualization",
+};
+
 function SkillMarketPage({ onBack }: SkillMarketPageProps) {
   const { t } = useTranslation();
   const { colorScheme } = useMantineColorScheme();
@@ -211,15 +237,15 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
     <Stack maw={900} mx="auto">
       <Group justify="space-between">
         <Group gap="xs">
-          <Text size="xl" fw={700}>🛒 Skill 市场</Text>
-          <Badge variant="light" color="blue">{BUILTIN_SKILLS.length} 个 Skill</Badge>
-          <Badge variant="light" color="green">{installed.size} 已安装</Badge>
+          <Text size="xl" fw={700}>{`🛒 ${t("skills.title")}`}</Text>
+          <Badge variant="light" color="blue">{t("skills.skillCount", { count: BUILTIN_SKILLS.length })}</Badge>
+          <Badge variant="light" color="green">{t("skills.installedCount", { count: installed.size })}</Badge>
         </Group>
         <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
       </Group>
 
       <Text size="sm" c="dimmed">
-        每个 Skill 是一个预设的多角色工作流模板。安装后可在工作流面板中使用。
+        {t("skills.subtitle")}
       </Text>
 
       {/* Category filter */}
@@ -230,7 +256,7 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
           style={{ cursor: "pointer" }}
           onClick={() => setFilter(null)}
         >
-          全部
+          {t("skills.all")}
         </Badge>
         {categories.map(cat => (
           <Badge
@@ -240,7 +266,7 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
             style={{ cursor: "pointer" }}
             onClick={() => setFilter(filter === cat ? null : cat)}
           >
-            {cat}
+            {t(CATEGORY_I18N_KEYS[cat] || cat)}
           </Badge>
         ))}
       </Group>
@@ -267,16 +293,16 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
                   <Group gap="xs" wrap="nowrap">
                     <Text size="xl">{skill.emoji}</Text>
                     <Stack gap={0}>
-                      <Text size="sm" fw={600}>{skill.name}</Text>
+                      <Text size="sm" fw={600}>{t(`skills.${skill.id}.name`)}</Text>
                       <Text size="xs" c="dimmed">{skill.nameEn}</Text>
                     </Stack>
                   </Group>
                   <Badge size="xs" color={CATEGORY_COLORS[skill.category] || "gray"} variant="light">
-                    {skill.category}
+                    {t(CATEGORY_I18N_KEYS[skill.category] || skill.category)}
                   </Badge>
                 </Group>
 
-                <Text size="xs" c="dimmed" mb="sm">{skill.description}</Text>
+                <Text size="xs" c="dimmed" mb="sm">{t(`skills.${skill.id}.description`)}</Text>
 
                 {/* Workflow steps preview */}
                 <Group gap={4} mb="sm" wrap="wrap">
@@ -292,23 +318,23 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
 
                 <Group gap="xs" wrap="wrap">
                   {skill.tags.map(tag => (
-                    <Badge key={tag} size="xs" variant="light" color="gray">#{tag}</Badge>
+                    <Badge key={tag} size="xs" variant="light" color="gray">#{t(TAG_I18N_KEYS[tag] || tag)}</Badge>
                   ))}
                 </Group>
 
                 <Group mt="sm">
                   {isInstalled ? (
                     <Group gap="xs">
-                      <Badge color="green" variant="light">✅ 已安装</Badge>
+                      <Badge color="green" variant="light">{`✅ ${t("skills.installed")}`}</Badge>
                       <Button size="xs" variant="subtle" color="red"
                         onClick={() => handleUninstall(skill)}>
-                        卸载
+                        {t("skills.uninstall")}
                       </Button>
                     </Group>
                   ) : (
                     <Button size="xs" variant="light" color="blue"
                       onClick={() => handleInstall(skill)}>
-                      📥 安装
+                      {`📥 ${t("skills.install")}`}
                     </Button>
                   )}
                 </Group>

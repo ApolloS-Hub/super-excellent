@@ -12,6 +12,9 @@ import {
   type Worker,
 } from "./team";
 import { emitAgentEvent } from "./event-bus";
+import i18n from "../i18n";
+
+const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 /** Worker 所属团队映射 */
 const ENGINEERING_IDS = new Set([
@@ -20,7 +23,7 @@ const ENGINEERING_IDS = new Set([
 ]);
 
 function getWorkerTeam(workerId: string): string {
-  return ENGINEERING_IDS.has(workerId) ? "研发团队" : "业务团队";
+  return ENGINEERING_IDS.has(workerId) ? t("coordinator.engineeringTeam") : t("coordinator.businessTeam");
 }
 
 // ═══════════ 类型定义 ═══════════
@@ -167,7 +170,7 @@ export function analyzeIntent(message: string): IntentResult {
     return {
       type: "multi_step",
       workers,
-      plan: `多步骤任务，涉及: ${workers.join(", ")}`,
+      plan: t("coordinator.multiStepPlan", { workers: workers.join(", ") }),
     };
   }
 
@@ -176,14 +179,14 @@ export function analyzeIntent(message: string): IntentResult {
     return {
       type: "task",
       workers: matchedWorkers,
-      plan: `单任务，由 ${matchedWorkers[0]} 执行`,
+      plan: t("coordinator.singleTaskPlan", { worker: matchedWorkers[0] }),
     };
   }
 
   // 检查是否为纯闲聊
   const isChatOnly = CHAT_KEYWORDS.some(kw => msg.includes(kw));
   if (isChatOnly && matchedWorkers.length === 0) {
-    return { type: "chat", workers: [], plan: "闲聊对话" };
+    return { type: "chat", workers: [], plan: t("coordinator.chatPlan") };
   }
 
   // 默认：如果消息较长且不像闲聊，当作开发任务
@@ -191,11 +194,11 @@ export function analyzeIntent(message: string): IntentResult {
     return {
       type: "task",
       workers: ["developer"],
-      plan: "默认由开发工程师处理",
+      plan: t("coordinator.defaultDeveloperPlan"),
     };
   }
 
-  return { type: "chat", workers: [], plan: "闲聊对话" };
+  return { type: "chat", workers: [], plan: t("coordinator.chatPlan") };
 }
 
 // ═══════════ 任务派发 ═══════════
@@ -217,7 +220,7 @@ export async function dispatchToWorker(
       workerId,
       workerName: workerId,
       success: false,
-      output: `未找到 Worker: ${workerId}`,
+      output: t("coordinator.workerNotFound", { id: workerId }),
     };
   }
 
@@ -232,7 +235,7 @@ export async function dispatchToWorker(
 
   onEvent({
     type: "thinking",
-    text: `\n🎯 派给 ${worker.emoji} ${worker.name}（${team}）\n`,
+    text: `\n🎯 ${t("coordinator.dispatchTo", { emoji: worker.emoji, name: worker.name, team })}\n`,
   });
 
   try {
@@ -260,7 +263,7 @@ export async function dispatchToWorker(
       workerId,
       workerName: worker.name,
       success: false,
-      output: `执行失败: ${errMsg}`,
+      output: `${t("coordinator.executionFailed")}: ${errMsg}`,
     };
   }
 }
@@ -284,7 +287,7 @@ async function callWorkerLLM(
   // 60-second overall timeout for worker execution
   const timeoutMs = 60000;
   const timeoutPromise = new Promise<string>((_, reject) =>
-    setTimeout(() => reject(new Error("Worker 执行超时 (60s)")), timeoutMs)
+    setTimeout(() => reject(new Error(t("coordinator.workerTimeout"))), timeoutMs)
   );
   return Promise.race([callWorkerLLMInner(worker, task, config, onEvent, _history), timeoutPromise]);
 }
@@ -303,8 +306,8 @@ async function callWorkerLLMInner(
 
   // 根据 Worker 角色过滤可用工具
   const allowedTools = getWorkerToolWhitelist(worker.role);
-  const filteredTools = TOOL_DEFINITIONS.filter(t =>
-    allowedTools.includes(t.function.name),
+  const filteredTools = TOOL_DEFINITIONS.filter(td =>
+    allowedTools.includes(td.function.name),
   );
 
   // ── 上下文隔离：独立 messages，不包含父 agent 历史 ──
@@ -314,7 +317,7 @@ async function callWorkerLLMInner(
     tool_call_id?: string;
     tool_calls?: unknown[];
   }> = [
-    { role: "system", content: worker.systemPrompt + `\n\n今天的日期是 ${new Date().toISOString().split("T")[0]}。搜索时不要在关键词里加年份数字。` },
+    { role: "system", content: worker.systemPrompt + `\n\n${t("coordinator.todayDateHint", { date: new Date().toISOString().split("T")[0] })}` },
     { role: "user", content: task },
   ];
 
@@ -344,13 +347,13 @@ async function callWorkerLLMInner(
       body = {
         model: config.model || "claude-sonnet-4-20250514",
         max_tokens: 4096,
-        system: worker.systemPrompt + "\n\n今天的日期是 " + new Date().toISOString().split("T")[0] + "。搜索时不要在关键词里加年份数字。",
+        system: worker.systemPrompt + "\n\n" + t("coordinator.todayDateHint", { date: new Date().toISOString().split("T")[0] }),
         messages: anthropicMsgs,
       };
       if (filteredTools.length > 0 && config.provider !== "compatible") {
-        body.tools = filteredTools.map(t => ({
-          name: t.function.name, description: t.function.description,
-          input_schema: t.function.parameters,
+        body.tools = filteredTools.map(td => ({
+          name: td.function.name, description: td.function.description,
+          input_schema: td.function.parameters,
         }));
       }
     } else {
@@ -395,7 +398,7 @@ async function callWorkerLLMInner(
       };
     } else {
       const choice = data.choices?.[0];
-      if (!choice) throw new Error("Worker API \u65e0\u54cd\u5e94");
+      if (!choice) throw new Error(t("coordinator.noApiResponse"));
       msg = choice.message;
     }
 
@@ -421,7 +424,7 @@ async function callWorkerLLMInner(
         if (!allowedTools.includes(fn.name)) {
           isolatedMessages.push({
             role: "tool",
-            content: `⛔ Worker ${worker.name} 无权使用工具: ${fn.name}`,
+            content: `⛔ ${t("coordinator.workerNoPermission", { worker: worker.name, tool: fn.name })}`,
             tool_call_id: tc.id,
           });
           continue;
@@ -465,7 +468,7 @@ async function callWorkerLLMInner(
       // Compatible provider: emit tool results directly and stop
       if (config.provider === "compatible") {
         const toolMsgs = isolatedMessages.filter(m => m.role === "tool").map(m => m.content).filter(Boolean);
-        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : "工具执行完成，但无返回结果";
+        const summary = toolMsgs.length > 0 ? toolMsgs.join("\n\n").slice(0, 5000) : t("coordinator.toolDoneNoResult");
         onEvent({ type: "text", text: summary });
         fullOutput = summary;
         break;
@@ -498,7 +501,7 @@ export async function orchestrateMultiStep(
 ): Promise<string> {
   onEvent({
     type: "thinking",
-    text: `\n📋 秘书开始编排多步骤任务，涉及 ${workerIds.length} 个 Worker...\n`,
+    text: `\n📋 ${t("coordinator.secretaryOrchestrating", { count: workerIds.length })}\n`,
   });
 
   const results: WorkerResult[] = [];
@@ -512,12 +515,12 @@ export async function orchestrateMultiStep(
     // 为每个 Worker 构建上下文（包含前一步的输出）
     let taskForWorker = message;
     if (previousOutput) {
-      taskForWorker = `${message}\n\n前序 Worker 的输出供你参考:\n${previousOutput.slice(0, 3000)}`;
+      taskForWorker = `${message}\n\n${t("coordinator.previousWorkerOutput")}:\n${previousOutput.slice(0, 3000)}`;
     }
 
     onEvent({
       type: "thinking",
-      text: `\n📌 步骤 ${results.length + 1}/${workerIds.length}: ${workerName}\n`,
+      text: `\n📌 ${t("coordinator.stepProgress", { current: results.length + 1, total: workerIds.length, worker: workerName })}\n`,
     });
 
     const result = await dispatchToWorker(
@@ -539,7 +542,7 @@ export async function orchestrateMultiStep(
 
 /** 汇总多个 Worker 的执行结果 */
 function buildSummary(results: WorkerResult[]): string {
-  const lines: string[] = ["---", "📊 **秘书汇总报告**\n"];
+  const lines: string[] = ["---", `📊 **${t("coordinator.summaryReport")}**\n`];
   for (const r of results) {
     const status = r.success ? "✅" : "❌";
     lines.push(`${status} **${r.workerName}**: ${r.output.slice(0, 200)}`);
@@ -547,7 +550,7 @@ function buildSummary(results: WorkerResult[]): string {
     lines.push("");
   }
   const successCount = results.filter(r => r.success).length;
-  lines.push(`\n**完成率**: ${successCount}/${results.length}`);
+  lines.push(`\n**${t("coordinator.completionRate")}**: ${successCount}/${results.length}`);
   return lines.join("\n");
 }
 
