@@ -2,7 +2,7 @@
  * Real end-to-end integration test — actually calls Anthropic API
  * Simulates the EXACT flow that happens when user types a message in the app
  */
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock Tauri environment
 vi.mock("@tauri-apps/plugin-http", () => ({
