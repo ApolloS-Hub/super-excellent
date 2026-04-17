@@ -518,6 +518,23 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
     const command = parts[0].toLowerCase();
     const args = parts.slice(1);
 
+    // Try the new command registry first (clean, pure commands)
+    try {
+      const { dispatchCommand } = await import("../lib/commands");
+      const registryResult = await dispatchCommand(cmd, {
+        conversation,
+        localMessages,
+        setLocalMessages,
+        config: loadConfig(),
+      });
+      if (registryResult !== null) {
+        // Registry handled this command — but skip help so ChatPage's fuller help wins
+        if (command !== "help" && command !== "?") {
+          return registryResult;
+        }
+      }
+    } catch (e) { /* fall through to legacy switch */ }
+
     switch (command) {
       case "help":
         return `## ${t("chat.helpTitle")}

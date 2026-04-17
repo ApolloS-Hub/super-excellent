@@ -614,35 +614,96 @@ for (const tool of BUILTIN_NEW_TOOLS) {
 
 // ═══════════ Execute through registry (with validation) ═══════════
 
+/**
+ * Unified tool execution result — used by executeTool() wrapper.
+ * Consistent shape regardless of whether execution succeeded, validated, or errored.
+ */
+export interface ToolExecutionResult {
+  /** Was this tool found and handled? */
+  handled: boolean;
+  /** Did execution succeed (no exception)? */
+  success: boolean;
+  /** Textual result (truncated if oversized) */
+  result: string;
+  /** Execution time in ms */
+  durationMs: number;
+  /** If truncated, how many chars were cut */
+  truncatedChars?: number;
+  /** Error category if failed */
+  errorCategory?: "validation" | "timeout" | "not_found" | "runtime";
+}
+
 export async function executeRegistryTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<{ handled: boolean; result: string }> {
+  const full = await executeRegistryToolFull(name, args);
+  return { handled: full.handled, result: full.result };
+}
+
+/**
+ * Full execution with structured result (timing, error classification, truncation metadata).
+ * Use this in places that need to display status to the user or log telemetry.
+ */
+export async function executeRegistryToolFull(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ToolExecutionResult> {
+  const startedAt = Date.now();
   const tool = getTool(name);
-  if (!tool) return { handled: false, result: "" };
+  if (!tool) {
+    return {
+      handled: false,
+      success: false,
+      result: "",
+      durationMs: 0,
+      errorCategory: "not_found",
+    };
+  }
 
   if (tool.validate) {
     const validation = tool.validate(args);
     if (!validation.valid) {
-      return { handled: true, result: `❌ Validation error: ${validation.error}` };
+      return {
+        handled: true,
+        success: false,
+        result: `❌ Validation error: ${validation.error}`,
+        durationMs: Date.now() - startedAt,
+        errorCategory: "validation",
+      };
     }
   }
 
-  // Wire progress callback so tools can report percent/message to the UI
   if (tool.progress && _progressEmitter) {
     tool.progress((data) => { _progressEmitter!(name, data); });
   }
 
-  const result = await tool.execute(args);
+  try {
+    const result = await tool.execute(args);
+    const durationMs = Date.now() - startedAt;
 
-  if (tool.maxResultChars && result.length > tool.maxResultChars) {
-    const half = Math.floor(tool.maxResultChars / 2);
-    const truncated = result.length - tool.maxResultChars;
+    if (tool.maxResultChars && result.length > tool.maxResultChars) {
+      const half = Math.floor(tool.maxResultChars / 2);
+      const truncatedChars = result.length - tool.maxResultChars;
+      return {
+        handled: true,
+        success: true,
+        result: `${result.slice(0, half)}\n\n... [truncated ${truncatedChars} chars] ...\n\n${result.slice(-half)}`,
+        durationMs,
+        truncatedChars,
+      };
+    }
+
+    return { handled: true, success: true, result, durationMs };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isTimeout = msg.toLowerCase().includes("timeout");
     return {
       handled: true,
-      result: `${result.slice(0, half)}\n\n... [truncated ${truncated} chars] ...\n\n${result.slice(-half)}`,
+      success: false,
+      result: `❌ ${msg}`,
+      durationMs: Date.now() - startedAt,
+      errorCategory: isTimeout ? "timeout" : "runtime",
     };
   }
-
-  return { handled: true, result };
 }

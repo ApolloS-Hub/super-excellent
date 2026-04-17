@@ -20,6 +20,7 @@ import {
   type AnthropicCacheBlock,
 } from "./prompt-cache";
 import { fetchWithRetry } from "./api-retry";
+import { runQuery } from "./query-engine";
 import i18n from "../i18n";
 
 export interface AgentConfig {
@@ -599,23 +600,18 @@ export async function sendMessage(
         // Stale notifier — push to UI as thinking event so user sees "still waiting..."
         setStaleNotifier((msg) => { onEvent({ type: "thinking", text: msg + "\n" }); });
 
-        // Enhance the message with worker role context
-        const enhancedMessage = `[Role: ${workerName}]\n${workerPrompt}\n\n[User Request]\n${message}`;
-
         try {
           await watchdogWrap(
             async (provider, model) => {
               const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-              if (effectiveConfig.provider === "anthropic") {
-                await callAnthropic(enhancedMessage, effectiveConfig, trackedOnEvent, history);
-              } else if (effectiveConfig.provider === "google") {
-                await callGemini(enhancedMessage, effectiveConfig, trackedOnEvent, history);
-              } else {
-                const finalConfig = effectiveConfig.provider === "kimi"
-                  ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
-                  : effectiveConfig;
-                await callOpenAI(enhancedMessage, finalConfig, trackedOnEvent, history);
-              }
+              // Delegate to QueryEngine — single entry point for turn orchestration
+              await runQuery({
+                message,
+                config: effectiveConfig,
+                onEvent: trackedOnEvent,
+                history,
+                worker: { id: workerId, name: workerName, systemPrompt: workerPrompt },
+              });
             },
             {
               provider: config.provider,
@@ -640,17 +636,11 @@ export async function sendMessage(
           setStaleNotifier(null);
         }
       } else {
-        // Worker not found, fall back to direct chat
+        // Worker not found, fall back to direct chat via QueryEngine
         await watchdogWrap(
           async (provider, model) => {
             const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-            if (effectiveConfig.provider === "anthropic") {
-              await callAnthropic(message, effectiveConfig, onEvent, history);
-            } else if (effectiveConfig.provider === "google") {
-              await callGemini(message, effectiveConfig, onEvent, history);
-            } else {
-              await callOpenAI(message, effectiveConfig, onEvent, history);
-            }
+            await runQuery({ message, config: effectiveConfig, onEvent, history });
           },
           { provider: config.provider, model: config.model },
         );
@@ -670,9 +660,9 @@ export async function sendMessage(
         onEvent({ type: "thinking", text: isZh ? `📌 步骤 ${wi + 1}/${intent.workers.length}: ${wName}\n` : `📌 Step ${wi + 1}/${intent.workers.length}: ${wName}\n` });
 
         const wPrompt = worker ? getLocalizedPrompt(worker) : "";
-        let taskMsg = `[Role: ${wName}]\n${wPrompt}\n\n[User Request]\n${message}`;
+        let stepMessage = message;
         if (prevOutput) {
-          taskMsg += `\n\n[Previous worker output for context]\n${prevOutput.slice(0, 3000)}`;
+          stepMessage += `\n\n[Previous worker output for context]\n${prevOutput.slice(0, 3000)}`;
         }
 
         let stepOutput = "";
@@ -684,36 +674,30 @@ export async function sendMessage(
         await watchdogWrap(
           async (provider, model) => {
             const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-            if (effectiveConfig.provider === "anthropic") {
-              await callAnthropic(taskMsg, effectiveConfig, captureEvent, history);
-            } else if (effectiveConfig.provider === "google") {
-              await callGemini(taskMsg, effectiveConfig, captureEvent, history);
-            } else {
-              const finalConfig = effectiveConfig.provider === "kimi"
-                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
-                : effectiveConfig;
-              await callOpenAI(taskMsg, finalConfig, captureEvent, history);
-            }
+            // Delegate to QueryEngine
+            await runQuery({
+              message: stepMessage,
+              config: effectiveConfig,
+              onEvent: captureEvent,
+              history,
+              worker: { id: wid, name: wName, systemPrompt: wPrompt },
+            });
           },
           { provider: config.provider, model: config.model },
         );
         prevOutput = stepOutput;
       }
     } else {
-      // 闲聊或兜底 — 直接走 LLM（不经过 Worker）
+      // 闲聊或兜底 — 直接走 QueryEngine（不经过 Worker 角色注入）
       await watchdogWrap(
         async (provider, model) => {
           const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          if (effectiveConfig.provider === "anthropic") {
-            await callAnthropic(message, effectiveConfig, onEvent, history);
-          } else if (effectiveConfig.provider === "google") {
-            await callGemini(message, effectiveConfig, onEvent, history);
-          } else {
-            const finalConfig = effectiveConfig.provider === "kimi"
-              ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
-              : effectiveConfig;
-            await callOpenAI(message, finalConfig, onEvent, history);
-          }
+          await runQuery({
+            message,
+            config: effectiveConfig,
+            onEvent,
+            history,
+          });
         },
         {
           provider: config.provider,
@@ -776,7 +760,7 @@ interface AnthropicLoopState {
   lastText: string;
 }
 
-async function callAnthropic(
+export async function callAnthropic(
   message: string,
   config: AgentConfig,
   onEvent: EventCallback,
@@ -1054,7 +1038,7 @@ async function processAnthropicToolBlocks(
   return toolNames;
 }
 
-async function callGemini(
+export async function callGemini(
   message: string,
   config: AgentConfig,
   onEvent: EventCallback,
@@ -1515,7 +1499,7 @@ interface PendingToolCall {
  * 4. 智能 auto-compact（基于 API usage 字段）
  * 5. Token warning → 自动压缩
  */
-async function callOpenAI(
+export async function callOpenAI(
   message: string,
   config: AgentConfig,
   onEvent: EventCallback,
