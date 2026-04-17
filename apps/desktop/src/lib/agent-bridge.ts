@@ -568,6 +568,7 @@ export async function sendMessage(
       // Get worker info for prompt enhancement
       const { getWorker } = await import("./team");
       const { getLocalizedName, getLocalizedPrompt } = await import("./team");
+      const { workerSpawning, workerThinking, workerCompleted, workerFailed } = await import("./worker-state-machine");
       const worker = getWorker(workerId);
       if (worker) {
         const workerName = getLocalizedName(worker);
@@ -578,37 +579,66 @@ export async function sendMessage(
         emitBusEvent({ type: "worker_activate", worker: workerName, workerId, team });
         emitBusEvent({ type: "worker_dispatch", worker: workerName, workerId, team });
 
+        // State machine: spawning → thinking
+        workerSpawning(workerId, workerName);
+        workerThinking(workerId, workerName);
+
+        // Wrap onEvent to auto-report progress + update state on tool events
+        const { reportProgress, workerToolRunning, setStaleNotifier } = await import("./worker-state-machine");
+        const trackedOnEvent: EventCallback = (event) => {
+          reportProgress(workerId);
+          if (event.type === "tool_use" && event.toolName) {
+            workerToolRunning(workerId, workerName, event.toolName);
+          } else if (event.type === "tool_result") {
+            // Tool finished, back to thinking
+            workerThinking(workerId, workerName);
+          }
+          onEvent(event);
+        };
+
+        // Stale notifier — push to UI as thinking event so user sees "still waiting..."
+        setStaleNotifier((msg) => { onEvent({ type: "thinking", text: msg + "\n" }); });
+
         // Enhance the message with worker role context
         const enhancedMessage = `[Role: ${workerName}]\n${workerPrompt}\n\n[User Request]\n${message}`;
 
-        await watchdogWrap(
-          async (provider, model) => {
-            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-            if (effectiveConfig.provider === "anthropic") {
-              await callAnthropic(enhancedMessage, effectiveConfig, onEvent, history);
-            } else if (effectiveConfig.provider === "google") {
-              await callGemini(enhancedMessage, effectiveConfig, onEvent, history);
-            } else {
-              const finalConfig = effectiveConfig.provider === "kimi"
-                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
-                : effectiveConfig;
-              await callOpenAI(enhancedMessage, finalConfig, onEvent, history);
-            }
-          },
-          {
-            provider: config.provider,
-            model: config.model,
-            onDegraded: (info) => {
-              onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+        try {
+          await watchdogWrap(
+            async (provider, model) => {
+              const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+              if (effectiveConfig.provider === "anthropic") {
+                await callAnthropic(enhancedMessage, effectiveConfig, trackedOnEvent, history);
+              } else if (effectiveConfig.provider === "google") {
+                await callGemini(enhancedMessage, effectiveConfig, trackedOnEvent, history);
+              } else {
+                const finalConfig = effectiveConfig.provider === "kimi"
+                  ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
+                  : effectiveConfig;
+                await callOpenAI(enhancedMessage, finalConfig, trackedOnEvent, history);
+              }
             },
-            onRecoveryAttempt: (p, m) => {
-              onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
-              markRecovered();
+            {
+              provider: config.provider,
+              model: config.model,
+              onDegraded: (info) => {
+                onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+              },
+              onRecoveryAttempt: (p, m) => {
+                onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
+                markRecovered();
+              },
             },
-          },
-        );
-
-        emitBusEvent({ type: "worker_complete", worker: workerName, workerId, team, success: true });
+          );
+          workerCompleted(workerId, workerName);
+          emitBusEvent({ type: "worker_complete", worker: workerName, workerId, team, success: true });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          workerFailed(workerId, workerName, msg);
+          emitBusEvent({ type: "worker_complete", worker: workerName, workerId, team, success: false });
+          throw err;
+        } finally {
+          setStaleNotifier(null);
+        }
       } else {
         // Worker not found, fall back to direct chat
         await watchdogWrap(
