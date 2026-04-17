@@ -176,7 +176,7 @@ const lark = new LarkCLI();
 
 const larkCalendarTool: ToolDefinition = {
   name: "lark_calendar",
-  description: "飞书日程管理 — 查看日程、创建会议、查询空闲时间。示例：帮我看今天的日程",
+  description: "Lark Calendar — view agenda, create meetings, check availability / 飞书日程管理",
   searchHint: "calendar agenda meeting schedule feishu lark 日程 会议",
   category: "web",
   permission: "medium",
@@ -186,39 +186,39 @@ const larkCalendarTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["agenda", "create", "freebusy"],
-        description: "agenda=查看日程, create=创建日程, freebusy=查询空闲",
+        description: "agenda=view agenda, create=new event, freebusy=check availability",
       },
-      days: { type: "number", description: "agenda: 查看未来N天 (默认1)" },
-      title: { type: "string", description: "create: 会议标题" },
-      start: { type: "string", description: "create/freebusy: 开始时间 ISO8601" },
-      end: { type: "string", description: "create/freebusy: 结束时间 ISO8601" },
-      attendees: { type: "string", description: "create: 参会人邮箱逗号分隔" },
-      user_ids: { type: "string", description: "freebusy: 用户ID逗号分隔" },
+      days: { type: "number", description: "agenda: days ahead (default 1)" },
+      title: { type: "string", description: "create: event title" },
+      start: { type: "string", description: "create/freebusy: start time ISO8601" },
+      end: { type: "string", description: "create/freebusy: end time ISO8601" },
+      attendees: { type: "string", description: "create: attendee emails, comma-separated" },
+      user_ids: { type: "string", description: "freebusy: user IDs, comma-separated" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "agenda":
         return lark.calendarAgenda(args.days ? Number(args.days) : undefined);
       case "create":
-        if (!args.title || !args.start || !args.end) return "❌ 创建日程需要 title, start, end";
+        if (!args.title || !args.start || !args.end) return "❌ create requires title, start, end";
         return lark.calendarCreate(String(args.title), String(args.start), String(args.end),
           args.attendees ? String(args.attendees).split(",") : undefined);
       case "freebusy":
-        if (!args.user_ids || !args.start || !args.end) return "❌ 查询空闲需要 user_ids, start, end";
+        if (!args.user_ids || !args.start || !args.end) return "❌ freebusy requires user_ids, start, end";
         return lark.calendarFreebusy(String(args.user_ids).split(","), String(args.start), String(args.end));
       default:
-        return `❌ 未知操作: ${action}。可用: agenda, create, freebusy`;
+        return `❌ Unknown action: ${action}. Available: agenda, create, freebusy`;
     }
   },
 };
 
 const larkImTool: ToolDefinition = {
   name: "lark_im",
-  description: "飞书消息发送 — 发送个人/群聊消息、搜索聊天记录。示例：给XX群发消息",
+  description: "Lark Messenger — send messages, search chat history / 飞书消息发送",
   searchHint: "message chat send im feishu lark 消息 群聊",
   category: "web",
   permission: "medium",
@@ -228,35 +228,35 @@ const larkImTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["send", "search", "list_chats"],
-        description: "send=发消息, search=搜索消息, list_chats=列出群聊",
+        description: "send=send message, search=search messages, list_chats=list chats",
       },
-      chat_id: { type: "string", description: "send/search: 聊天ID (oc_xxx)" },
-      text: { type: "string", description: "send: 消息内容" },
-      query: { type: "string", description: "search: 搜索关键词" },
+      chat_id: { type: "string", description: "send/search: chat ID (oc_xxx)" },
+      text: { type: "string", description: "send: message text" },
+      query: { type: "string", description: "search: search keyword" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "send":
-        if (!args.chat_id || !args.text) return "❌ 发送消息需要 chat_id 和 text";
+        if (!args.chat_id || !args.text) return "❌ send requires chat_id and text";
         return lark.imSendMessage(String(args.chat_id), String(args.text));
       case "search":
-        if (!args.query) return "❌ 搜索需要 query";
+        if (!args.query) return "❌ search requires query";
         return lark.imSearchMessages(String(args.query), args.chat_id ? String(args.chat_id) : undefined);
       case "list_chats":
         return lark.imListChats();
       default:
-        return `❌ 未知操作: ${action}。可用: send, search, list_chats`;
+        return `❌ Unknown action: ${action}. Available: send, search, list_chats`;
     }
   },
 };
 
 const larkDocTool: ToolDefinition = {
   name: "lark_doc",
-  description: "飞书文档操作 — 创建/读取/搜索文档。示例：帮我搜索关于XX的文档",
+  description: "Lark Docs — create, read, and search documents / 飞书文档操作",
   searchHint: "document doc create read search feishu lark 文档",
   category: "web",
   permission: "medium",
@@ -266,37 +266,37 @@ const larkDocTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["create", "read", "search"],
-        description: "create=创建文档, read=读取文档, search=搜索文档",
+        description: "create=new doc, read=read doc, search=search docs",
       },
-      title: { type: "string", description: "create: 文档标题" },
-      content: { type: "string", description: "create: 文档内容 (Markdown)" },
-      doc_token: { type: "string", description: "read: 文档 Token" },
-      query: { type: "string", description: "search: 搜索关键词" },
+      title: { type: "string", description: "create: document title" },
+      content: { type: "string", description: "create: document content (Markdown)" },
+      doc_token: { type: "string", description: "read: document token" },
+      query: { type: "string", description: "search: search keyword" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "create":
-        if (!args.title) return "❌ 创建文档需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.docCreate(String(args.title), args.content ? String(args.content) : undefined);
       case "read":
-        if (!args.doc_token) return "❌ 读取文档需要 doc_token";
+        if (!args.doc_token) return "❌ read requires doc_token";
         return lark.docRead(String(args.doc_token));
       case "search":
-        if (!args.query) return "❌ 搜索需要 query";
+        if (!args.query) return "❌ search requires query";
         return lark.docSearch(String(args.query));
       default:
-        return `❌ 未知操作: ${action}。可用: create, read, search`;
+        return `❌ Unknown action: ${action}. Available: create, read, search`;
     }
   },
 };
 
 const larkTaskTool: ToolDefinition = {
   name: "lark_task",
-  description: "飞书任务管理 — 创建/查看/完成任务。示例：帮我创建一个任务",
+  description: "Lark Tasks — create, list, and complete tasks / 飞书任务管理",
   searchHint: "task todo create complete feishu lark 任务",
   category: "task",
   permission: "medium",
@@ -306,35 +306,35 @@ const larkTaskTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["create", "list", "complete"],
-        description: "create=创建任务, list=查看任务列表, complete=完成任务",
+        description: "create=new task, list=list tasks, complete=mark done",
       },
-      title: { type: "string", description: "create: 任务标题" },
-      due_date: { type: "string", description: "create: 截止日期 ISO8601" },
-      task_id: { type: "string", description: "complete: 任务ID" },
+      title: { type: "string", description: "create: task title" },
+      due_date: { type: "string", description: "create: due date ISO8601" },
+      task_id: { type: "string", description: "complete: task ID" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "create":
-        if (!args.title) return "❌ 创建任务需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.taskCreate(String(args.title), args.due_date ? String(args.due_date) : undefined);
       case "list":
         return lark.taskList();
       case "complete":
-        if (!args.task_id) return "❌ 完成任务需要 task_id";
+        if (!args.task_id) return "❌ complete requires task_id";
         return lark.taskComplete(String(args.task_id));
       default:
-        return `❌ 未知操作: ${action}。可用: create, list, complete`;
+        return `❌ Unknown action: ${action}. Available: create, list, complete`;
     }
   },
 };
 
 const larkApprovalTool: ToolDefinition = {
   name: "lark_approval",
-  description: "飞书审批处理 — 查询/审批/驳回审批单。示例：帮我看看待审批的单子",
+  description: "Lark Approval — query, approve, or reject approval requests / 飞书审批处理",
   searchHint: "approval approve reject feishu lark 审批",
   category: "web",
   permission: "high",
@@ -344,35 +344,35 @@ const larkApprovalTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["query", "approve", "reject"],
-        description: "query=查询审批, approve=通过, reject=驳回",
+        description: "query=list approvals, approve=approve, reject=reject",
       },
-      status: { type: "string", description: "query: 筛选状态 (pending/approved/rejected)" },
-      instance_id: { type: "string", description: "approve/reject: 审批实例ID" },
-      comment: { type: "string", description: "approve/reject: 审批意见" },
+      status: { type: "string", description: "query: filter by status (pending/approved/rejected)" },
+      instance_id: { type: "string", description: "approve/reject: approval instance ID" },
+      comment: { type: "string", description: "approve/reject: comment" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "query":
         return lark.approvalQuery(args.status ? String(args.status) : undefined);
       case "approve":
-        if (!args.instance_id) return "❌ 审批需要 instance_id";
+        if (!args.instance_id) return "❌ approve requires instance_id";
         return lark.approvalApprove(String(args.instance_id), args.comment ? String(args.comment) : undefined);
       case "reject":
-        if (!args.instance_id) return "❌ 驳回需要 instance_id";
+        if (!args.instance_id) return "❌ reject requires instance_id";
         return lark.approvalReject(String(args.instance_id), args.comment ? String(args.comment) : undefined);
       default:
-        return `❌ 未知操作: ${action}。可用: query, approve, reject`;
+        return `❌ Unknown action: ${action}. Available: query, approve, reject`;
     }
   },
 };
 
 const larkSheetTool: ToolDefinition = {
   name: "lark_sheet",
-  description: "飞书表格数据 — 读写电子表格数据、创建表格。示例：帮我读取XX表格的数据",
+  description: "Lark Sheets — read/write spreadsheet data, create sheets / 飞书表格数据",
   searchHint: "sheet spreadsheet read write data feishu lark 表格 数据",
   category: "web",
   permission: "medium",
@@ -382,30 +382,30 @@ const larkSheetTool: ToolDefinition = {
       action: {
         type: "string",
         enum: ["read", "write", "create"],
-        description: "read=读取数据, write=写入数据, create=创建表格",
+        description: "read=read data, write=write data, create=new sheet",
       },
-      spreadsheet_token: { type: "string", description: "read/write: 表格Token" },
-      range: { type: "string", description: "read/write: 单元格范围 (如 Sheet1!A1:C10)" },
-      values: { type: "string", description: "write: JSON 格式的数据" },
-      title: { type: "string", description: "create: 表格标题" },
+      spreadsheet_token: { type: "string", description: "read/write: spreadsheet token" },
+      range: { type: "string", description: "read/write: cell range (e.g. Sheet1!A1:C10)" },
+      values: { type: "string", description: "write: data in JSON format" },
+      title: { type: "string", description: "create: sheet title" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ 飞书未配置。请在设置页面配置 App ID 和 App Secret。";
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
     const action = String(args.action);
     switch (action) {
       case "read":
-        if (!args.spreadsheet_token) return "❌ 读取需要 spreadsheet_token";
+        if (!args.spreadsheet_token) return "❌ read requires spreadsheet_token";
         return lark.sheetRead(String(args.spreadsheet_token), args.range ? String(args.range) : undefined);
       case "write":
-        if (!args.spreadsheet_token || !args.range || !args.values) return "❌ 写入需要 spreadsheet_token, range, values";
+        if (!args.spreadsheet_token || !args.range || !args.values) return "❌ write requires spreadsheet_token, range, values";
         return lark.sheetWrite(String(args.spreadsheet_token), String(args.range), String(args.values));
       case "create":
-        if (!args.title) return "❌ 创建表格需要 title";
+        if (!args.title) return "❌ create requires title";
         return lark.sheetCreate(String(args.title));
       default:
-        return `❌ 未知操作: ${action}。可用: read, write, create`;
+        return `❌ Unknown action: ${action}. Available: read, write, create`;
     }
   },
 };

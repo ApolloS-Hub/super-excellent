@@ -112,15 +112,15 @@ function extractStylePreferences(turns: ConversationTurn[]): ExtractedPattern[] 
   const joined = userTexts.join(" ");
 
   const styleSignals: Array<[RegExp, string]> = [
-    [/(?:用|使用|prefer)\s*(?:TypeScript|TS)/i, "偏好 TypeScript"],
-    [/(?:用|使用|prefer)\s*(?:Python|py)/i, "偏好 Python"],
-    [/(?:用|使用)\s*(?:函数式|functional)/i, "偏好函数式风格"],
-    [/(?:用|使用)\s*(?:class|类)/i, "偏好 class 风格"],
-    [/(?:不要|别|避免)\s*(?:any|unknown)/i, "避免 any/unknown"],
-    [/(?:用|使用)\s*(?:async\/await|promise)/i, "偏好 async/await"],
-    [/(?:不要|don'?t)\s*(?:注释|comment)/i, "少写注释"],
-    [/(?:详细|verbose)\s*(?:注释|comment)/i, "详细注释"],
-    [/(?:简洁|concise|简短)/i, "偏好简洁代码"],
+    [/(?:用|使用|prefer)\s*(?:TypeScript|TS)/i, "Prefers TypeScript"],
+    [/(?:用|使用|prefer)\s*(?:Python|py)/i, "Prefers Python"],
+    [/(?:用|使用)\s*(?:函数式|functional)/i, "Prefers functional style"],
+    [/(?:用|使用)\s*(?:class|类)/i, "Prefers class style"],
+    [/(?:不要|别|避免)\s*(?:any|unknown)/i, "Avoids any/unknown"],
+    [/(?:用|使用)\s*(?:async\/await|promise)/i, "Prefers async/await"],
+    [/(?:不要|don'?t)\s*(?:注释|comment)/i, "Minimal comments"],
+    [/(?:详细|verbose)\s*(?:注释|comment)/i, "Verbose comments"],
+    [/(?:简洁|concise|简短)/i, "Prefers concise code"],
   ];
 
   for (const [re, label] of styleSignals) {

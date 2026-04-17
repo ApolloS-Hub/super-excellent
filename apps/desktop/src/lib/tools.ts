@@ -955,14 +955,50 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
       .replace(/(news|latest|search|find|today|recent)/gi, "")
       .replace(/\s+/g, " ").trim() || "AI";
 
-    // Use Rust backend web_search command (reqwest with system proxy)
+    // Use Rust backend web_search command with hard 15s timeout
     if (isTauriAvailable()) {
       const { invoke } = await import("@tauri-apps/api/core");
-      return await invoke("web_search", { query: enOnly }) as string;
+      const timeout = new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("web_search timeout (15s)")), 15000)
+      );
+      try {
+        return await Promise.race([
+          invoke("web_search", { query: enOnly }) as Promise<string>,
+          timeout,
+        ]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("timeout")) {
+          // Tauri invoke hung — fall back to direct fetch
+          return await webSearchFallback(enOnly);
+        }
+        throw e;
+      }
     }
 
-    return `⚠️ ${t("tools.searchRequiresDesktop")}`;
+    return await webSearchFallback(enOnly);
   } catch (e) {
     return `${t("tools.searchFailed")}: ` + (e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Fallback web search using direct fetch (works when Rust curl hangs) */
+async function webSearchFallback(query: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    // Try HackerNews Algolia API
+    const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=story&hitsPerPage=5`;
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!resp.ok) return `Search returned HTTP ${resp.status}`;
+    const data = await resp.json() as { hits?: Array<{ title?: string; url?: string; points?: number }> };
+    if (!data.hits?.length) return "No results found";
+    return data.hits
+      .map((h, i) => `${i + 1}. ${h.title || "Untitled"}${h.url ? ` — ${h.url}` : ""}${h.points ? ` (${h.points} pts)` : ""}`)
+      .join("\n");
+  } catch (e) {
+    clearTimeout(timer);
+    return `Search failed: ${e instanceof Error ? e.message : String(e)}`;
   }
 }

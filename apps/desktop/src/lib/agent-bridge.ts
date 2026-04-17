@@ -8,7 +8,7 @@
  * Phase 2: All API calls now route through Rust when running as Tauri app.
  */
 import { isTauriAvailable, validateApiKeyRust } from "./tauri-bridge";
-import { analyzeIntent, dispatchToWorker, orchestrateMultiStep } from "./coordinator";
+import { analyzeIntent } from "./coordinator";
 import { emitAgentEvent as emitBusEvent } from "./event-bus";
 import { watchdogWrap, getWatchdogState, markRecovered } from "./watchdog";
 import { recordUsage as recordRuntimeUsage } from "./runtime";
@@ -561,45 +561,114 @@ export async function sendMessage(
     }
 
     if (intent.type === "task" && intent.workers.length === 1) {
-      // 单步任务 — 派发给对应 Worker
-      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 秘书识别为任务型消息，派发给 ${intent.workers[0]}\n` : `🎯 Secretary identified task, dispatching to ${intent.workers[0]}\n` });
-      await watchdogWrap(
-        async (provider, model) => {
-          const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          await dispatchToWorker(intent.workers[0], message, effectiveConfig, onEvent, history);
-        },
-        {
-          provider: config.provider,
-          model: config.model,
-          onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+      // 单步任务 — 用 Worker 的角色 prompt 增强主 LLM 调用路径（复用已验证的流式代码）
+      const workerId = intent.workers[0];
+      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 秘书识别为任务型消息，派发给 ${workerId}\n` : `🎯 Secretary identified task, dispatching to ${workerId}\n` });
+
+      // Get worker info for prompt enhancement
+      const { getWorker } = await import("./team");
+      const { getLocalizedName, getLocalizedPrompt } = await import("./team");
+      const worker = getWorker(workerId);
+      if (worker) {
+        const workerName = getLocalizedName(worker);
+        const workerPrompt = getLocalizedPrompt(worker);
+        const team = ["product", "architect", "developer", "frontend", "code_reviewer", "tester", "devops", "security", "writer", "researcher", "ux_designer", "data_analyst"].includes(workerId)
+          ? (i18n.language.startsWith("zh") ? "研发团队" : "Engineering") : (i18n.language.startsWith("zh") ? "业务团队" : "Business");
+        onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `🎯 派给 ${worker.emoji} ${workerName}（${team}）\n` : `🎯 Dispatching to ${worker.emoji} ${workerName} (${team})\n` });
+        emitBusEvent({ type: "worker_activate", worker: workerName, workerId, team });
+        emitBusEvent({ type: "worker_dispatch", worker: workerName, workerId, team });
+
+        // Enhance the message with worker role context
+        const enhancedMessage = `[Role: ${workerName}]\n${workerPrompt}\n\n[User Request]\n${message}`;
+
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(enhancedMessage, effectiveConfig, onEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(enhancedMessage, effectiveConfig, onEvent, history);
+            } else {
+              const finalConfig = effectiveConfig.provider === "kimi"
+                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
+                : effectiveConfig;
+              await callOpenAI(enhancedMessage, finalConfig, onEvent, history);
+            }
           },
-          onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
-            markRecovered();
+          {
+            provider: config.provider,
+            model: config.model,
+            onDegraded: (info) => {
+              onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+            },
+            onRecoveryAttempt: (p, m) => {
+              onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
+              markRecovered();
+            },
           },
-        },
-      );
+        );
+
+        emitBusEvent({ type: "worker_complete", worker: workerName, workerId, team, success: true });
+      } else {
+        // Worker not found, fall back to direct chat
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(message, effectiveConfig, onEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(message, effectiveConfig, onEvent, history);
+            } else {
+              await callOpenAI(message, effectiveConfig, onEvent, history);
+            }
+          },
+          { provider: config.provider, model: config.model },
+        );
+      }
     } else if (intent.type === "multi_step") {
-      // 多步骤任务 — 编排多个 Worker 协作
-      onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `📋 秘书识别为多步骤任务: ${intent.plan}\n` : `📋 Secretary identified multi-step task: ${intent.plan}\n` });
-      await watchdogWrap(
-        async (provider, model) => {
-          const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
-          await orchestrateMultiStep(message, intent.workers, effectiveConfig, onEvent, history);
-        },
-        {
-          provider: config.provider,
-          model: config.model,
-          onDegraded: (info) => {
-            onEvent({ type: "thinking", text: `🔄 ${i18n.language.startsWith("zh") ? "自动降级" : "Auto-fallback"}：${info.fromProvider}/${info.fromModel} → ${info.toProvider}/${info.toModel}\n` });
+      // 多步骤任务 — 按顺序用各 Worker 角色增强主 LLM 调用
+      const isZh = i18n.language.startsWith("zh");
+      onEvent({ type: "thinking", text: isZh ? `📋 秘书识别为多步骤任务: ${intent.plan}\n` : `📋 Secretary identified multi-step task: ${intent.plan}\n` });
+
+      const { getWorker, getLocalizedName, getLocalizedPrompt } = await import("./team");
+      let prevOutput = "";
+
+      for (let wi = 0; wi < intent.workers.length; wi++) {
+        const wid = intent.workers[wi];
+        const worker = getWorker(wid);
+        const wName = worker ? getLocalizedName(worker) : wid;
+        onEvent({ type: "thinking", text: isZh ? `📌 步骤 ${wi + 1}/${intent.workers.length}: ${wName}\n` : `📌 Step ${wi + 1}/${intent.workers.length}: ${wName}\n` });
+
+        const wPrompt = worker ? getLocalizedPrompt(worker) : "";
+        let taskMsg = `[Role: ${wName}]\n${wPrompt}\n\n[User Request]\n${message}`;
+        if (prevOutput) {
+          taskMsg += `\n\n[Previous worker output for context]\n${prevOutput.slice(0, 3000)}`;
+        }
+
+        let stepOutput = "";
+        const captureEvent = (event: AgentEvent) => {
+          onEvent(event);
+          if (event.type === "text" && event.text) stepOutput += event.text;
+        };
+
+        await watchdogWrap(
+          async (provider, model) => {
+            const effectiveConfig = { ...config, provider: provider as AgentConfig["provider"], model };
+            if (effectiveConfig.provider === "anthropic") {
+              await callAnthropic(taskMsg, effectiveConfig, captureEvent, history);
+            } else if (effectiveConfig.provider === "google") {
+              await callGemini(taskMsg, effectiveConfig, captureEvent, history);
+            } else {
+              const finalConfig = effectiveConfig.provider === "kimi"
+                ? { ...effectiveConfig, baseURL: effectiveConfig.baseURL || "https://api.moonshot.cn/v1" }
+                : effectiveConfig;
+              await callOpenAI(taskMsg, finalConfig, captureEvent, history);
+            }
           },
-          onRecoveryAttempt: (p, m) => {
-            onEvent({ type: "thinking", text: `🔁 ${i18n.language.startsWith("zh") ? "尝试恢复" : "Recovery attempt"}：${p}/${m}\n` });
-            markRecovered();
-          },
-        },
-      );
+          { provider: config.provider, model: config.model },
+        );
+        prevOutput = stepOutput;
+      }
     } else {
       // 闲聊或兜底 — 直接走 LLM（不经过 Worker）
       await watchdogWrap(
@@ -743,20 +812,21 @@ async function callAnthropic(
       break;
     }
 
-    // ── API call with per-turn timeout (streaming enabled) ──
+    // ── API call with per-turn timeout ──
+    // NOTE: Use stream:false because Tauri plugin-http does not support ReadableStream.
+    // Text is emitted to UI after full response arrives.
     const body: Record<string, unknown> = {
       model: config.model || "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: systemBlocks,
       messages: loop.messages,
       tools: anthropicTools,
-      stream: true,
+      stream: false,
     };
 
     const turnAbort = new AbortController();
     const turnTimer = setTimeout(() => turnAbort.abort(), TURN_TIMEOUT_MS);
 
-    // Combine user abort + turn timeout
     const combinedSignal = signal.aborted ? signal : turnAbort.signal;
     signal.addEventListener("abort", () => turnAbort.abort(), { once: true });
 
@@ -803,93 +873,22 @@ async function callAnthropic(
       throw new Error(formatClassifiedError(classified));
     }
 
-    // ── Parse SSE stream and accumulate content blocks ──
-    const content: AnthropicContentBlock[] = [];
-    let _stopReason = "end_turn";
-    let usageData: { input_tokens?: number; output_tokens?: number } | undefined;
-    // Track current content block being streamed
-    let currentBlockIndex = -1;
-    let currentToolId = "";
-    let currentToolName = "";
-    let currentToolJson = "";
+    // ── Parse JSON response (reliable in Tauri environment) ──
+    const data = await response.json() as {
+      content: AnthropicContentBlock[];
+      stop_reason: string;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
 
-    const reader = response.body?.getReader();
-    if (reader) {
-      const decoder = new TextDecoder();
-      let sseBuffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (signal.aborted) { loop.phase = 'done'; break; }
-        sseBuffer += decoder.decode(value, { stream: true });
-        const lines = sseBuffer.split("\n");
-        sseBuffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (raw === "[DONE]") continue;
-          try {
-            const evt = JSON.parse(raw);
-            switch (evt.type) {
-              case "content_block_start":
-                currentBlockIndex = evt.index ?? content.length;
-                if (evt.content_block?.type === "text") {
-                  content[currentBlockIndex] = { type: "text", text: "" };
-                } else if (evt.content_block?.type === "tool_use") {
-                  currentToolId = evt.content_block.id || "";
-                  currentToolName = evt.content_block.name || "";
-                  currentToolJson = "";
-                  content[currentBlockIndex] = {
-                    type: "tool_use", id: currentToolId,
-                    name: currentToolName, input: {},
-                  } as AnthropicToolUseBlock;
-                } else if (evt.content_block?.type === "thinking") {
-                  content[currentBlockIndex] = { type: "thinking", thinking: "" } as AnthropicThinkingBlock;
-                }
-                break;
-              case "content_block_delta":
-                if (evt.delta?.type === "text_delta" && evt.delta.text) {
-                  const block = content[currentBlockIndex];
-                  if (block?.type === "text") {
-                    (block as AnthropicTextBlock).text += evt.delta.text;
-                    onEvent({ type: "text", text: evt.delta.text });
-                  }
-                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
-                  currentToolJson += evt.delta.partial_json;
-                } else if (evt.delta?.type === "thinking_delta" && evt.delta.thinking) {
-                  const block = content[currentBlockIndex];
-                  if (block?.type === "thinking") {
-                    (block as AnthropicThinkingBlock).thinking += evt.delta.thinking;
-                  }
-                }
-                break;
-              case "content_block_stop":
-                if (content[currentBlockIndex]?.type === "tool_use" && currentToolJson) {
-                  try {
-                    (content[currentBlockIndex] as AnthropicToolUseBlock).input = JSON.parse(currentToolJson);
-                  } catch { /* partial JSON */ }
-                  currentToolJson = "";
-                }
-                break;
-              case "message_delta":
-                if (evt.delta?.stop_reason) _stopReason = evt.delta.stop_reason;
-                if (evt.usage) usageData = { ...usageData, ...evt.usage };
-                break;
-              case "message_start":
-                if (evt.message?.usage) usageData = evt.message.usage;
-                break;
-            }
-          } catch { /* skip unparseable SSE */ }
-        }
-      }
-    }
+    const content = data.content || [];
+    const _stopReason = data.stop_reason || "end_turn";
 
     // ── Usage tracking ──
-    if (usageData) {
+    if (data.usage) {
       const { recordUsage } = await import("./cost-tracker");
       const record = recordUsage(config.model || "unknown", config.model || "unknown", {
-        prompt_tokens: usageData.input_tokens,
-        completion_tokens: usageData.output_tokens,
+        prompt_tokens: data.usage.input_tokens,
+        completion_tokens: data.usage.output_tokens,
       });
       if (record) onEvent({ type: "thinking", text: `💰 ${record.inputTokens}+${record.outputTokens} tokens ≈ $${record.estimatedCost.toFixed(4)}\n` });
     }
@@ -897,7 +896,7 @@ async function callAnthropic(
     const hasToolUse = content.some(b => b.type === "tool_use");
 
     // Cache tool call rounds
-    if (hasToolUse) setCache(cacheKey, { content, usage: usageData });
+    if (hasToolUse) setCache(cacheKey, { content, usage: data.usage });
 
     // ── Emit thinking blocks ──
     for (const block of content) {

@@ -494,7 +494,7 @@ function App() {
                 conversations={conversations}
                 selectedId={activeConvId}
                 onSelect={setActiveConvId}
-                label="左"
+                label="L"
               />
               <div style={{ flex: 1, overflow: "hidden" }}>
                 <ChatPage
@@ -513,7 +513,7 @@ function App() {
                 conversations={conversations}
                 selectedId={splitConvId}
                 onSelect={setSplitConvId}
-                label="右"
+                label="R"
               />
               <div style={{ flex: 1, overflow: "hidden" }}>
                 <ChatPage
@@ -693,7 +693,7 @@ function ConversationItem({
       onClick={() => !editing && onSelect(conv.id)}
       onContextMenu={e => {
         e.preventDefault();
-        const action = window.prompt("操作: 输入新名称(改名) 或输入 delete(删除)", conv.title);
+        const action = window.prompt(t("nav.renameOrDeletePrompt"), conv.title);
         if (action === null) return;
         if (action.toLowerCase() === "delete") {
           onDelete(conv.id);

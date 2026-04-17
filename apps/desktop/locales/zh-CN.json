@@ -17,7 +17,8 @@
     "earlier": "更早",
     "messages": "条消息",
     "singleScreen": "单屏模式",
-    "splitScreen": "双屏模式"
+    "splitScreen": "双屏模式",
+    "renameOrDeletePrompt": "输入新名称(改名) 或输入 delete(删除)"
   },
   "chat": {
     "welcome": "你好！我是你的 AI 秘书，告诉我你需要什么，我来安排。",
