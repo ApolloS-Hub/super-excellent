@@ -259,15 +259,36 @@ export async function readResource(serverName: string, uri: string): Promise<str
 /**
  * Load MCP config and connect all servers
  */
-export async function loadMCPConfig(): Promise<void> {
+export interface MCPLoadReport {
+  total: number;
+  succeeded: string[];
+  failed: Array<{ name: string; error: string }>;
+}
+
+export async function loadMCPConfig(): Promise<MCPLoadReport> {
+  const report: MCPLoadReport = { total: 0, succeeded: [], failed: [] };
   try {
     const raw = localStorage.getItem("mcp-config");
-    if (!raw) return;
+    if (!raw) return report;
     const config = JSON.parse(raw) as MCPConfig;
-    for (const sc of config.servers) {
-      const server = await connectServer(sc);
-      // Register connected MCP tools into tool-registry
+    report.total = config.servers.length;
+    // Parallel connect — partial success is first-class: one bad server doesn't block the rest
+    const results = await Promise.allSettled(
+      config.servers.map(async sc => {
+        const server = await connectServer(sc);
+        return { sc, server };
+      }),
+    );
+    for (let i = 0; i < results.length; i++) {
+      const sc = config.servers[i];
+      const r = results[i];
+      if (r.status === "rejected") {
+        report.failed.push({ name: sc.name, error: String(r.reason) });
+        continue;
+      }
+      const { server } = r.value;
       if (server.status === "connected") {
+        report.succeeded.push(server.name);
         try {
           const { registerTool } = await import("./tool-registry");
           for (const tool of server.tools) {
@@ -281,11 +302,30 @@ export async function loadMCPConfig(): Promise<void> {
             });
           }
         } catch { /* tool-registry not available */ }
+      } else {
+        report.failed.push({ name: server.name, error: server.error || "failed to connect" });
       }
     }
+    // Emit a summary event for the UI
+    try {
+      const { emitAgentEvent } = await import("./event-bus");
+      emitAgentEvent({
+        type: "mcp_load_report",
+        total: report.total,
+        succeeded: report.succeeded,
+        failed: report.failed,
+      });
+      if (report.failed.length > 0 && report.succeeded.length > 0) {
+        console.info(
+          `[mcp] Degraded mode: ${report.succeeded.length}/${report.total} servers connected. ` +
+          `Failed: ${report.failed.map(f => f.name).join(", ")}`,
+        );
+      }
+    } catch { /* event-bus not available */ }
   } catch (e) {
     console.error("MCP config load failed:", e);
   }
+  return report;
 }
 
 /**

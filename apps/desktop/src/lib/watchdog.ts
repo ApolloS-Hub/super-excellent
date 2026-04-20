@@ -169,21 +169,25 @@ export async function watchdogWrap<T>(
   const activeProvider = state.isDegraded && state.currentProvider ? state.currentProvider : config.provider;
   const activeModel = state.isDegraded && state.currentModel ? state.currentModel : config.model;
 
-  // 指数退避重试（仅网络错误 / 可重试状态码）
+  // Import lazily to avoid circular deps
+  const { recordAttempt } = await import("./recovery-ledger");
+  const opKey = `chat:${activeProvider}:${activeModel}`;
+
+  // Exponential backoff retry (for network errors / retryable status codes)
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const result = await fn(activeProvider, activeModel);
-      // 成功：重置计数器
       state.consecutiveFailures = 0;
-      if (state.isDegraded) {
-        // 降级状态下成功了，保持降级直到 recovery timer 触发
+      if (attempt > 0) {
+        recordAttempt(opKey, "retry_with_backoff", true, `attempt ${attempt + 1}`);
       }
       return result;
     } catch (err) {
       lastError = err;
       if ((isNetworkError(err) || isRetryableStatus(err)) && attempt < MAX_RETRIES - 1) {
         const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+        recordAttempt(opKey, "retry_with_backoff", false, `attempt ${attempt + 1}, waiting ${delay}ms`);
         await sleep(delay);
         continue;
       }
@@ -213,9 +217,26 @@ export async function watchdogWrap<T>(
 
       startRecoveryTimer((p, m) => config.onRecoveryAttempt?.(p, m));
 
-      // 用降级配置重试一次
+      // Retry once with fallback config
       state.consecutiveFailures = 0;
-      return fn(fallback.provider, fallback.model);
+      recordAttempt(
+        opKey,
+        fallback.provider !== activeProvider ? "provider_fallback" : "model_fallback",
+        false,
+        `${activeProvider}/${activeModel} → ${fallback.provider}/${fallback.model}`,
+      );
+      try {
+        const result = await fn(fallback.provider, fallback.model);
+        recordAttempt(
+          `chat:${fallback.provider}:${fallback.model}`,
+          "provider_fallback",
+          true,
+          "recovered",
+        );
+        return result;
+      } catch (err) {
+        lastError = err;
+      }
     }
   }
 

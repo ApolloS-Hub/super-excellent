@@ -3,6 +3,16 @@
  *
  * Ported from CodePilot's error-classifier.ts pattern-matching classifier.
  * Produces actionable, user-facing error messages with recovery hints.
+ *
+ * Envelope schema inspired by claw-code ROADMAP:
+ *   - kind: high-level category (auth / network / quota / ...)
+ *   - operation: what syscall / API call failed (chat / file_read / tool_execute)
+ *   - target: which resource (URL, file path, tool name)
+ *   - retryable: whether auto-retry is expected to succeed
+ *   - hint: specific next action
+ *
+ * Downstream consumers (UI, watchdog, StopHooks) can dispatch on the typed
+ * fields instead of regex-matching prose.
  */
 import i18n from "../i18n";
 
@@ -28,6 +38,20 @@ export type ErrorCategory =
   | 'ABORT'
   | 'UNKNOWN';
 
+/** High-level machine-dispatchable kind of failure */
+export type ErrorKind =
+  | 'auth'          // credentials / permissions
+  | 'quota'         // rate limit / overload / budget
+  | 'network'       // connection / DNS / firewall
+  | 'config'        // invalid endpoint / model / params
+  | 'input'         // user-caused malformed request
+  | 'server'        // 5xx / gateway / capacity
+  | 'timeout'       // exceeded deadline
+  | 'context'       // context window overflow
+  | 'stream'        // SSE / streaming parse
+  | 'abort'         // user cancellation
+  | 'unknown';
+
 /** A concrete action the user can take to recover */
 export interface RecoveryAction {
   label: string;
@@ -36,10 +60,18 @@ export interface RecoveryAction {
 
 export interface ClassifiedError {
   category: ErrorCategory;
+  /** High-level kind for machine dispatch */
+  kind: ErrorKind;
+  /** Which operation failed (chat / tool_execute / file_read / mcp_connect) */
+  operation?: string;
+  /** Which resource (URL, tool name, file path, provider) */
+  target?: string;
   /** User-facing message explaining what went wrong */
   userMessage: string;
   /** Actionable hint telling the user how to fix it */
   actionHint: string;
+  /** Machine-readable hint key, e.g. "rotate_api_key", "switch_provider" */
+  hint?: string;
   /** Original raw error message */
   rawMessage: string;
   /** Provider name if available */
@@ -52,6 +84,46 @@ export interface ClassifiedError {
   recoveryActions: RecoveryAction[];
 }
 
+/** Map ErrorCategory → ErrorKind for machine dispatch */
+const CATEGORY_TO_KIND: Record<ErrorCategory, ErrorKind> = {
+  NO_CREDENTIALS: 'auth',
+  AUTH_REJECTED: 'auth',
+  AUTH_FORBIDDEN: 'auth',
+  RATE_LIMITED: 'quota',
+  OVERLOADED: 'quota',
+  NETWORK_UNREACHABLE: 'network',
+  ENDPOINT_NOT_FOUND: 'config',
+  MODEL_NOT_AVAILABLE: 'config',
+  INVALID_REQUEST: 'input',
+  CONTEXT_TOO_LONG: 'context',
+  TIMEOUT: 'timeout',
+  SERVER_ERROR: 'server',
+  EMPTY_RESPONSE: 'server',
+  STREAM_ERROR: 'stream',
+  ABORT: 'abort',
+  UNKNOWN: 'unknown',
+};
+
+/** Map ErrorCategory → machine-readable hint for automatic recovery */
+const CATEGORY_TO_HINT: Record<ErrorCategory, string> = {
+  NO_CREDENTIALS: 'configure_api_key',
+  AUTH_REJECTED: 'rotate_api_key',
+  AUTH_FORBIDDEN: 'upgrade_plan',
+  RATE_LIMITED: 'wait_and_retry',
+  OVERLOADED: 'switch_provider_or_wait',
+  NETWORK_UNREACHABLE: 'check_network_or_proxy',
+  ENDPOINT_NOT_FOUND: 'fix_base_url',
+  MODEL_NOT_AVAILABLE: 'switch_model',
+  INVALID_REQUEST: 'adjust_params',
+  CONTEXT_TOO_LONG: 'compact_or_new_session',
+  TIMEOUT: 'retry_with_backoff',
+  SERVER_ERROR: 'wait_and_retry',
+  EMPTY_RESPONSE: 'retry',
+  STREAM_ERROR: 'retry',
+  ABORT: 'none',
+  UNKNOWN: 'open_settings',
+};
+
 // ── Classification context ──────────────────────────────────────
 
 export interface ErrorContext {
@@ -59,6 +131,10 @@ export interface ErrorContext {
   providerName?: string;
   baseUrl?: string;
   model?: string;
+  /** Which operation was running (e.g. "chat", "tool_execute", "mcp_connect") */
+  operation?: string;
+  /** Which resource (tool name, file path, URL) */
+  target?: string;
 }
 
 // ── Pattern definitions ─────────────────────────────────────────
@@ -236,8 +312,12 @@ export function classifyError(ctx: ErrorContext): ClassifiedError {
   // Fallback: unknown error
   return {
     category: 'UNKNOWN',
+    kind: CATEGORY_TO_KIND['UNKNOWN'],
+    operation: ctx.operation,
+    target: ctx.target ?? ctx.baseUrl,
     userMessage: t('errors.unknown', { provider: providerHint(ctx) }),
     actionHint: t('errors.unknownHint'),
+    hint: CATEGORY_TO_HINT['UNKNOWN'],
     rawMessage,
     providerName: ctx.providerName,
     details: extraDetail || undefined,
@@ -279,14 +359,42 @@ function buildResult(
 ): ClassifiedError {
   return {
     category: pattern.category,
+    kind: CATEGORY_TO_KIND[pattern.category],
+    operation: ctx.operation,
+    target: ctx.target ?? ctx.baseUrl,
     userMessage: pattern.userMessage(ctx),
     actionHint: pattern.actionHint(ctx),
+    hint: CATEGORY_TO_HINT[pattern.category],
     rawMessage,
     providerName: ctx.providerName,
     details: extraDetail || undefined,
     retryable: pattern.retryable,
     recoveryActions: buildRecoveryActions(pattern.category),
   };
+}
+
+// ── Machine-dispatch helpers ────────────────────────────────────
+
+/** Returns true if the error should be automatically retried by the watchdog */
+export function shouldAutoRetry(err: ClassifiedError): boolean {
+  return err.retryable && err.kind !== 'abort';
+}
+
+/** Returns true if the error suggests switching to a different provider */
+export function shouldSwitchProvider(err: ClassifiedError): boolean {
+  return err.kind === 'quota' || err.kind === 'server' ||
+    (err.kind === 'config' && err.category === 'MODEL_NOT_AVAILABLE');
+}
+
+/** Returns true if the error requires user intervention (not auto-fixable) */
+export function requiresUserAction(err: ClassifiedError): boolean {
+  return err.kind === 'auth' || err.kind === 'input' ||
+    (err.kind === 'config' && err.category === 'ENDPOINT_NOT_FOUND');
+}
+
+/** Returns true if the current context should be compacted before retrying */
+export function shouldCompactContext(err: ClassifiedError): boolean {
+  return err.kind === 'context';
 }
 
 // ── Formatting helper ───────────────────────────────────────────
