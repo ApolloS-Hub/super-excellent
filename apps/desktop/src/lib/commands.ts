@@ -180,3 +180,59 @@ registerCommand({
     return lines.join("\n");
   },
 });
+
+// ═══════════ Instruction memory commands ═══════════
+
+registerCommand({
+  name: "rule-add",
+  aliases: ["remember-rule", "rule"],
+  description: "Add a permanent instruction rule (e.g. /rule-add always respond in Chinese)",
+  handler: async (ctx) => {
+    const rule = ctx.args.join(" ").trim();
+    if (!rule) return "❌ Usage: /rule-add <your rule>\nExample: /rule-add always use TypeScript";
+    const { addRule } = await import("./instruction-memory");
+    const created = addRule(rule);
+    return `✅ Rule added (id: ${created.id}):\n> ${created.rule}`;
+  },
+});
+
+registerCommand({
+  name: "rules",
+  aliases: ["rule-list", "my-rules"],
+  description: "List all user-curated instruction rules",
+  handler: async () => {
+    const { listRules } = await import("./instruction-memory");
+    const rules = listRules();
+    if (rules.length === 0) return "📭 No rules yet. Use `/rule-add <rule>` to add one.";
+    const lines = ["## 📌 Your Instruction Rules", ""];
+    for (const r of rules) {
+      const status = r.enabled === false ? " *(disabled)*" : "";
+      lines.push(`- **${r.id}**${status}: ${r.rule}`);
+    }
+    lines.push("", "Use `/rule-remove <id>` to delete, `/rule-toggle <id>` to enable/disable.");
+    return lines.join("\n");
+  },
+});
+
+registerCommand({
+  name: "rule-remove",
+  aliases: ["rule-del"],
+  description: "Remove an instruction rule by id",
+  handler: async (ctx) => {
+    const id = ctx.args[0];
+    if (!id) return "❌ Usage: /rule-remove <id> — see /rules for ids";
+    const { removeRule } = await import("./instruction-memory");
+    return removeRule(id) ? `✅ Removed rule ${id}` : `❌ No rule with id ${id}`;
+  },
+});
+
+registerCommand({
+  name: "rule-toggle",
+  description: "Enable/disable an instruction rule without deleting it",
+  handler: async (ctx) => {
+    const id = ctx.args[0];
+    if (!id) return "❌ Usage: /rule-toggle <id>";
+    const { toggleRule } = await import("./instruction-memory");
+    return toggleRule(id) ? `✅ Toggled rule ${id}` : `❌ No rule with id ${id}`;
+  },
+});

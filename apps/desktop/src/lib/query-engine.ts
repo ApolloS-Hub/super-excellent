@@ -73,12 +73,20 @@ export async function runQuery(options: QueryOptions): Promise<void> {
     skillSection = buildSkillPrompt(message);
   } catch { /* skills module not available */ }
 
-  // Build the actual message with worker role + skill injection
+  // Inject user instruction rules (takes priority over auto-learned)
+  let instructionSection = "";
+  try {
+    const { buildInstructionPrompt } = await import("./instruction-memory");
+    instructionSection = buildInstructionPrompt();
+  } catch { /* instruction-memory not available */ }
+
+  // Build the actual message with worker role + instructions + skill injection
+  const injections = [instructionSection, skillSection].filter(Boolean).join("\n\n");
   let finalMessage = message;
   if (worker) {
-    finalMessage = `[Role: ${worker.name}]\n${worker.systemPrompt}${skillSection}\n\n[User Request]\n${message}`;
-  } else if (skillSection) {
-    finalMessage = `${skillSection}\n\n[User Request]\n${message}`;
+    finalMessage = `[Role: ${worker.name}]\n${worker.systemPrompt}${injections ? "\n\n" + injections : ""}\n\n[User Request]\n${message}`;
+  } else if (injections) {
+    finalMessage = `${injections}\n\n[User Request]\n${message}`;
   }
 
   // Initialize token budget for this query
