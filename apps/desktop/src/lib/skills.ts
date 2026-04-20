@@ -1,9 +1,16 @@
 /**
  * Skills System — On-demand knowledge loading
  * Aligned with ref-s05: SkillMeta with trigger-based matching + system prompt injection.
+ *
+ * Two sources:
+ * 1. Built-in hardcoded skills (below, simple topics)
+ * 2. Bundled markdown skills in apps/desktop/skills/*.md (rich workflows
+ *    with frontmatter, inspired by addyosmani/agent-skills)
  */
 
 import i18n from "../i18n";
+import { parseSkillMarkdown, buildSkillPromptSection, matchSkills as matchMarkdownSkills } from "./skill-loader";
+import type { ParsedSkill } from "./skill-loader";
 const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts);
 
 // ═══════════ Types ═══════════
@@ -128,11 +135,84 @@ export function matchSkills(userMessage: string): SkillMeta[] {
  * Analyzes user message and returns content of matched skills.
  */
 export function buildSkillPrompt(userMessage: string): string {
-  const matched = matchSkills(userMessage);
-  if (matched.length === 0) return "";
+  const injected: string[] = [];
 
-  // Inject at most 2 skills to keep prompt manageable
-  const injected = matched.slice(0, 2);
-  const sections = injected.map(s => s.content);
-  return `\n\n# ${t("skills.activatedSkills")}\n` + sections.join("\n\n");
+  // 1) Match built-in hardcoded skills (short topic helpers)
+  const legacy = matchSkills(userMessage).slice(0, 1);
+  for (const s of legacy) injected.push(s.content);
+
+  // 2) Match bundled markdown skills (richer workflows with process + red flags + verification)
+  const md = matchMarkdownSkills(userMessage, listMarkdownSkills(), 2);
+  for (const s of md) injected.push(buildSkillPromptSection(s, 2000));
+
+  if (injected.length === 0) return "";
+  return `\n\n# ${t("skills.activatedSkills")}\n` + injected.join("\n\n");
+}
+
+// ═══════════ Bundled markdown skills ═══════════
+// Vite's import.meta.glob bundles all .md files at build time.
+// Each skill is parsed into ParsedSkill (frontmatter + body + searchText).
+
+const markdownSkills: ParsedSkill[] = [];
+let markdownSkillsLoaded = false;
+
+/**
+ * Load bundled markdown skills (called once on app start).
+ * Uses Vite's glob import to inline .md files as raw strings.
+ */
+export function loadMarkdownSkills(): void {
+  if (markdownSkillsLoaded) return;
+  try {
+    // Eager-loaded so all skills are available immediately.
+    const modules = import.meta.glob("../../skills/*.md", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>;
+
+    for (const [path, raw] of Object.entries(modules)) {
+      const parsed = parseSkillMarkdown(typeof raw === "string" ? raw : String(raw));
+      if (parsed) {
+        markdownSkills.push(parsed);
+      } else {
+        console.warn(`[skills] Failed to parse frontmatter: ${path}`);
+      }
+    }
+    markdownSkillsLoaded = true;
+    console.log(`[skills] Loaded ${markdownSkills.length} markdown skills`);
+  } catch (e) {
+    console.warn("[skills] Markdown glob import failed:", e);
+    markdownSkillsLoaded = true; // don't retry in a loop
+  }
+}
+
+export function listMarkdownSkills(): ParsedSkill[] {
+  if (!markdownSkillsLoaded) loadMarkdownSkills();
+  return [...markdownSkills];
+}
+
+export function getMarkdownSkill(name: string): ParsedSkill | undefined {
+  if (!markdownSkillsLoaded) loadMarkdownSkills();
+  return markdownSkills.find(s => s.frontmatter.name === name);
+}
+
+/** Describe all markdown skills for display in SkillMarketPage */
+export interface MarkdownSkillSummary {
+  name: string;
+  description: string;
+  phase?: string;
+  category?: string;
+  tags: string[];
+  workers: string[];
+}
+
+export function summarizeMarkdownSkills(): MarkdownSkillSummary[] {
+  return listMarkdownSkills().map(s => ({
+    name: s.frontmatter.name,
+    description: s.frontmatter.description,
+    phase: s.frontmatter.phase,
+    category: s.frontmatter.category,
+    tags: s.frontmatter.tags || [],
+    workers: s.frontmatter.workers || [],
+  }));
 }

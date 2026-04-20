@@ -57,6 +57,8 @@ function App() {
     startHealthMonitor();
     startStaleDetection();
     initStopHooks();
+    // Load bundled markdown skills for workflow guidance injection
+    import("./lib/skills").then(m => m.loadMarkdownSkills()).catch(console.warn);
     // Migrate API keys to secure store
     import("./lib/secure-store").then(m => m.migrateApiKeyFromConfig()).catch(console.warn);
     // Load MCP config and connect servers on startup

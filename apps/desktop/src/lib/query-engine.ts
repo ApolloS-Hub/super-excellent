@@ -66,10 +66,20 @@ export interface QueryOptions {
 export async function runQuery(options: QueryOptions): Promise<void> {
   const { message, config, onEvent, history, worker, maxTurns: _maxTurns } = options;
 
-  // Build the actual message with worker role injection if present
-  const finalMessage = worker
-    ? `[Role: ${worker.name}]\n${worker.systemPrompt}\n\n[User Request]\n${message}`
-    : message;
+  // Inject matched skills into the message for workflow guidance
+  let skillSection = "";
+  try {
+    const { buildSkillPrompt } = await import("./skills");
+    skillSection = buildSkillPrompt(message);
+  } catch { /* skills module not available */ }
+
+  // Build the actual message with worker role + skill injection
+  let finalMessage = message;
+  if (worker) {
+    finalMessage = `[Role: ${worker.name}]\n${worker.systemPrompt}${skillSection}\n\n[User Request]\n${message}`;
+  } else if (skillSection) {
+    finalMessage = `${skillSection}\n\n[User Request]\n${message}`;
+  }
 
   // Initialize token budget for this query
   initBudget(config.model);
