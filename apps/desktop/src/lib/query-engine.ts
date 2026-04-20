@@ -20,6 +20,8 @@
  */
 
 import type { AgentConfig, AgentEvent } from "./agent-bridge";
+import { runStopHooks } from "./stop-hooks";
+import { recordTurnUsage, initBudget } from "./token-budget";
 import i18n from "../i18n";
 
 export type EventCallback = (event: AgentEvent) => void;
@@ -69,20 +71,56 @@ export async function runQuery(options: QueryOptions): Promise<void> {
     ? `[Role: ${worker.name}]\n${worker.systemPrompt}\n\n[User Request]\n${message}`
     : message;
 
+  // Initialize token budget for this query
+  initBudget(config.model);
+
+  // Track response text and tool calls for StopHooks
+  let responseText = "";
+  const toolsUsed: string[] = [];
+  let tokensIn = 0;
+  let tokensOut = 0;
+
+  const wrappedOnEvent: EventCallback = (event) => {
+    // Capture data for post-turn hooks
+    if (event.type === "text" && event.text) responseText += event.text;
+    if (event.type === "tool_use" && event.toolName) toolsUsed.push(event.toolName);
+    onEvent(event);
+  };
+
   // Provider dispatch — each one handles its own turn loop internally
   const bridge = await import("./agent-bridge");
 
   const provider = config.provider;
   if (provider === "anthropic") {
-    await bridge.callAnthropic(finalMessage, config, onEvent, history);
+    await bridge.callAnthropic(finalMessage, config, wrappedOnEvent, history);
   } else if (provider === "google") {
-    await bridge.callGemini(finalMessage, config, onEvent, history);
+    await bridge.callGemini(finalMessage, config, wrappedOnEvent, history);
   } else {
     const finalConfig = provider === "kimi"
       ? { ...config, baseURL: config.baseURL || "https://api.moonshot.cn/v1" }
       : config;
-    await bridge.callOpenAI(finalMessage, finalConfig, onEvent, history);
+    await bridge.callOpenAI(finalMessage, finalConfig, wrappedOnEvent, history);
   }
+
+  // Record turn in token budget
+  tokensIn = Math.ceil(message.length / 4);
+  tokensOut = Math.ceil(responseText.length / 4);
+  const snapshot = recordTurnUsage({ inputTokens: tokensIn, outputTokens: tokensOut }, config.model);
+
+  // Run StopHooks in background (non-blocking, fire-and-forget)
+  runStopHooks({
+    userMessage: message,
+    assistantResponse: responseText.slice(0, 2000),
+    turnCount: snapshot.turn,
+    toolsUsed,
+    provider: config.provider,
+    model: config.model,
+    tokensIn,
+    tokensOut,
+    costUsd: snapshot.estimatedCost,
+    workerId: worker?.id,
+    workerName: worker?.name,
+  }).catch(() => { /* never block on hook failures */ });
 }
 
 /**

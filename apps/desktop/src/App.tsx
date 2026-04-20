@@ -23,6 +23,7 @@ import { setState as setAppState } from "./lib/app-state";
 import { check } from "@tauri-apps/plugin-updater";
 import { startHealthMonitor, stopHealthMonitor, backupConfig } from "./lib/health-monitor";
 import { startStaleDetection, stopStaleDetection } from "./lib/worker-state-machine";
+import { initStopHooks } from "./lib/stop-hooks";
 import OnboardingWizard from "./components/OnboardingWizard";
 
 type Page = "chat" | "settings" | "monitor" | "skills";
@@ -55,6 +56,7 @@ function App() {
     startMonitor();
     startHealthMonitor();
     startStaleDetection();
+    initStopHooks();
     // Migrate API keys to secure store
     import("./lib/secure-store").then(m => m.migrateApiKeyFromConfig()).catch(console.warn);
     // Load MCP config and connect servers on startup
