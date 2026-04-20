@@ -1,13 +1,23 @@
+/* ═══════════════════════════════════════════════════════════
+   Super Excellent — Global styles
+   Modern, polished, subtle animations
+   ═══════════════════════════════════════════════════════════ */
+
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Let Mantine handle colors via colorScheme */
 body {
   margin: 0;
   min-height: 100vh;
+  overflow: hidden;
 }
+
+/* ═══════════ Animations ═══════════ */
 
 .cursor-blink {
   animation: blink 1s step-end infinite;
@@ -23,23 +33,238 @@ body {
 }
 
 @keyframes worker-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  50% { box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 12px 3px rgba(99, 102, 241, 0.3); }
 }
 
-/* Keyboard shortcuts hint */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Typing indicator dots */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-dots > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mantine-color-indigo-5);
+  animation: typing-dot 1.4s infinite ease-in-out;
+}
+
+.typing-dots > span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots > span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ═══════════ Message bubble styles ═══════════ */
+
+.msg-bubble {
+  animation: slide-up 0.2s ease-out;
+}
+
+.msg-bubble-user {
+  background: linear-gradient(135deg, var(--mantine-color-indigo-6), var(--mantine-color-indigo-7));
+  color: white;
+  border-radius: 18px 18px 4px 18px;
+  padding: 10px 14px;
+  max-width: 78%;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+[data-mantine-color-scheme="light"] .msg-bubble-assistant {
+  background: var(--mantine-color-gray-0);
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 18px 18px 18px 4px;
+  padding: 10px 14px;
+}
+
+[data-mantine-color-scheme="dark"] .msg-bubble-assistant {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px 18px 18px 4px;
+  padding: 10px 14px;
+}
+
+.msg-bubble-thinking {
+  background: linear-gradient(90deg,
+    rgba(99, 102, 241, 0.08) 0%,
+    rgba(139, 92, 246, 0.08) 50%,
+    rgba(99, 102, 241, 0.08) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  border: 1px dashed rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+}
+
+/* ═══════════ Sidebar item hover ═══════════ */
+
+.conv-item {
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+.conv-item:hover {
+  background-color: var(--mantine-color-default-hover);
+}
+
+.conv-item-active {
+  background-color: var(--mantine-color-indigo-light) !important;
+}
+
+.conv-item-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--mantine-color-indigo-5);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ═══════════ Worker status badge ═══════════ */
+
+.worker-active {
+  animation: worker-pulse 2s ease-in-out infinite;
+}
+
+.worker-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--mantine-color-indigo-light);
+  color: var(--mantine-color-indigo-7);
+}
+
+[data-mantine-color-scheme="dark"] .worker-badge {
+  color: var(--mantine-color-indigo-3);
+}
+
+/* ═══════════ Keyboard shortcut display ═══════════ */
+
 .kbd {
   display: inline-block;
   padding: 2px 6px;
   font-size: 11px;
-  font-family: monospace;
+  font-family: 'SF Mono', 'Menlo', monospace;
   border: 1px solid var(--mantine-color-default-border);
+  border-bottom-width: 2px;
   border-radius: 4px;
   background: var(--mantine-color-body);
+  line-height: 1.2;
 }
 
-/* Smooth scrollbar */
-::-webkit-scrollbar { width: 6px; }
+/* ═══════════ Smooth scrollbar ═══════════ */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--mantine-color-default-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--mantine-color-dimmed); }
+::-webkit-scrollbar-thumb {
+  background: var(--mantine-color-default-border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mantine-color-dimmed);
+  background-clip: padding-box;
+}
+
+/* ═══════════ Empty state hero ═══════════ */
+
+.empty-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 24px;
+  animation: fade-in 0.4s ease-out;
+}
+
+.empty-hero-icon {
+  font-size: 64px;
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.suggestion-chip {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--mantine-color-text);
+}
+
+.suggestion-chip:hover {
+  border-color: var(--mantine-color-indigo-5);
+  background: var(--mantine-color-indigo-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+}
+
+/* ═══════════ Header polish ═══════════ */
+
+.app-header {
+  backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--mantine-color-body) 85%, transparent);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.app-title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, var(--mantine-color-indigo-5), var(--mantine-color-violet-5));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══════════ Tool call card ═══════════ */
+
+.tool-card {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin: 4px 0;
+  transition: all 0.15s ease;
+}
+
+.tool-card-running {
+  border-color: var(--mantine-color-indigo-4);
+  background: var(--mantine-color-indigo-light);
+}
+
+.tool-card-success {
+  border-color: var(--mantine-color-teal-4);
+}
+
+.tool-card-error {
+  border-color: var(--mantine-color-red-4);
+  background: var(--mantine-color-red-light);
+}

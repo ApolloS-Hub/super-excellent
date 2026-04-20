@@ -343,18 +343,18 @@ function App() {
       }}
       padding="md"
     >
-      <AppShell.Header>
+      <AppShell.Header className="app-header">
         <Group h="100%" px="md" justify="space-between">
-          <Group>
+          <Group gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={3}>🌟 {t("app.title")}</Title>
+            <Title order={4} className="app-title">✨ {t("app.title")}</Title>
           </Group>
-          <Group gap="xs">
-            <Tooltip label={splitMode ? t("nav.singleScreen") : t("nav.splitScreen")} position="bottom">
+          <Group gap={4}>
+            <Tooltip label={splitMode ? t("nav.singleScreen") : t("nav.splitScreen")} position="bottom" openDelay={400}>
               <ActionIcon
-                variant={splitMode ? "filled" : "subtle"}
-                size="lg"
-                color={splitMode ? "blue" : undefined}
+                variant={splitMode ? "light" : "subtle"}
+                size="md"
+                color={splitMode ? "indigo" : "gray"}
                 onClick={() => {
                   if (!splitMode) {
                     // Enter split mode: pick the second conversation
@@ -375,21 +375,23 @@ function App() {
                   }
                 }}
               >
-                <Text size="sm">{splitMode ? "◻" : "◫"}</Text>
+                <Text size="xs" fw={600}>{splitMode ? "◻" : "◫"}</Text>
               </ActionIcon>
             </Tooltip>
-            <ActionIcon variant="subtle" size="lg" onClick={() => toggleColorScheme()}>
-              <Text size="sm">{colorScheme === "dark" ? "🌙" : "☀️"}</Text>
-            </ActionIcon>
-            <Menu>
+            <Tooltip label={colorScheme === "dark" ? t("settings.light") : t("settings.dark")} position="bottom" openDelay={400}>
+              <ActionIcon variant="subtle" size="md" color="gray" onClick={() => toggleColorScheme()}>
+                <Text size="sm">{colorScheme === "dark" ? "☀️" : "🌙"}</Text>
+              </ActionIcon>
+            </Tooltip>
+            <Menu position="bottom-end" withArrow>
               <Menu.Target>
-                <ActionIcon variant="subtle" size="lg">
-                  <Text size="sm">{currentLang === "zh-CN" ? "中" : "EN"}</Text>
+                <ActionIcon variant="subtle" size="md" color="gray">
+                  <Text size="xs" fw={600}>{currentLang === "zh-CN" ? "中" : "EN"}</Text>
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item onClick={() => switchLanguage("zh-CN")}>中文</Menu.Item>
-                <Menu.Item onClick={() => switchLanguage("en-US")}>English</Menu.Item>
+                <Menu.Item onClick={() => switchLanguage("zh-CN")} leftSection="🇨🇳">中文</Menu.Item>
+                <Menu.Item onClick={() => switchLanguage("en-US")} leftSection="🇺🇸">English</Menu.Item>
               </Menu.Dropdown>
             </Menu>
           </Group>
@@ -407,13 +409,18 @@ function App() {
             rightSection={searchQuery ? <CloseButton size="xs" onClick={() => setSearchQuery("")} /> : undefined}
           />
 
-          {/* New conversation button */}
+          {/* New conversation button — bigger, gradient accent */}
           <Button
             fullWidth
-            variant="light"
+            variant="gradient"
+            gradient={{ from: "indigo", to: "violet", deg: 135 }}
             size="sm"
+            radius="md"
             onClick={handleNewConversation}
-            leftSection={<Text size="sm">➕</Text>}
+            leftSection={<Text size="sm">＋</Text>}
+            styles={{
+              root: { fontWeight: 500, boxShadow: "0 2px 8px rgba(99, 102, 241, 0.2)" },
+            }}
           >
             {t("nav.newConversation")}
           </Button>
@@ -448,36 +455,54 @@ function App() {
             </Stack>
           </ScrollArea>
 
-          {/* Cost summary */}
+          {/* Cost summary card */}
           {sessionCost > 0 && (
-            <Text size="xs" c="dimmed" ta="center" py={4}>
-              💰 {sessionCost < 0.01 ? `$${sessionCost.toFixed(4)}` : `$${sessionCost.toFixed(2)}`}
-            </Text>
+            <Box
+              py={8}
+              px="sm"
+              style={{
+                background: "var(--mantine-color-indigo-light)",
+                borderRadius: 10,
+                textAlign: "center",
+              }}
+            >
+              <Text size="xs" c="dimmed" style={{ fontSize: 10, letterSpacing: "0.05em" }}>
+                💰 {t("monitor.costOverview")}
+              </Text>
+              <Text size="sm" fw={600} c="indigo">
+                {sessionCost < 0.01 ? `$${sessionCost.toFixed(4)}` : `$${sessionCost.toFixed(2)}`}
+              </Text>
+            </Box>
           )}
 
           {/* Bottom nav */}
-          <Divider />
-          <NavLink
-            label={t("nav.settings")}
-            leftSection={<Text size="sm">⚙️</Text>}
-            active={currentPage === "settings"}
-            onClick={() => { setCurrentPage("settings"); close(); }}
-            py={6}
-          />
-          <NavLink
-            label={t("nav.agents")}
-            leftSection={<Text size="sm">🤖</Text>}
-            active={currentPage === "monitor"}
-            onClick={() => { setCurrentPage("monitor"); close(); }}
-            py={6}
-          />
-          <NavLink
-            label={t("nav.skillMarket")}
-            leftSection={<Text size="sm">🛒</Text>}
-            active={currentPage === "skills"}
-            onClick={() => { setCurrentPage("skills"); close(); }}
-            py={6}
-          />
+          <Divider my={4} />
+          <Stack gap={2}>
+            <NavLink
+              label={t("nav.agents")}
+              leftSection={<Text size="md">🤖</Text>}
+              active={currentPage === "monitor"}
+              onClick={() => { setCurrentPage("monitor"); close(); }}
+              py={8}
+              style={{ borderRadius: 8 }}
+            />
+            <NavLink
+              label={t("nav.skillMarket")}
+              leftSection={<Text size="md">🛍️</Text>}
+              active={currentPage === "skills"}
+              onClick={() => { setCurrentPage("skills"); close(); }}
+              py={8}
+              style={{ borderRadius: 8 }}
+            />
+            <NavLink
+              label={t("nav.settings")}
+              leftSection={<Text size="md">⚙️</Text>}
+              active={currentPage === "settings"}
+              onClick={() => { setCurrentPage("settings"); close(); }}
+              py={8}
+              style={{ borderRadius: 8 }}
+            />
+          </Stack>
         </Stack>
       </AppShell.Navbar>
 

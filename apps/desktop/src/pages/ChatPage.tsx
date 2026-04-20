@@ -16,6 +16,8 @@ import {
 } from "../lib/tool-registry";
 import type { Conversation } from "../lib/conversations";
 import { MarkdownContent } from "../components/MarkdownContent";
+import EmptyState from "../components/EmptyState";
+import WorkerStatusIndicator from "../components/WorkerStatusIndicator";
 import ToolProgress from "../components/ToolProgress";
 import type { ToolCallEntry, ToolCallStatus } from "../components/ToolProgress";
 import CostBadge from "../components/CostBadge";
@@ -1128,31 +1130,7 @@ ${t("chat.modelUseHint")}`;
       <ScrollArea flex={1} viewportRef={viewport}>
         <Stack gap="sm" p="sm">
           {localMessages.length === 0 && (
-            <Box ta="center" py="xl">
-              <Text size="xl" fw={700}>🌟 {t("app.title")}</Text>
-              <Text c="dimmed" mt="sm">{t("chat.welcome")}</Text>
-              <Group mt="lg" justify="center" gap="xs">
-                <Badge variant="light" color="blue">Claude</Badge>
-                <Badge variant="light" color="green">OpenAI</Badge>
-                <Badge variant="light" color="cyan">Gemini</Badge>
-                <Badge variant="light" color="grape">Kimi</Badge>
-                <Badge variant="light" color="teal">Ollama</Badge>
-                <Badge variant="light" color="indigo">DeepSeek</Badge>
-                <Badge variant="light" color="orange">Qwen</Badge>
-                <Badge variant="light" color="pink">MiniMax</Badge>
-                <Badge variant="light" color="lime">Zhipu</Badge>
-                <Badge variant="light" color="violet">{t("chat.custom")}</Badge>
-              </Group>
-              <Stack mt="xl" gap="xs" align="center">
-                <Text size="sm" c="dimmed">{t("chat.trySuggestions")}</Text>
-                {[t("chat.hintCreateTodo"), t("chat.hintSearchNews"), t("chat.hintAnalyzeDeps")].map((hint, i) => (
-                  <Badge key={i} variant="outline" size="lg" style={{ cursor: "pointer" }}
-                    onClick={() => setInput(hint)}>
-                    {hint}
-                  </Badge>
-                ))}
-              </Stack>
-            </Box>
+            <EmptyState onSuggestion={(text) => setInput(text)} />
           )}
           {localMessages.map((msg, idx) => (
             <MessageBubble
@@ -1162,6 +1140,9 @@ ${t("chat.modelUseHint")}`;
               onRewind={msg.role === "user" && !isLoading ? () => handleRewind(idx) : undefined}
             />
           ))}
+
+          {/* Live worker status indicator */}
+          {isLoading && <WorkerStatusIndicator />}
 
           {/* Thinking indicator with pulse animation */}
           {isThinking && isLoading && (
