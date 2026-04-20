@@ -168,6 +168,29 @@ export class LarkCLI {
   async sheetCreate(title: string): Promise<string> {
     return this.execute(["sheets", "+create", "--title", title]);
   }
+
+  // ── Email (Feishu Mail) ──
+  async emailList(folder?: string, limit?: number): Promise<string> {
+    const args = ["mail", "+list"];
+    if (folder) args.push("--folder", folder);
+    if (limit) args.push("--limit", String(limit));
+    return this.execute(args);
+  }
+  async emailSend(to: string, subject: string, body: string, cc?: string): Promise<string> {
+    const args = ["mail", "+send", "--to", to, "--subject", subject, "--body", body];
+    if (cc) args.push("--cc", cc);
+    args.push("--dry-run");
+    return this.execute(args);
+  }
+  async emailReply(messageId: string, body: string): Promise<string> {
+    return this.execute(["mail", "+reply", "--message-id", messageId, "--body", body, "--dry-run"]);
+  }
+  async emailSearch(query: string): Promise<string> {
+    return this.execute(["mail", "+search", "--query", query]);
+  }
+  async emailRead(messageId: string): Promise<string> {
+    return this.execute(["mail", "+read", "--message-id", messageId]);
+  }
 }
 
 // ═══════════ Tool Definitions ═══════════
@@ -410,6 +433,63 @@ const larkSheetTool: ToolDefinition = {
   },
 };
 
+const larkEmailTool: ToolDefinition = {
+  name: "lark_email",
+  description: "Lark Mail — list / read / send / reply / search emails / 飞书邮件操作",
+  searchHint: "email mail send read reply search feishu lark 邮件 收件 发件",
+  category: "web",
+  permission: "medium",
+  inputSchema: {
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        enum: ["list", "read", "send", "reply", "search"],
+        description: "list=inbox, read=get one email, send=new email, reply=to existing, search=by keyword",
+      },
+      folder: { type: "string", description: "list: folder name (inbox/sent/drafts), default: inbox" },
+      limit: { type: "number", description: "list: max results (default 20)" },
+      message_id: { type: "string", description: "read/reply: email ID" },
+      to: { type: "string", description: "send: comma-separated recipient emails" },
+      cc: { type: "string", description: "send: comma-separated CC recipients" },
+      subject: { type: "string", description: "send: subject line" },
+      body: { type: "string", description: "send/reply: plain text or HTML body" },
+      query: { type: "string", description: "search: search query" },
+    },
+    required: ["action"],
+  },
+  execute: async (args) => {
+    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
+    const action = String(args.action);
+    switch (action) {
+      case "list":
+        return lark.emailList(
+          args.folder ? String(args.folder) : undefined,
+          args.limit ? Number(args.limit) : undefined,
+        );
+      case "read":
+        if (!args.message_id) return "❌ read requires message_id";
+        return lark.emailRead(String(args.message_id));
+      case "send":
+        if (!args.to || !args.subject || !args.body) return "❌ send requires to, subject, body";
+        return lark.emailSend(
+          String(args.to),
+          String(args.subject),
+          String(args.body),
+          args.cc ? String(args.cc) : undefined,
+        );
+      case "reply":
+        if (!args.message_id || !args.body) return "❌ reply requires message_id and body";
+        return lark.emailReply(String(args.message_id), String(args.body));
+      case "search":
+        if (!args.query) return "❌ search requires query";
+        return lark.emailSearch(String(args.query));
+      default:
+        return `❌ Unknown action: ${action}. Available: list, read, send, reply, search`;
+    }
+  },
+};
+
 // ═══════════ Registration ═══════════
 
 const LARK_TOOLS: ToolDefinition[] = [
@@ -419,6 +499,7 @@ const LARK_TOOLS: ToolDefinition[] = [
   larkTaskTool,
   larkApprovalTool,
   larkSheetTool,
+  larkEmailTool,
 ];
 
 /** Register all Lark tools into the tool registry */

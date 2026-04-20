@@ -180,6 +180,24 @@ export function loadMarkdownSkills(): void {
     }
     markdownSkillsLoaded = true;
     console.log(`[skills] Loaded ${markdownSkills.length} markdown skills`);
+
+    // Auto-register slash commands for skills with a `command:` field
+    void import("./commands").then(({ registerCommand }) => {
+      for (const skill of markdownSkills) {
+        const cmd = skill.frontmatter.command;
+        if (!cmd) continue;
+        const cleanName = cmd.replace(/^\//, "");
+        if (!cleanName) continue;
+        registerCommand({
+          name: cleanName,
+          description: skill.frontmatter.description.slice(0, 120),
+          handler: () => {
+            const section = buildSkillPromptSection(skill, 3000);
+            return `## 📘 ${skill.frontmatter.name}\n\n${section}`;
+          },
+        });
+      }
+    }).catch(() => { /* commands module might not be loaded yet */ });
   } catch (e) {
     console.warn("[skills] Markdown glob import failed:", e);
     markdownSkillsLoaded = true; // don't retry in a loop

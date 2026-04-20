@@ -33,6 +33,8 @@ export interface SkillFrontmatter {
   tags?: string[];
   workers?: string[];
   triggers?: string[];
+  /** Optional slash-command shortcut, e.g. "/tdd" or "/lark-cal" */
+  command?: string;
 }
 
 export interface ParsedSkill {
