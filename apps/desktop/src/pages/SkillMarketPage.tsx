@@ -234,7 +234,8 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
     : BUILTIN_SKILLS;
 
   return (
-    <Stack maw={900} mx="auto">
+    <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
+    <Stack maw={900} mx="auto" pb="xl">
       <Group justify="space-between">
         <Group gap="xs">
           <Text size="xl" fw={700}>{`🛒 ${t("skills.title")}`}</Text>
@@ -344,6 +345,7 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
         </SimpleGrid>
       </ScrollArea>
     </Stack>
+    </ScrollArea>
   );
 }
 

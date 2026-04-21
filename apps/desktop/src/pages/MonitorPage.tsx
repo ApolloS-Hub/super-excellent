@@ -199,7 +199,8 @@ function MonitorPage({ onBack }: MonitorPageProps) {
   }, [autoRefresh, refreshInterval]);
 
   return (
-    <Stack maw={800} mx="auto">
+    <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
+    <Stack maw={800} mx="auto" pb="xl">
       <Group justify="space-between">
         <Text size="xl" fw={700}>🤖 {t("monitor.title")}</Text>
         <Button variant="subtle" onClick={onBack}>← {t("monitor.back")}</Button>
@@ -451,6 +452,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         </ScrollArea>
       </Paper>
     </Stack>
+    </ScrollArea>
   );
 }
 

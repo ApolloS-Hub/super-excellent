@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Stack, TextInput, Select, Button, Text, Paper, Group,
   PasswordInput, Notification, Badge, useMantineColorScheme,
-  Divider, Box, ActionIcon, Tabs, Switch,
+  Divider, Box, ActionIcon, Tabs, Switch, ScrollArea,
 } from "@mantine/core";
 import { loadConfig, saveConfig, validateApiKey } from "../lib/agent-bridge";
 import type { AgentConfig } from "../lib/agent-bridge";
@@ -281,7 +281,8 @@ function SettingsPage({ onBack }: SettingsPageProps) {
 
   // ═══════ Edit Mode (categorized with Tabs) ═══════
   return (
-    <Stack maw={600} mx="auto">
+    <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
+    <Stack maw={600} mx="auto" pb="xl">
       <Group justify="space-between">
         <Text size="xl" fw={700}>{t("settings.title")}</Text>
         <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
@@ -486,10 +487,9 @@ function SettingsPage({ onBack }: SettingsPageProps) {
         </Tabs.Panel>
       </Tabs>
     </Stack>
+    </ScrollArea>
   );
 }
-
-/** Permission Level Settings Panel */
 function PermissionSettingsPanel() {
   const { t } = useTranslation();
   const [level, setLevel] = usePermissionLevel();
