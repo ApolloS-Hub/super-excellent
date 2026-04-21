@@ -785,6 +785,15 @@
     "summaryFailed": "{{count}} 失败",
     "blockedByPolicy": "安全策略阻止"
   },
+  "hud": {
+    "title": "实时监控",
+    "iterations": "迭代次数",
+    "workers": "活跃 Worker",
+    "toolCalls": "工具调用",
+    "errors": "错误数",
+    "contextUsage": "上下文占用",
+    "modes": "活跃模式"
+  },
   "skills": {
     "title": "Skill 市场",
     "skillCount": "{{count}} 个 Skill",

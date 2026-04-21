@@ -1,14 +1,15 @@
 /**
- * AppHealthMonitor — In-app self-healing watchdog
+ * AppHealthMonitor — In-app self-healing watchdog + /doctor diagnostics
  *
- * Runs periodic health checks and auto-repairs:
- * 1. Config validation — detects and repairs corrupted config
- * 2. Storage integrity — checks localStorage / IndexedDB
- * 3. API connectivity — verifies current provider is reachable
- * 4. Memory pressure — warns when storage is getting full
+ * Two layers, both via the same check framework:
  *
- * Designed to run independently of main app logic so it can
- * recover from crashes caused by config corruption.
+ * 1. Install-time checks (sync, fast, safe to run every 60s):
+ *    config, storage, conversations, memory, indexeddb.
+ *    Auto-repair is permitted here.
+ *
+ * 2. Runtime checks (async, opt-in, surfaced via `runDoctorReport()`):
+ *    API smoke test, MCP server health, markdown skill loader.
+ *    These never auto-repair; they report only.
  */
 
 import { emitAgentEvent } from "./event-bus";
@@ -18,6 +19,10 @@ export interface HealthCheckResult {
   status: "ok" | "warn" | "fail";
   message: string;
   autoFixed?: boolean;
+  /** "install" = static environment/config; "runtime" = live behavior (API, MCP, skills) */
+  layer?: "install" | "runtime";
+  /** Extra structured info for rendering (e.g. latency). */
+  detail?: Record<string, unknown>;
 }
 
 export interface HealthReport {
@@ -348,4 +353,190 @@ export function getHealthLog(): HealthReport[] {
 
 export function isMonitorRunning(): boolean {
   return monitorTimer !== null;
+}
+
+// ═══════════ Runtime checks (async, for /doctor) ═══════════
+
+/**
+ * Smoke-test the configured LLM provider with a minimal request.
+ * Never auto-repairs. Returns a result that callers can render.
+ */
+export async function runtimeApiSmokeTest(): Promise<HealthCheckResult> {
+  const started = Date.now();
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return { name: "api-smoke", status: "warn", message: "No config — cannot run smoke test", layer: "runtime" };
+    const cfg = JSON.parse(raw);
+    if (!cfg.apiKey) {
+      return { name: "api-smoke", status: "warn", message: "API key not set", layer: "runtime" };
+    }
+
+    const { validateApiKey } = await import("./agent-bridge");
+    const result = await validateApiKey(cfg);
+    const durationMs = Date.now() - started;
+    if (result.valid) {
+      return {
+        name: "api-smoke",
+        status: "ok",
+        message: `Provider reachable in ${durationMs}ms`,
+        layer: "runtime",
+        detail: { latencyMs: durationMs, model: cfg.model, provider: cfg.provider },
+      };
+    }
+    return {
+      name: "api-smoke",
+      status: "fail",
+      message: result.error || `Smoke test failed after ${durationMs}ms`,
+      layer: "runtime",
+      detail: { latencyMs: durationMs },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { name: "api-smoke", status: "fail", message: `Smoke test threw: ${msg}`, layer: "runtime" };
+  }
+}
+
+/**
+ * Probe MCP servers registered in the client. Non-destructive.
+ */
+export async function checkMcpServers(): Promise<HealthCheckResult> {
+  try {
+    const mod = await import("./mcp-client").catch(() => null);
+    if (!mod || typeof mod.getServers !== "function") {
+      return { name: "mcp", status: "ok", message: "No MCP client", layer: "runtime" };
+    }
+    const servers = mod.getServers();
+    if (!Array.isArray(servers) || servers.length === 0) {
+      return { name: "mcp", status: "ok", message: "No MCP servers configured", layer: "runtime" };
+    }
+    const connected = servers.filter((s: { status?: string }) => s.status === "connected").length;
+    const total = servers.length;
+    const status: HealthCheckResult["status"] = connected === total ? "ok" : connected > 0 ? "warn" : "fail";
+    return {
+      name: "mcp",
+      status,
+      message: `${connected}/${total} MCP servers connected`,
+      layer: "runtime",
+      detail: { connected, total, servers: servers.map((s: { name?: string; status?: string }) => ({ name: s.name, status: s.status })) },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { name: "mcp", status: "warn", message: `MCP check failed: ${msg}`, layer: "runtime" };
+  }
+}
+
+/**
+ * Verify markdown skill loader — skills parsed, none in error state.
+ */
+export async function checkSkillLoader(): Promise<HealthCheckResult> {
+  try {
+    const mod = await import("./skills").catch(() => null);
+    if (!mod) return { name: "skills", status: "ok", message: "No skills module", layer: "runtime" };
+
+    const summaries = typeof mod.summarizeMarkdownSkills === "function" ? mod.summarizeMarkdownSkills() : [];
+    const loaded = Array.isArray(summaries) ? summaries.length : 0;
+    const missingDesc = Array.isArray(summaries)
+      ? summaries.filter(s => !s.description || !s.name).length
+      : 0;
+    const status: HealthCheckResult["status"] = missingDesc > 0 ? "warn" : "ok";
+    return {
+      name: "skills",
+      status,
+      message: missingDesc > 0
+        ? `${loaded} skills loaded, ${missingDesc} missing name/description`
+        : `${loaded} skills loaded`,
+      layer: "runtime",
+      detail: { loaded, missingDesc },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { name: "skills", status: "warn", message: `Skill loader check failed: ${msg}`, layer: "runtime" };
+  }
+}
+
+// ═══════════ Doctor report (install + runtime) ═══════════
+
+export interface DoctorReport extends HealthReport {
+  install: HealthCheckResult[];
+  runtime: HealthCheckResult[];
+  summary: { ok: number; warn: number; fail: number };
+}
+
+/**
+ * Full diagnostic: runs sync install checks, then parallel runtime checks.
+ * Install-layer auto-repair still happens; runtime checks are read-only.
+ */
+export async function runDoctorReport(opts: { skipSmokeTest?: boolean } = {}): Promise<DoctorReport> {
+  const installReport = runHealthChecks();
+  const install = installReport.checks.map(c => ({ ...c, layer: "install" as const }));
+
+  const runtimeChecks: Array<Promise<HealthCheckResult>> = [checkMcpServers(), checkSkillLoader()];
+  if (!opts.skipSmokeTest) runtimeChecks.push(runtimeApiSmokeTest());
+  const runtime = await Promise.all(runtimeChecks);
+
+  const all = [...install, ...runtime];
+  const summary = {
+    ok: all.filter(c => c.status === "ok").length,
+    warn: all.filter(c => c.status === "warn").length,
+    fail: all.filter(c => c.status === "fail").length,
+  };
+  const overallStatus: HealthReport["overallStatus"] =
+    summary.fail > 0 ? "critical" : summary.warn > 0 ? "degraded" : "healthy";
+
+  return {
+    timestamp: Date.now(),
+    checks: all,
+    overallStatus,
+    autoFixCount: installReport.autoFixCount,
+    install,
+    runtime,
+    summary,
+  };
+}
+
+function iconFor(status: HealthCheckResult["status"]): string {
+  return status === "ok" ? "✅" : status === "warn" ? "⚠️" : "❌";
+}
+
+/**
+ * Render a doctor report as rich markdown (for /doctor slash command).
+ */
+export function renderDoctorReport(report: DoctorReport, opts: { zh?: boolean } = {}): string {
+  const zh = opts.zh ?? false;
+  const overallIcon = report.overallStatus === "healthy" ? "✅" : report.overallStatus === "degraded" ? "⚠️" : "❌";
+  const lines: string[] = [
+    `## 🩺 ${zh ? "诊断报告" : "Doctor Report"} ${overallIcon}`,
+    "",
+    `**${zh ? "整体状态" : "Overall"}**: \`${report.overallStatus}\` · **✅** ${report.summary.ok} · **⚠️** ${report.summary.warn} · **❌** ${report.summary.fail}${report.autoFixCount > 0 ? ` · 🔧 ${report.autoFixCount} ${zh ? "自动修复" : "auto-fixed"}` : ""}`,
+    "",
+    `### ${zh ? "安装层检查" : "Install-time checks"}`,
+    "",
+    `| ${zh ? "项目" : "Check"} | ${zh ? "状态" : "Status"} | ${zh ? "详情" : "Detail"} |`,
+    "|------|------|------|",
+  ];
+  for (const c of report.install) {
+    const fixed = c.autoFixed ? ` 🔧 ${zh ? "已修复" : "auto-fixed"}` : "";
+    lines.push(`| ${c.name} | ${iconFor(c.status)} ${c.status} | ${c.message}${fixed} |`);
+  }
+  lines.push("", `### ${zh ? "运行时检查" : "Runtime checks"}`, "");
+  lines.push(`| ${zh ? "项目" : "Check"} | ${zh ? "状态" : "Status"} | ${zh ? "详情" : "Detail"} |`);
+  lines.push("|------|------|------|");
+  for (const c of report.runtime) {
+    const extra = c.detail?.latencyMs ? ` · ${c.detail.latencyMs}ms` : "";
+    lines.push(`| ${c.name} | ${iconFor(c.status)} ${c.status} | ${c.message}${extra} |`);
+  }
+
+  if (report.summary.fail > 0 || report.summary.warn > 0) {
+    lines.push("", `### ${zh ? "建议" : "Suggestions"}`, "");
+    for (const c of report.checks) {
+      if (c.status === "ok") continue;
+      if (c.name === "config") lines.push(`- ${zh ? "打开设置页检查 provider / model / apiKey" : "Open Settings and verify provider / model / apiKey"}`);
+      if (c.name === "storage") lines.push(`- ${zh ? "localStorage 使用过高，可清理旧对话" : "localStorage is full — prune old conversations"}`);
+      if (c.name === "api-smoke") lines.push(`- ${zh ? "检查网络代理、API Key 和 base URL" : "Check network proxy, API key, and base URL"}`);
+      if (c.name === "mcp") lines.push(`- ${zh ? "查看 MCP 配置并重新连接失联的服务" : "Review MCP config and reconnect any disconnected servers"}`);
+      if (c.name === "skills") lines.push(`- ${zh ? "检查技能 markdown frontmatter 格式" : "Check skill markdown frontmatter formatting"}`);
+    }
+  }
+
+  return lines.join("\n");
 }

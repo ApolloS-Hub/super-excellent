@@ -785,6 +785,15 @@
     "summaryFailed": "{{count}} failed",
     "blockedByPolicy": "Blocked by security policy"
   },
+  "hud": {
+    "title": "HUD",
+    "iterations": "Iterations",
+    "workers": "Active Workers",
+    "toolCalls": "Tool Calls",
+    "errors": "Errors",
+    "contextUsage": "Context Usage",
+    "modes": "Active modes"
+  },
   "skills": {
     "title": "Skill Market",
     "skillCount": "{{count}} Skills",
