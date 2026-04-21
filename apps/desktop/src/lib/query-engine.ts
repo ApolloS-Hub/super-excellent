@@ -54,6 +54,45 @@ export interface QueryOptions {
   maxTurns?: number;
 }
 
+// ═══════════ Adaptive Computation (OpenMythos ACT pattern) ═══════════
+
+interface ComplexityEstimate {
+  level: "trivial" | "simple" | "moderate" | "complex" | "deep";
+  maxTokens: number;
+  maxTurns: number;
+  budgetUsd: number;
+}
+
+/**
+ * Estimate task complexity from the message content.
+ * Simpler tasks get fewer turns + smaller token budget.
+ * Complex tasks get more turns + larger budget.
+ */
+function estimateComplexity(message: string, hasWorker: boolean): ComplexityEstimate {
+  const len = message.length;
+  const wordCount = message.split(/\s+/).length;
+
+  // Signals of complexity
+  const hasMultiStep = /先.*再|然后|第[一二三]步|step\s*\d|1\).*2\)|从.*到/i.test(message);
+  const hasCode = /```|function|import |class |def |const |let |var /i.test(message);
+  const hasAnalysis = /分析|比较|评估|研究|调研|analyze|compare|evaluate|research/i.test(message);
+  const isGreeting = /^(hi|hello|你好|嗨|hey|哈喽)\s*[!？?。.]*$/i.test(message.trim());
+
+  if (isGreeting || len < 15) {
+    return { level: "trivial", maxTokens: 1024, maxTurns: 2, budgetUsd: 0.005 };
+  }
+  if (!hasWorker && wordCount < 20 && !hasMultiStep && !hasCode) {
+    return { level: "simple", maxTokens: 2048, maxTurns: 3, budgetUsd: 0.01 };
+  }
+  if (hasMultiStep || (hasAnalysis && hasCode)) {
+    return { level: "complex", maxTokens: 8192, maxTurns: 10, budgetUsd: 0.1 };
+  }
+  if (hasMultiStep && hasCode && wordCount > 100) {
+    return { level: "deep", maxTokens: 8192, maxTurns: 15, budgetUsd: 0.2 };
+  }
+  return { level: "moderate", maxTokens: 4096, maxTurns: 8, budgetUsd: 0.05 };
+}
+
 /**
  * Main entry: drive one query to completion.
  *
@@ -89,8 +128,26 @@ export async function runQuery(options: QueryOptions): Promise<void> {
     finalMessage = `${injections}\n\n[User Request]\n${message}`;
   }
 
-  // Initialize token budget for this query
-  initBudget(config.model);
+  // ── Adaptive Computation (inspired by OpenMythos ACT) ──
+  // Simple tasks get fewer turns + smaller token budget.
+  // Complex tasks get more turns + larger budget.
+  const complexity = estimateComplexity(message, !!worker);
+  const adaptiveMaxTokens = complexity.maxTokens;
+
+  // Initialize token budget with adaptive context awareness
+  initBudget(config.model, complexity.budgetUsd);
+
+  // Log adaptive decision (visible in Monitor page event log)
+  try {
+    const { emitAgentEvent } = await import("./event-bus");
+    emitAgentEvent({
+      type: "adaptive_computation",
+      level: complexity.level,
+      maxTokens: adaptiveMaxTokens,
+      maxTurns: complexity.maxTurns,
+      budgetUsd: complexity.budgetUsd,
+    });
+  } catch { /* event-bus not available */ }
 
   // Track response text and tool calls for StopHooks
   let responseText = "";
