@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  AppShell, Burger, Group, Title, ActionIcon, Menu, Text, Box, Mark,
-  NavLink, Divider, Button, Stack, ScrollArea, TextInput,
+  AppShell, Burger, Group, ActionIcon, Menu, Text, Box, Mark,
+  Divider, Button, Stack, ScrollArea, TextInput,
   CloseButton, Tooltip, useMantineColorScheme, Badge,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
@@ -10,6 +10,7 @@ import ChatPage from "./pages/ChatPage";
 import SettingsPage from "./pages/SettingsPage";
 import MonitorPage from "./pages/MonitorPage";
 import SkillMarketPage from "./pages/SkillMarketPage";
+import Icon from "./components/Icon";
 import { PermissionDialog, permissionManager } from "./components/PermissionDialog";
 import type { PermissionRequest } from "./components/PermissionDialog";
 import {
@@ -339,9 +340,9 @@ function App() {
 
   return (
     <AppShell
-      header={{ height: 50 }}
+      header={{ height: 46 }}
       navbar={{
-        width: 280,
+        width: 256,
         breakpoint: "sm",
         collapsed: { mobile: !opened },
       }}
@@ -351,9 +352,14 @@ function App() {
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={4} className="app-title">✨ {t("app.title")}</Title>
+            <span className="app-brand">
+              <span className="app-brand-mark">
+                <Icon name="sparkle" size={14} stroke={2} />
+              </span>
+              <span className="app-brand-text">{t("app.title")}</span>
+            </span>
           </Group>
-          <Group gap={4}>
+          <Group gap={2}>
             <Tooltip label={splitMode ? t("nav.singleScreen") : t("nav.splitScreen")} position="bottom" openDelay={400}>
               <ActionIcon
                 variant={splitMode ? "light" : "subtle"}
@@ -361,13 +367,11 @@ function App() {
                 color={splitMode ? "indigo" : "gray"}
                 onClick={() => {
                   if (!splitMode) {
-                    // Enter split mode: pick the second conversation
                     const otherConvs = conversations.filter(c => c.id !== activeConvId);
                     if (otherConvs.length > 0) {
                       setSplitConvId(otherConvs[0].id);
                       setSplitMode(true);
                     } else {
-                      // Create a new conversation for the right pane
                       const newConv = createConversation();
                       setConversations(prev => [newConv, ...prev]);
                       setSplitConvId(newConv.id);
@@ -378,24 +382,27 @@ function App() {
                     setSplitConvId(null);
                   }
                 }}
+                aria-label={splitMode ? t("nav.singleScreen") : t("nav.splitScreen")}
               >
-                <Text size="xs" fw={600}>{splitMode ? "◻" : "◫"}</Text>
+                <Icon name={splitMode ? "single" : "split"} size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label={colorScheme === "dark" ? t("settings.light") : t("settings.dark")} position="bottom" openDelay={400}>
-              <ActionIcon variant="subtle" size="md" color="gray" onClick={() => toggleColorScheme()}>
-                <Text size="sm">{colorScheme === "dark" ? "☀️" : "🌙"}</Text>
+              <ActionIcon variant="subtle" size="md" color="gray" onClick={() => toggleColorScheme()} aria-label="Toggle theme">
+                <Icon name={colorScheme === "dark" ? "sun" : "moon"} size={15} />
               </ActionIcon>
             </Tooltip>
             <Menu position="bottom-end" withArrow>
               <Menu.Target>
-                <ActionIcon variant="subtle" size="md" color="gray">
-                  <Text size="xs" fw={600}>{currentLang === "zh-CN" ? "中" : "EN"}</Text>
+                <ActionIcon variant="subtle" size="md" color="gray" aria-label="Language">
+                  <Text size="xs" fw={600} style={{ letterSpacing: "0.03em" }}>
+                    {currentLang === "zh-CN" ? "中" : "EN"}
+                  </Text>
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item onClick={() => switchLanguage("zh-CN")} leftSection="🇨🇳">中文</Menu.Item>
-                <Menu.Item onClick={() => switchLanguage("en-US")} leftSection="🇺🇸">English</Menu.Item>
+                <Menu.Item onClick={() => switchLanguage("zh-CN")}>中文</Menu.Item>
+                <Menu.Item onClick={() => switchLanguage("en-US")}>English</Menu.Item>
               </Menu.Dropdown>
             </Menu>
           </Group>
@@ -403,35 +410,38 @@ function App() {
       </AppShell.Header>
 
       <AppShell.Navbar p="xs">
-        <Stack gap="xs" h="100%">
+        <Stack gap={8} h="100%">
           {/* Search */}
           <TextInput
             placeholder={t("nav.searchConversations")}
             size="xs"
             value={searchQuery}
             onChange={e => setSearchQuery(e.currentTarget.value)}
+            leftSection={<Icon name="search" size={13} />}
+            leftSectionWidth={28}
             rightSection={searchQuery ? <CloseButton size="xs" onClick={() => setSearchQuery("")} /> : undefined}
+            styles={{ input: { height: 32, minHeight: 32 } }}
           />
 
-          {/* New conversation button — bigger, gradient accent */}
+          {/* New conversation — solid filled, calm */}
           <Button
             fullWidth
-            variant="gradient"
-            gradient={{ from: "indigo", to: "violet", deg: 135 }}
+            variant="filled"
+            color="indigo"
             size="sm"
             radius="md"
             onClick={handleNewConversation}
-            leftSection={<Text size="sm">＋</Text>}
+            leftSection={<Icon name="plus" size={14} stroke={2.2} />}
             styles={{
-              root: { fontWeight: 500, boxShadow: "0 2px 8px rgba(99, 102, 241, 0.2)" },
+              root: { fontWeight: 550, letterSpacing: "-0.005em", height: 34 },
             }}
           >
             {t("nav.newConversation")}
           </Button>
 
-          {/* Conversation list — grouped by date */}
-          <ScrollArea flex={1} offsetScrollbars>
-            <Stack gap={2}>
+          {/* Conversation list */}
+          <ScrollArea flex={1} offsetScrollbars scrollbarSize={6}>
+            <Stack gap={1}>
               {filteredConversations.length === 0 && (
                 <Text size="xs" c="dimmed" ta="center" py="md">
                   {t("nav.noConversations")}
@@ -458,53 +468,43 @@ function App() {
             </Stack>
           </ScrollArea>
 
-          {/* Cost summary card */}
+          {/* Cost card */}
           {sessionCost > 0 && (
-            <Box
-              py={8}
-              px="sm"
-              style={{
-                background: "var(--mantine-color-indigo-light)",
-                borderRadius: 10,
-                textAlign: "center",
-              }}
-            >
-              <Text size="xs" c="dimmed" style={{ fontSize: 10, letterSpacing: "0.05em" }}>
-                💰 {t("monitor.costOverview")}
-              </Text>
-              <Text size="sm" fw={600} c="indigo">
+            <div className="cost-card">
+              <span className="cost-card-label">{t("monitor.costOverview")}</span>
+              <span className="cost-card-value">
                 {sessionCost < 0.01 ? `$${sessionCost.toFixed(4)}` : `$${sessionCost.toFixed(2)}`}
-              </Text>
-            </Box>
+              </span>
+            </div>
           )}
 
           {/* Bottom nav */}
-          <Divider my={4} />
-          <Stack gap={2}>
-            <NavLink
-              label={t("nav.agents")}
-              leftSection={<Text size="md">🤖</Text>}
-              active={currentPage === "monitor"}
+          <Divider my={2} />
+          <Stack gap={1}>
+            <button
+              type="button"
+              className={`nav-item${currentPage === "monitor" ? " nav-item-active" : ""}`}
               onClick={() => { setCurrentPage("monitor"); close(); }}
-              py={8}
-              style={{ borderRadius: 8 }}
-            />
-            <NavLink
-              label={t("nav.skillMarket")}
-              leftSection={<Text size="md">🛍️</Text>}
-              active={currentPage === "skills"}
+            >
+              <Icon name="users" size={15} />
+              <span>{t("nav.agents")}</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-item${currentPage === "skills" ? " nav-item-active" : ""}`}
               onClick={() => { setCurrentPage("skills"); close(); }}
-              py={8}
-              style={{ borderRadius: 8 }}
-            />
-            <NavLink
-              label={t("nav.settings")}
-              leftSection={<Text size="md">⚙️</Text>}
-              active={currentPage === "settings"}
+            >
+              <Icon name="skills" size={15} />
+              <span>{t("nav.skillMarket")}</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-item${currentPage === "settings" ? " nav-item-active" : ""}`}
               onClick={() => { setCurrentPage("settings"); close(); }}
-              py={8}
-              style={{ borderRadius: 8 }}
-            />
+            >
+              <Icon name="settings" size={15} />
+              <span>{t("nav.settings")}</span>
+            </button>
           </Stack>
         </Stack>
       </AppShell.Navbar>
@@ -621,9 +621,9 @@ function groupConversationsByDate(convs: Conversation[], t: (key: string) => str
   const todayStart = new Date().setHours(0, 0, 0, 0);
   const weekAgo = todayStart - 7 * 86_400_000;
   const groups: { label: string; items: Conversation[] }[] = [
-    { label: `📅 ${t("nav.today")}`, items: [] },
-    { label: `📆 ${t("nav.thisWeek")}`, items: [] },
-    { label: `🗓️ ${t("nav.earlier")}`, items: [] },
+    { label: t("nav.today"), items: [] },
+    { label: t("nav.thisWeek"), items: [] },
+    { label: t("nav.earlier"), items: [] },
   ];
   for (const c of convs) {
     const ts = c.updatedAt || now;
@@ -715,13 +715,7 @@ function ConversationItem({
     <Group
       gap={0}
       wrap="nowrap"
-      px="xs"
-      py={6}
-      style={{
-        borderRadius: 6,
-        cursor: "pointer",
-        backgroundColor: active ? "var(--mantine-color-blue-light)" : "transparent",
-      }}
+      className={`conv-item${active ? " conv-item-active" : ""}`}
       onClick={() => !editing && onSelect(conv.id)}
       onContextMenu={e => {
         e.preventDefault();
@@ -732,12 +726,6 @@ function ConversationItem({
         } else if (action.trim() && action.trim() !== conv.title) {
           onRename(conv.id, action.trim());
         }
-      }}
-      onMouseEnter={e => {
-        if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = "var(--mantine-color-default-hover)";
-      }}
-      onMouseLeave={e => {
-        if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
       }}
     >
       <Stack gap={0} flex={1} miw={0}>
