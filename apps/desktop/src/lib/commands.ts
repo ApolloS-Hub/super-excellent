@@ -368,7 +368,7 @@ ${zh ? "提示：发送 \"帮我审查上面的代码\" 让 AI 分析" : "Tip: S
 registerCommand({
   name: "model",
   aliases: ["switch-model"],
-  description: "Switch AI model mid-session (e.g. /model claude-3-5-sonnet)",
+  description: "Switch AI model mid-session (e.g. /model claude-opus-4-7)",
   handler: (ctx) => {
     const modelArg = ctx.args[0];
     if (!modelArg) {
@@ -378,7 +378,7 @@ registerCommand({
 **${ctx.config.provider}** / \`${ctx.config.model}\`
 
 ${zh ? "用法" : "Usage"}: \`/model <model-id>\`
-${zh ? "例如" : "Examples"}: \`/model gpt-4o\`, \`/model claude-3-5-sonnet\`, \`/model deepseek-chat\``;
+${zh ? "例如" : "Examples"}: \`/model claude-opus-4-7\`, \`/model claude-sonnet-4-6\`, \`/model gpt-4o\`, \`/model deepseek-chat\``;
     }
 
     try {

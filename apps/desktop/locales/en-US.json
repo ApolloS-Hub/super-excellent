@@ -206,7 +206,7 @@
     "permissionSetDryRun": "Set to dry run mode (default)",
     "permissionUnknownLevel": "Unknown permission level: {{level}}\nAvailable: full, readonly, dryrun",
     "currentModel": "Current Model",
-    "modelUseHint": "Use `/model <id>` to switch models, e.g.: `/model claude-sonnet-4-6`",
+    "modelUseHint": "Use `/model <id>` to switch models, e.g.: `/model claude-opus-4-7`",
     "noTasks": "No tasks. Use AI to create tasks.",
     "taskListTitle": "Task List ({{count}})",
     "taskStatus": "Status",

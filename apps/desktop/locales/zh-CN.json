@@ -206,7 +206,7 @@
     "permissionSetDryRun": "已设置为试运行模式 (default)",
     "permissionUnknownLevel": "未知权限级别: {{level}}\n可用: full, readonly, dryrun",
     "currentModel": "当前模型",
-    "modelUseHint": "使用 `/model <id>` 切换模型，例如: `/model claude-sonnet-4-6`",
+    "modelUseHint": "使用 `/model <id>` 切换模型，例如: `/model claude-opus-4-7`",
     "noTasks": "暂无任务。使用 AI 创建任务。",
     "taskListTitle": "任务列表 ({{count}})",
     "taskStatus": "状态",

@@ -855,7 +855,7 @@ export async function callAnthropic(
     // NOTE: Use stream:false because Tauri plugin-http does not support ReadableStream.
     // Text is emitted to UI after full response arrives.
     const body: Record<string, unknown> = {
-      model: config.model || "claude-sonnet-4-20250514",
+      model: config.model || "claude-sonnet-4-6",
       max_tokens: 4096,
       system: systemBlocks,
       messages: loop.messages,
@@ -2083,7 +2083,7 @@ async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Prom
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: config.model || "claude-opus-4-6",
+      model: config.model || "claude-opus-4-7",
       max_tokens: 1,
       messages: [{ role: "user", content: "hi" }],
     }),
@@ -2169,7 +2169,7 @@ export function loadConfig(): AgentConfig {
   return {
     provider: "anthropic",
     apiKey: "",
-    model: "claude-opus-4-6",
+    model: "claude-opus-4-7",
   };
 }
 

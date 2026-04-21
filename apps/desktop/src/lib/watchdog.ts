@@ -13,7 +13,7 @@ interface ProviderFallback {
 }
 
 const FALLBACK_CHAIN: ProviderFallback[] = [
-  { provider: "anthropic", models: ["claude-sonnet-4-20250514", "claude-3-haiku-20240307"] },
+  { provider: "anthropic", models: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"] },
   { provider: "openai", models: ["gpt-4o", "gpt-4o-mini"] },
   { provider: "google", models: ["gemini-2.0-flash", "gemini-1.5-flash"] },
 ];

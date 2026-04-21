@@ -30,9 +30,10 @@ const PROVIDER_OPTIONS = [
 
 const MODEL_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
   anthropic: [
+    { value: "claude-opus-4-7", label: "Claude Opus 4.7" },
     { value: "claude-opus-4-6", label: "Claude Opus 4.6" },
     { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-    { value: "claude-haiku-4", label: "Claude Haiku 4" },
+    { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
   ],
   openai: [
     { value: "gpt-5.4", label: "GPT-5.4" },
