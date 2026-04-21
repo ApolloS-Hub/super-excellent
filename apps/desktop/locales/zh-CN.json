@@ -782,7 +782,8 @@
     "toolCalls": "工具调用",
     "summaryRunning": "{{count}} 运行中",
     "summarySuccess": "{{count}} 成功",
-    "summaryFailed": "{{count}} 失败"
+    "summaryFailed": "{{count}} 失败",
+    "blockedByPolicy": "安全策略阻止"
   },
   "skills": {
     "title": "Skill 市场",

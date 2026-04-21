@@ -782,7 +782,8 @@
     "toolCalls": "Tool Calls",
     "summaryRunning": "{{count}} running",
     "summarySuccess": "{{count}} succeeded",
-    "summaryFailed": "{{count}} failed"
+    "summaryFailed": "{{count}} failed",
+    "blockedByPolicy": "Blocked by security policy"
   },
   "skills": {
     "title": "Skill Market",

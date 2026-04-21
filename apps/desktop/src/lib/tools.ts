@@ -82,6 +82,19 @@ export function describeToolAction(toolName: string, args: Record<string, unknow
 // ═══════════ Tool Execution ═══════════
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  // ═══════ Sandbox policy enforcement ═══════
+  try {
+    const { checkToolAllowed } = await import("./sandbox-policy");
+    const verdict = checkToolAllowed(name, args);
+    if (verdict.verdict === "deny") {
+      return `🔒 ${t("tools.blockedByPolicy")}: ${verdict.reason || "Operation not allowed"}`;
+    }
+    if (verdict.verdict === "ask" && permissionCallback) {
+      const allowed = await permissionCallback(name, verdict.reason || `Confirm ${name}?`);
+      if (!allowed) return `⛔ ${t("tools.userDeniedExec")}: ${name}`;
+    }
+  } catch { /* sandbox-policy not available */ }
+
   // Execute before_tool hooks
   try {
     const { executeHooks } = await import("./hooks");
