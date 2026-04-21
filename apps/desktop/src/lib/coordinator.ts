@@ -354,7 +354,7 @@ async function callWorkerLLMInner(
         role: m.role, content: m.content || "",
       }));
       body = {
-        model: config.model || "claude-sonnet-4-20250514",
+        model: config.model || "claude-sonnet-4-6",
         max_tokens: 4096,
         system: worker.systemPrompt + "\n\n" + t("coordinator.todayDateHint", { date: new Date().toISOString().split("T")[0] }),
         messages: anthropicMsgs,

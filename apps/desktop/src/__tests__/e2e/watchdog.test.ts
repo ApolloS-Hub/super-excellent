@@ -169,8 +169,8 @@ describe("Watchdog — API Call Self-Healing", () => {
       // 3rd failure triggers degradation, which retries with fallback model
       const result = await watchdogWrap(fn, config);
       expect(result).toBe("fallback-success");
-      // The fallback should be haiku (same provider, different model)
-      expect(lastCalledModel).toBe("claude-3-haiku-20240307");
+      // The fallback should be the first alternate model in the same provider
+      expect(lastCalledModel).toBe("claude-opus-4-7");
     });
 
     it("updates watchdog state to isDegraded after fallback", async () => {
@@ -192,7 +192,7 @@ describe("Watchdog — API Call Self-Healing", () => {
 
       const state = getWatchdogState();
       expect(state.isDegraded).toBe(true);
-      expect(state.currentModel).toBe("claude-3-haiku-20240307");
+      expect(state.currentModel).toBe("claude-opus-4-7");
     });
 
     it("uses degraded provider/model for subsequent calls", async () => {
@@ -315,8 +315,8 @@ describe("Watchdog — API Call Self-Healing", () => {
 
       const state = getWatchdogState();
       expect(state.isDegraded).toBe(true);
-      // Falls back to alternate model in same provider
-      expect(state.currentModel).toBe("claude-3-haiku-20240307");
+      // Falls back to first alternate model in same provider
+      expect(state.currentModel).toBe("claude-opus-4-7");
     });
   });
 });

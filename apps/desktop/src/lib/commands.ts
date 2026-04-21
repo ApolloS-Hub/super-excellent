@@ -368,7 +368,7 @@ ${zh ? "提示：发送 \"帮我审查上面的代码\" 让 AI 分析" : "Tip: S
 registerCommand({
   name: "model",
   aliases: ["switch-model"],
-  description: "Switch AI model mid-session (e.g. /model claude-3-5-sonnet)",
+  description: "Switch AI model mid-session (e.g. /model claude-opus-4-7)",
   handler: (ctx) => {
     const modelArg = ctx.args[0];
     if (!modelArg) {
@@ -378,7 +378,7 @@ registerCommand({
 **${ctx.config.provider}** / \`${ctx.config.model}\`
 
 ${zh ? "用法" : "Usage"}: \`/model <model-id>\`
-${zh ? "例如" : "Examples"}: \`/model gpt-4o\`, \`/model claude-3-5-sonnet\`, \`/model deepseek-chat\``;
+${zh ? "例如" : "Examples"}: \`/model claude-opus-4-7\`, \`/model claude-sonnet-4-6\`, \`/model gpt-4o\`, \`/model deepseek-chat\``;
     }
 
     try {
@@ -482,5 +482,219 @@ registerCommand({
     }
 
     return lines.join("\n");
+  },
+});
+
+// ═══════════ OMX patterns ═══════════
+
+const INTERVIEW_KEY = "omx-interview-active";
+
+registerCommand({
+  name: "interview",
+  aliases: ["deep-interview", "clarify"],
+  description: "Socratic clarification interview (quick|standard|deep)",
+  handler: async (ctx) => {
+    const iv = await import("./deep-interview");
+    const zh = i18n.language.startsWith("zh");
+    const sub = ctx.args[0]?.toLowerCase();
+
+    if (sub === "answer") {
+      const raw = localStorage.getItem(INTERVIEW_KEY);
+      if (!raw) return zh ? "❌ 当前没有进行中的面谈，请先 /interview <话题>" : "❌ No active interview. Start with /interview <topic>";
+      const state = JSON.parse(raw) as import("./deep-interview").InterviewState;
+      const answer = ctx.args.slice(1).join(" ").trim();
+      if (!answer) return zh ? "❌ 用法：/interview answer <你的回答>" : "❌ Usage: /interview answer <your answer>";
+      const lastRound = state.rounds[state.rounds.length - 1];
+      const lastQ = lastRound?.question ?? "";
+      const lastMode = lastRound?.mode;
+      // Drop the pending round before recording, then record fresh
+      const rollback = { ...state, rounds: state.rounds.slice(0, -1) };
+      const updated = iv.recordAnswer(rollback, lastQ, answer, lastMode);
+      localStorage.setItem(INTERVIEW_KEY, JSON.stringify(updated));
+      if (updated.converged) {
+        localStorage.removeItem(INTERVIEW_KEY);
+        let saved: string | null = null;
+        if (ctx.config.workDir) saved = await iv.saveSpec(updated, ctx.config.workDir);
+        return `## ${zh ? "面谈结束" : "Interview complete"}\n\n${zh ? "最终歧义度" : "Final ambiguity"}: **${updated.score.overall.toFixed(2)}**\n${saved ? `${zh ? "规格文档已保存" : "Spec saved"}: \`${saved}\`` : ""}\n\n---\n\n${iv.renderSpec(updated)}`;
+      }
+      const next = iv.nextQuestion(updated);
+      const pending = { ...updated, rounds: [...updated.rounds, { round: updated.rounds.length + 1, question: next.question, mode: next.mode }] };
+      localStorage.setItem(INTERVIEW_KEY, JSON.stringify(pending));
+      return `**${zh ? "第" : "Round"} ${pending.rounds.length}${zh ? "轮" : ""}** (${zh ? "歧义度" : "ambiguity"}: ${updated.score.overall.toFixed(2)})\n\n${next.mode ? `_${next.mode}_\n\n` : ""}**Q:** ${next.question}\n\n${zh ? "用 `/interview answer <回答>` 继续" : "Reply with `/interview answer <your answer>`"}`;
+    }
+
+    if (sub === "done" || sub === "cancel") {
+      const raw = localStorage.getItem(INTERVIEW_KEY);
+      if (!raw) return zh ? "没有进行中的面谈" : "No active interview";
+      const state = JSON.parse(raw) as import("./deep-interview").InterviewState;
+      localStorage.removeItem(INTERVIEW_KEY);
+      if (sub === "cancel") return zh ? "❎ 已取消" : "❎ Cancelled";
+      let saved: string | null = null;
+      if (ctx.config.workDir) saved = await iv.saveSpec(state, ctx.config.workDir);
+      return `## ${zh ? "面谈结束" : "Interview complete"}\n\n${saved ? `${zh ? "规格文档已保存" : "Spec saved"}: \`${saved}\`\n\n` : ""}${iv.renderSpec(state)}`;
+    }
+
+    const profileArg = (ctx.args[0] === "quick" || ctx.args[0] === "standard" || ctx.args[0] === "deep") ? ctx.args[0] : null;
+    const profile = (profileArg ?? "standard") as import("./deep-interview").InterviewProfile;
+    const topic = (profileArg ? ctx.args.slice(1) : ctx.args).join(" ").trim();
+    if (!topic) {
+      return zh
+        ? "用法：`/interview [quick|standard|deep] <话题>`，然后用 `/interview answer <回答>` 逐轮回答"
+        : "Usage: `/interview [quick|standard|deep] <topic>`, then `/interview answer <your answer>`";
+    }
+    const state = iv.startInterview(topic, profile);
+    const next = iv.nextQuestion(state);
+    const pending = { ...state, rounds: [{ round: 1, question: next.question, mode: next.mode }] };
+    localStorage.setItem(INTERVIEW_KEY, JSON.stringify(pending));
+    return `## ${zh ? "深度面谈" : "Deep Interview"} — ${topic}\n\n- ${zh ? "档位" : "Profile"}: \`${profile}\`\n- ${zh ? "初始歧义度" : "Initial ambiguity"}: **${state.score.overall.toFixed(2)}**\n\n**Q:** ${next.question}\n\n${zh ? "用 `/interview answer <回答>` 继续" : "Reply with `/interview answer <your answer>`"}`;
+  },
+});
+
+registerCommand({
+  name: "plan",
+  aliases: ["ralplan"],
+  description: "Start a three-role deliberation (planner → architect → critic)",
+  handler: async (ctx) => {
+    const rp = await import("./ralplan");
+    const zh = i18n.language.startsWith("zh");
+    const title = ctx.args.join(" ").trim();
+    if (!title) {
+      return zh
+        ? "用法：`/plan <标题>` — 会基于最近一次面谈的 spec 或对话上下文生成 ADR"
+        : "Usage: `/plan <title>` — generates an ADR from the latest interview spec or conversation";
+    }
+    const lastUser = [...ctx.localMessages].reverse().find(m => m.role === "user")?.content?.slice(0, 2000) ?? "";
+    const session = rp.startSession(title, lastUser || title);
+    localStorage.setItem("omx-ralplan-session", JSON.stringify(session));
+    return `## ${zh ? "Ralplan 启动" : "Ralplan started"} — ${title}\n\n${zh ? "会话 ID" : "Session"}: \`${session.id}\`\n\n${zh ? "提示：让 AI 扮演 planner/architect/critic 三个角色迭代讨论。可用 prompt：" : "Next: have the AI play planner/architect/critic iteratively. Prompt hint:"}\n\n\`\`\`\n${rp.buildPrompt(session, "planner")}\n\`\`\``;
+  },
+});
+
+registerCommand({
+  name: "ralph",
+  description: "Kick off a persistent completion loop",
+  handler: async (ctx) => {
+    const rl = await import("./ralph-loop");
+    const zh = i18n.language.startsWith("zh");
+    const goal = ctx.args.join(" ").trim();
+    if (!goal) {
+      return zh
+        ? "用法：`/ralph <目标>` — 分 6 阶段（pre-context/execute/verify/review/deslop/regression）逐轮推进"
+        : "Usage: `/ralph <goal>` — splits goal into 6 stages (pre-context/execute/verify/review/deslop/regression)";
+    }
+    const session = rl.startRalph(goal, 5);
+    localStorage.setItem("ralph-session", JSON.stringify(session));
+    return `## ${zh ? "Ralph 循环启动" : "Ralph loop started"} — ${goal}\n\n- ${zh ? "最多" : "Max"} ${session.maxIterations} ${zh ? "轮" : "iterations"}\n- ${zh ? "阶段" : "Stages"}: ${rl.STAGES.join(" → ")}\n\n${zh ? "首阶段" : "First stage"}: **${rl.STAGES[0]}**\n\n${zh ? "在 HUD 面板中监控进度（/hud），完整报告会保存在" : "Monitor progress in the HUD (/hud); full report will be at"} \`.omx/sessions/${session.id}.md\``;
+  },
+});
+
+registerCommand({
+  name: "deslop",
+  aliases: ["slop-clean", "clean-slop"],
+  description: "Scrub AI-slop patterns from the last assistant message or supplied code",
+  handler: async (ctx) => {
+    const { cleanSlop, summarizeFindings } = await import("./ai-slop-cleaner");
+    const zh = i18n.language.startsWith("zh");
+    let source = ctx.args.join(" ");
+    if (!source) {
+      const last = [...ctx.localMessages].reverse().find(m => m.role === "assistant");
+      if (!last) return zh ? "❌ 没有可清理的内容" : "❌ Nothing to clean";
+      source = last.content;
+    }
+    const result = cleanSlop(source);
+    if (result.findings.length === 0) {
+      return summarizeFindings(result);
+    }
+    return `${summarizeFindings(result)}\n\n### ${zh ? "清理后" : "Cleaned"}\n\n\`\`\`\n${result.cleaned}\n\`\`\``;
+  },
+});
+
+registerCommand({
+  name: "wiki",
+  description: "Project wiki: list | get <slug> | save <title> <body> | search <query>",
+  handler: async (ctx) => {
+    const wiki = await import("./project-wiki");
+    const zh = i18n.language.startsWith("zh");
+    if (!ctx.config.workDir) {
+      return zh ? "❌ 未设置工作目录，无法使用 wiki" : "❌ workDir not set — wiki unavailable";
+    }
+    const sub = ctx.args[0]?.toLowerCase() || "list";
+
+    if (sub === "list") {
+      const entries = await wiki.listEntries(ctx.config.workDir);
+      if (entries.length === 0) return zh ? "📭 wiki 为空，用 `/wiki save <标题> <内容>` 新建" : "📭 Wiki is empty. Use `/wiki save <title> <body>`";
+      const lines = [`## 📚 ${zh ? "项目 wiki" : "Project Wiki"} (${entries.length})`, "", `| Slug | ${zh ? "标题" : "Title"} | ${zh ? "标签" : "Tags"} |`, "|---|---|---|"];
+      for (const e of entries.slice(0, 25)) lines.push(`| \`${e.slug}\` | ${e.title} | ${e.tags.join(", ") || "—"} |`);
+      return lines.join("\n");
+    }
+    if (sub === "get") {
+      const slug = ctx.args[1];
+      if (!slug) return "Usage: /wiki get <slug>";
+      const got = await wiki.getEntry(ctx.config.workDir, slug);
+      if (!got) return `❌ Not found: ${slug}`;
+      return `## ${got.entry.title}\n\n${got.content}`;
+    }
+    if (sub === "save") {
+      const title = ctx.args[1];
+      const body = ctx.args.slice(2).join(" ");
+      if (!title || !body) return "Usage: /wiki save <title> <body>";
+      const saved = await wiki.saveEntry(ctx.config.workDir, title, body);
+      return saved ? `✅ ${zh ? "已保存" : "Saved"}: \`${saved.slug}\` → \`${saved.path}\`` : "❌ Save failed";
+    }
+    if (sub === "search") {
+      const q = ctx.args.slice(1).join(" ");
+      if (!q) return "Usage: /wiki search <query>";
+      const hits = await wiki.search(ctx.config.workDir, q);
+      if (hits.length === 0) return zh ? "🔍 没有结果" : "🔍 No hits";
+      const lines = [`## 🔎 ${zh ? "搜索" : "Search"}: \`${q}\``, ""];
+      for (const h of hits) lines.push(`- \`${h.entry.slug}\` — ${h.entry.title} _(score ${h.score}, ${h.matches.join(", ")})_`);
+      return lines.join("\n");
+    }
+    return `Usage: /wiki [list | get <slug> | save <title> <body> | search <query>]`;
+  },
+});
+
+registerCommand({
+  name: "hud",
+  description: "Toggle the HUD (live iteration/context/worker dashboard)",
+  handler: (ctx) => {
+    const zh = i18n.language.startsWith("zh");
+    const current = localStorage.getItem("hud-visible") === "true";
+    const sub = ctx.args[0]?.toLowerCase();
+    const next = sub === "on" ? true : sub === "off" ? false : !current;
+    localStorage.setItem("hud-visible", String(next));
+    window.dispatchEvent(new CustomEvent("hud-toggle", { detail: { visible: next } }));
+    return next
+      ? (zh ? "🖥️ HUD 已开启。在侧边/顶栏查看实时指标。" : "🖥️ HUD on. Check the sidebar/header for live metrics.")
+      : (zh ? "HUD 已关闭。" : "HUD off.");
+  },
+});
+
+registerCommand({
+  name: "doctor",
+  aliases: ["diagnose", "health"],
+  description: "Full doctor diagnostic (install + runtime + quality gate + env)",
+  handler: async (ctx) => {
+    const { runDoctorReport, renderDoctorReport } = await import("./health-monitor");
+    const zh = i18n.language.startsWith("zh");
+    const skip = ctx.args[0] === "quick" || ctx.args[0] === "no-smoke";
+
+    const report = await runDoctorReport({ skipSmokeTest: skip });
+    const parts: string[] = [renderDoctorReport(report, { zh })];
+
+    try {
+      const { collectDiagnosticsBundle, formatDiagnosticsText } = await import("./runtime/diagnostics");
+      const bundle = collectDiagnosticsBundle({ appName: "super-excellent" });
+      parts.push("", `### ${zh ? "运行环境" : "Runtime Environment"}`, "", "```", formatDiagnosticsText(bundle).trimEnd(), "```");
+    } catch { /* diagnostics module unavailable */ }
+
+    try {
+      const { installDefaultCheckers, runQualityGate, formatGateResult } = await import("./runtime/quality-gate");
+      installDefaultCheckers();
+      const gate = await runQualityGate();
+      parts.push("", `### ${zh ? "质量门禁" : "Quality Gate"}`, "", "```", formatGateResult(gate), "```");
+    } catch { /* quality-gate module unavailable */ }
+
+    return parts.join("\n");
   },
 });

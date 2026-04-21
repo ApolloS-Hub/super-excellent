@@ -21,7 +21,7 @@ import WorkerStatusIndicator from "../components/WorkerStatusIndicator";
 import ToolProgress from "../components/ToolProgress";
 import type { ToolCallEntry, ToolCallStatus } from "../components/ToolProgress";
 import CostBadge from "../components/CostBadge";
-import { collectDiagnosticsBundle, formatDiagnosticsText } from "../lib/runtime/diagnostics";
+import Icon from "../components/Icon";
 import { getAllBackups, computeDiff, formatDiff, getRewindContent, canRewind } from "../lib/file-history";
 import type { FileBackup } from "../lib/file-history";
 import { getCachedProject } from "../lib/project-context";
@@ -633,27 +633,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         return `📌 ${t("chat.commitHint", { msg })}`;
       }
 
-      case "doctor": {
-        const { installDefaultCheckers, runQualityGate, formatGateResult } = await import("../lib/runtime/quality-gate");
-        installDefaultCheckers();
-        const [bundle, gate] = await Promise.all([
-          Promise.resolve(collectDiagnosticsBundle({ appName: "super-excellent" })),
-          runQualityGate(),
-        ]);
-        return [
-          `## 🩺 ${t("chat.diagnosticReport")}`,
-          "",
-          "```",
-          formatDiagnosticsText(bundle).trimEnd(),
-          "```",
-          "",
-          `## ✅ ${t("chat.qualityGate")}`,
-          "",
-          "```",
-          formatGateResult(gate),
-          "```",
-        ].join("\n");
-      }
+      // /doctor is now handled by the command registry (commands.ts)
 
       case "context": {
         const cfg = loadConfig();
@@ -1167,25 +1147,17 @@ ${t("chat.modelUseHint")}`;
           {/* Live worker status indicator */}
           {isLoading && <WorkerStatusIndicator />}
 
-          {/* Thinking indicator with pulse animation */}
+          {/* Thinking indicator — calm dot + three-dot typing animation */}
           {isThinking && isLoading && (
             <Paper p="sm" radius="md" bg="transparent">
               <Group gap="xs">
                 <Box style={{
-                  width: 10, height: 10, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
-                  animation: "thinking-pulse 1.5s ease-in-out infinite",
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: "var(--accent)",
+                  animation: "pulse-soft 1.5s ease-in-out infinite",
                 }} />
                 <Text size="sm" c="dimmed" fw={500}>{t("chat.thinkingEllipsis")}</Text>
-                <Box style={{ display: "flex", gap: 3 }}>
-                  {[0, 1, 2].map(i => (
-                    <Box key={i} style={{
-                      width: 4, height: 4, borderRadius: "50%",
-                      background: "var(--mantine-color-blue-5)",
-                      animation: `thinking-bounce 1.4s ease-in-out ${i * 0.16}s infinite`,
-                    }} />
-                  ))}
-                </Box>
+                <span className="typing-dots"><span /><span /><span /></span>
               </Group>
             </Paper>
           )}
@@ -1250,7 +1222,7 @@ ${t("chat.modelUseHint")}`;
         </Paper>
       )}
 
-      <Group gap="sm">
+      <Group gap="sm" align="flex-end">
         <Textarea
           flex={1}
           placeholder={t("chat.input_placeholder")}
@@ -1267,27 +1239,41 @@ ${t("chat.modelUseHint")}`;
           minRows={1}
           maxRows={6}
           autosize
+          styles={{
+            input: {
+              borderRadius: 12,
+              paddingInline: 14,
+              paddingBlock: 10,
+              fontSize: 14,
+              lineHeight: 1.55,
+            },
+          }}
         />
         {isLoading && !isPausedState ? (
-          <Group gap={4}>
-            <Button onClick={handlePause} color="yellow" variant="filled" size="md">
-              ⏸ {t("chat.pauseBtn")}
+          <Group gap={6}>
+            <Button onClick={handlePause} color="gray" variant="default" size="md" leftSection={<Icon name="pause" size={14} />}>
+              {t("chat.pauseBtn")}
             </Button>
-            <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ {t("chat.stopBtn")}
+            <Button onClick={handleStop} color="red" variant="light" size="md" leftSection={<Icon name="stop" size={14} />}>
+              {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : isPausedState ? (
-          <Group gap={4}>
-            <Button onClick={handleResume} color="green" variant="filled" size="md">
-              ▶ {t("chat.resumeBtn")}
+          <Group gap={6}>
+            <Button onClick={handleResume} color="indigo" variant="filled" size="md" leftSection={<Icon name="send" size={14} />}>
+              {t("chat.resumeBtn")}
             </Button>
-            <Button onClick={handleStop} color="red" variant="filled" size="md">
-              ⏹ {t("chat.stopBtn")}
+            <Button onClick={handleStop} color="red" variant="light" size="md" leftSection={<Icon name="stop" size={14} />}>
+              {t("chat.stopBtn")}
             </Button>
           </Group>
         ) : (
-          <Button onClick={handleSend} size="md">
+          <Button
+            onClick={handleSend}
+            size="md"
+            disabled={!input.trim()}
+            rightSection={<Icon name="send" size={14} />}
+          >
             {t("chat.send")}
           </Button>
         )}

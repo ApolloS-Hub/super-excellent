@@ -6,6 +6,47 @@ All notable changes to Super Excellent.
 
 ---
 
+## v0.2.0 (2026-04-21)
+
+Codex 风格的安全控制层 + oh-my-codex 7 个工作流模式 + 增强诊断。
+
+Codex-style safety & control layer + 7 oh-my-codex workflow patterns + enhanced diagnostics.
+
+### Codex-inspired features
+
+- **双轴安全模型 / Two-axis security model** (`lib/sandbox-policy.ts`): ApprovalMode × SandboxMode with 4 presets (safe/standard/full-auto/unrestricted)
+- **受保护路径 / Protected paths**: `.git`, `.env*`, `.pem`, `.key`, `.p12`, `.pfx`, `.jks` are always write-blocked
+- **默认网络关闭 / Default network-off**: network tools gated unless explicitly enabled
+- **桌面通知 / Desktop notifications** (`lib/desktop-notify.ts`): turn-completion alerts via Tauri + browser fallback
+- **新斜杠命令 / New slash commands**: `/security`, `/review` (git diff presets), `/model` (mid-session switch), `/resume` (most recent conversation)
+
+### OMX workflow patterns (7/7)
+
+- **`/interview`** (`lib/deep-interview.ts`): Socratic clarification, 6-dim ambiguity scoring, 3 profiles, 3 challenge modes, specs to `.omx/specs/`
+- **`/plan`** (`lib/ralplan.ts`): Planner → Architect → Critic deliberation, max 5 iterations, ADR output to `.omx/adrs/`
+- **`/ralph`** (`lib/ralph-loop.ts`): 6-stage persistent completion loop (pre-context → execute → verify → review → deslop → regression)
+- **`/deslop`** (`lib/ai-slop-cleaner.ts`): idempotent pattern-based AI output scrubber
+- **`/wiki`** (`lib/project-wiki.ts`): markdown-first KB with frontmatter + weighted search
+- **`/hud`** (`components/HUDMonitor.tsx`): live dashboard (iterations / workers / context / errors) wired into MonitorPage
+- **`/doctor`** (enhanced `lib/health-monitor.ts`): dual-layer — install checks (config/storage/memory/indexeddb) + runtime checks (API smoke test / MCP / skills) + diagnostics bundle + quality gate
+
+### Default models updated
+
+- Anthropic 默认切换到最新一代 Claude 模型 / defaults updated to latest Claude generation:
+  - Claude Opus 4.7 (`claude-opus-4-7`) — 首选 / primary
+  - Claude Sonnet 4.6 (`claude-sonnet-4-6`)
+  - Claude Haiku 4.5 (`claude-haiku-4-5-20251001`)
+- Watchdog 故障转移链更新 / Watchdog fallback chain updated
+- Settings 下拉列表新增 Opus 4.7 / Settings dropdown now includes Opus 4.7
+
+### Infrastructure
+
+- 审计 JSONL logger + artifact 文件系统 / Audit JSONL logger + artifact file system
+- 规则记忆管理命令（`/rule-add` `/rules` `/rule-remove` `/rule-toggle`） / Rule memory commands
+- 审计日志命令（`/audit` with export） / Audit log command
+
+---
+
 ## v0.1.0 (2026-04-11)
 
 首个里程碑版本，learn-claude-code 19 层架构全部实现。

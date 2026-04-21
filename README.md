@@ -51,6 +51,7 @@
 ### 核心功能
 
 - **10 个 AI 供应商**：Anthropic / OpenAI / Google / Kimi / DeepSeek / 通义千问 / MiniMax / 智谱 / Ollama / 自定义兼容
+  - Claude 模型默认：Opus 4.7 / Sonnet 4.6 / Haiku 4.5
 - **工作流可视化**：SVG 实时流程图，看到角色怎么协作
 - **飞书集成**：日历、消息、文档、任务、审批、表格（通过 Lark CLI）
 - **远程控制**：从飞书发消息，桌面 Agent 执行
@@ -67,6 +68,31 @@
 - **5 级权限**：从完全自动到需要审批
 - **错误分类器**：16 类结构化错误 + 用户友好提示
 - **多语言**：中文 / English
+
+### Codex 风格的安全与控制层
+
+灵感来自 openai/codex，覆盖"两轴决策"模型与常用工作流：
+
+- **双轴安全策略**：审批模式（on-request/untrusted/never）× 沙箱模式（read-only/workspace-write/full-access），4 个预设：safe / standard / full-auto / unrestricted
+- **受保护路径**：`.git` `.env` `.pem` 等永远不可写入
+- **默认网络关闭**：联网工具必须显式开启
+- **桌面通知**：AI 长任务完成后系统级通知
+- **`/security`**：查看或切换预设
+- **`/review`**：对 git diff 做 AI 代码审查（uncommitted / staged / branch / commit）
+- **`/model`**：会话中切换模型
+- **`/resume`**：恢复最近一次对话
+
+### OMX 工作流模式
+
+灵感来自 oh-my-codex 的 7 个模式，全部已实现：
+
+- **`/interview`**：苏格拉底式澄清面谈，6 维歧义度打分 + 3 档位（quick/standard/deep）+ 3 挑战模式（contrarian/simplifier/ontologist），产出 spec 保存到 `.omx/specs/`
+- **`/plan`**：Planner → Architect → Critic 三角色协商，最多 5 轮，生成 ADR 到 `.omx/adrs/`
+- **`/ralph`**：6 阶段持续完成循环（pre-context → execute → verify → review → deslop → regression）
+- **`/deslop`**：AI 产出"套路"清扫器——移除冗余注释、"As an AI..."前言、emoji 噪声
+- **`/wiki`**：基于 markdown 的项目知识库，支持 CRUD + 搜索 + frontmatter 标签
+- **`/hud`**：实时仪表盘（迭代/worker/context 占用/错误），70%/90% 黄红阈值
+- **`/doctor`**：双层诊断——install 层（config/storage/memory/indexeddb）+ runtime 层（API smoke test / MCP / skills）+ 运行环境 + 质量门禁，产出可执行建议
 
 ### 快速开始
 
@@ -102,6 +128,7 @@ Just tell the Secretary what you need. It analyzes intent, matches roles, dispat
 ### Features
 
 - **10 AI providers**: Anthropic, OpenAI, Google, Kimi, DeepSeek, Qwen, MiniMax, Zhipu, Ollama, Custom
+  - Claude defaults: Opus 4.7 / Sonnet 4.6 / Haiku 4.5
 - **20 specialized AI roles**: 12 engineering + 8 business/operations
 - **Workflow visualization**: Real-time SVG diagrams of role collaboration
 - **Feishu integration**: Calendar, IM, Docs, Tasks, Approval, Sheets via Lark CLI
@@ -116,6 +143,31 @@ Just tell the Secretary what you need. It analyzes intent, matches roles, dispat
 - **16-category error classifier**: User-friendly error messages
 - **Dark / Light theme**
 - **i18n**: Chinese + English
+
+### Codex-style safety & control layer
+
+Inspired by openai/codex, covering the two-axis decision model and common workflows:
+
+- **Two-axis security**: ApprovalMode (on-request/untrusted/never) × SandboxMode (read-only/workspace-write/full-access), 4 presets: safe / standard / full-auto / unrestricted
+- **Protected paths**: `.git` `.env` `.pem` etc. are never writable
+- **Default network-off**: network tools must be explicitly enabled
+- **Desktop notifications**: system-level alerts when long-running turns finish
+- **`/security`**: inspect or switch preset
+- **`/review`**: AI code review over git diffs (uncommitted / staged / branch / commit)
+- **`/model`**: switch model mid-session
+- **`/resume`**: restore the most recent conversation
+
+### OMX workflow patterns
+
+Inspired by oh-my-codex's 7 patterns, all implemented:
+
+- **`/interview`**: Socratic clarification with 6-dim ambiguity scoring, 3 profiles (quick/standard/deep), 3 challenge modes (contrarian/simplifier/ontologist). Spec saved to `.omx/specs/`.
+- **`/plan`**: Planner → Architect → Critic deliberation, max 5 iterations, ADR output to `.omx/adrs/`.
+- **`/ralph`**: 6-stage persistent completion loop (pre-context → execute → verify → review → deslop → regression).
+- **`/deslop`**: idempotent AI-slop scrubber — strips redundant comments, "As an AI..." preambles, emoji-log noise.
+- **`/wiki`**: markdown-first project knowledge base with CRUD + tag-weighted search.
+- **`/hud`**: live dashboard (iterations / workers / context usage / errors) with 70%/90% yellow/red thresholds.
+- **`/doctor`**: dual-layer diagnostic — install layer (config / storage / memory / indexeddb) + runtime layer (API smoke test / MCP / skills) + runtime env + quality gate, with actionable suggestions.
 
 ### Quick Start
 

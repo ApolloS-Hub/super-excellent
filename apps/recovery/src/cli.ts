@@ -77,7 +77,7 @@ function checkConfig(): HealthCheck {
         const defaultConfig = {
           provider: "anthropic",
           apiKey: "",
-          model: "claude-opus-4-6",
+          model: "claude-opus-4-7",
           language: "zh-CN",
           theme: "dark",
           createdAt: new Date().toISOString(),
@@ -101,7 +101,7 @@ function checkConfig(): HealthCheck {
         // Backup corrupted file then reset
         const corruptPath = CONFIG_FILE + `.corrupt.${Date.now()}`;
         fs.renameSync(CONFIG_FILE, corruptPath);
-        const defaultConfig = { provider: "anthropic", apiKey: "", model: "claude-opus-4-6" };
+        const defaultConfig = { provider: "anthropic", apiKey: "", model: "claude-opus-4-7" };
         fs.writeFileSync(CONFIG_FILE, JSON.stringify(defaultConfig, null, 2));
       },
     };
@@ -296,7 +296,7 @@ function runReset() {
   const defaultConfig = {
     provider: "anthropic",
     apiKey: "",
-    model: "claude-opus-4-6",
+    model: "claude-opus-4-7",
     language: "zh-CN",
     theme: "dark",
     createdAt: new Date().toISOString(),

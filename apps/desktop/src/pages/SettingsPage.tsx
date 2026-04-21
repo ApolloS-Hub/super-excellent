@@ -8,6 +8,7 @@ import {
 import { loadConfig, saveConfig, validateApiKey } from "../lib/agent-bridge";
 import type { AgentConfig } from "../lib/agent-bridge";
 import { usePermissionLevel } from "../components/PermissionDialog";
+import Icon from "../components/Icon";
 import {
   PERMISSION_LEVEL_META,
   permissionEngine,
@@ -30,9 +31,10 @@ const PROVIDER_OPTIONS = [
 
 const MODEL_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
   anthropic: [
+    { value: "claude-opus-4-7", label: "Claude Opus 4.7" },
     { value: "claude-opus-4-6", label: "Claude Opus 4.6" },
     { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-    { value: "claude-haiku-4", label: "Claude Haiku 4" },
+    { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
   ],
   openai: [
     { value: "gpt-5.4", label: "GPT-5.4" },
@@ -284,22 +286,24 @@ function SettingsPage({ onBack }: SettingsPageProps) {
     <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
     <Stack maw={600} mx="auto" pb="xl">
       <Group justify="space-between">
-        <Text size="xl" fw={700}>{t("settings.title")}</Text>
-        <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
+        <Text size="xl" fw={650} style={{ letterSpacing: "-0.015em" }}>{t("settings.title")}</Text>
+        <Button variant="subtle" size="sm" leftSection={<Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} />} onClick={onBack}>
+          {t("nav.conversations")}
+        </Button>
       </Group>
 
       {saved && (
-        <Notification color="green" withCloseButton={false}>
-          {`✅ ${t("settings.configSaved")}`}
+        <Notification color="green" withCloseButton={false} icon={<Icon name="check" size={14} stroke={2.2} />}>
+          {t("settings.configSaved")}
         </Notification>
       )}
 
       <Tabs defaultValue="model">
         <Tabs.List>
-          <Tabs.Tab value="model">{`🤖 ${t("settings.modelConfig")}`}</Tabs.Tab>
-          <Tabs.Tab value="general">{`⚙️ ${t("settings.general")}`}</Tabs.Tab>
-          <Tabs.Tab value="lark">{`🐦 ${t("settings.lark")}`}</Tabs.Tab>
-          <Tabs.Tab value="advanced">{`🔧 ${t("settings.advanced")}`}</Tabs.Tab>
+          <Tabs.Tab value="model"    leftSection={<Icon name="bot" size={14} />}>      {t("settings.modelConfig")}</Tabs.Tab>
+          <Tabs.Tab value="general"  leftSection={<Icon name="sliders" size={14} />}>  {t("settings.general")}</Tabs.Tab>
+          <Tabs.Tab value="lark"     leftSection={<Icon name="chat" size={14} />}>     {t("settings.lark")}</Tabs.Tab>
+          <Tabs.Tab value="advanced" leftSection={<Icon name="shield" size={14} />}>   {t("settings.advanced")}</Tabs.Tab>
         </Tabs.List>
 
         {/* ── 模型配置 (Model Config) ── */}
@@ -784,8 +788,8 @@ function MCPConfigPanel() {
               <Text size="xs" c="dimmed" truncate style={{ maxWidth: 140 }}>{s.url}</Text>
             </Group>
             <Group gap={4}>
-              <Badge size="xs" variant="outline">🔧 {s.toolCount}</Badge>
-              <Badge size="xs" variant="outline">📄 {s.resourceCount}</Badge>
+              <Badge size="xs" variant="outline" leftSection={<Icon name="sliders" size={10} />}>{s.toolCount}</Badge>
+              <Badge size="xs" variant="outline" leftSection={<Icon name="file" size={10} />}>{s.resourceCount}</Badge>
               {s.status === "connected" && (
                 <Button
                   size="xs" variant="subtle"
@@ -1047,14 +1051,17 @@ function LarkConfigPanel() {
   return (
     <Stack gap="md">
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">{`🐦 ${t("settings.larkIntegration")}`}</Text>
+        <Group gap={8} mb="sm">
+          <Icon name="chat" size={15} />
+          <Text fw={600}>{t("settings.larkIntegration")}</Text>
+        </Group>
         <Text size="sm" c="dimmed" mb="md">
           {t("settings.larkIntegrationHint")}
         </Text>
 
         {saved && (
-          <Notification color="green" withCloseButton={false} mb="md">
-            {`✅ ${t("settings.larkConfigSaved")}`}
+          <Notification color="green" withCloseButton={false} mb="md" icon={<Icon name="check" size={14} stroke={2.2} />}>
+            {t("settings.larkConfigSaved")}
           </Notification>
         )}
 
@@ -1085,27 +1092,30 @@ function LarkConfigPanel() {
 
           <Group>
             <Button onClick={handleSave} flex={1}>
-              {`💾 ${t("settings.saveLarkConfig")}`}
+              {t("settings.saveLarkConfig")}
             </Button>
           </Group>
         </Stack>
       </Paper>
 
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">{`🔧 ${t("settings.registeredTools")}`}</Text>
+        <Group gap={8} mb="sm">
+          <Icon name="sliders" size={15} />
+          <Text fw={600}>{t("settings.registeredTools")}</Text>
+        </Group>
         <Group gap="xs" mb="sm">
           <Badge color={isConfigured ? "green" : "gray"} variant="light">
-            {isConfigured ? `✅ ${t("settings.configured")}` : `⚠️ ${t("settings.notConfigured")}`}
+            {isConfigured ? t("settings.configured") : t("settings.notConfigured")}
           </Badge>
         </Group>
         <Stack gap="xs">
           {[
-            { name: "lark_calendar", desc: `📅 ${t("settings.larkCalendar")}` },
-            { name: "lark_im", desc: `💬 ${t("settings.larkIM")}` },
-            { name: "lark_doc", desc: `📄 ${t("settings.larkDoc")}` },
-            { name: "lark_task", desc: `✅ ${t("settings.larkTask")}` },
-            { name: "lark_approval", desc: `✍️ ${t("settings.larkApproval")}` },
-            { name: "lark_sheet", desc: `📊 ${t("settings.larkSheet")}` },
+            { name: "lark_calendar", desc: t("settings.larkCalendar") },
+            { name: "lark_im", desc: t("settings.larkIM") },
+            { name: "lark_doc", desc: t("settings.larkDoc") },
+            { name: "lark_task", desc: t("settings.larkTask") },
+            { name: "lark_approval", desc: t("settings.larkApproval") },
+            { name: "lark_sheet", desc: t("settings.larkSheet") },
           ].map(tool => (
             <Group key={tool.name} gap="xs" wrap="nowrap">
               <Badge size="xs" variant="outline" color={isConfigured ? "blue" : "gray"}>
