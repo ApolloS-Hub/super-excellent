@@ -553,11 +553,11 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
             <Group gap={8} wrap="nowrap" align="center">
               <Box
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 30,
+                  height: 30,
                   borderRadius: 8,
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
+                  background: "var(--accent-soft)",
+                  border: "1px solid var(--border-strong)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -590,7 +590,7 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
               size="xs"
               mt={6}
               fullWidth
-              variant={isWorking ? "filled" : "light"}
+              variant={isWorking ? "filled" : isDone || isError ? "light" : "outline"}
             >
               {isWorking ? t("monitor.working")
                 : isDone ? t("monitor.done")
