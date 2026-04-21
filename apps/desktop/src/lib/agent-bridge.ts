@@ -539,6 +539,9 @@ export async function sendMessage(
   // Abort any previous in-flight request (stream-manager calls this per-session)
   abortGeneration();
 
+  // Mark turn start for desktop notification timing
+  import("./desktop-notify").then(m => m.markTurnStart()).catch(() => {});
+
   // For MVP: direct API call from frontend
   
   if (!config.apiKey) {

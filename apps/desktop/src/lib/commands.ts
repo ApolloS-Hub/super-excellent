@@ -237,6 +237,207 @@ registerCommand({
   },
 });
 
+// ═══════════ Security policy commands ═══════════
+
+registerCommand({
+  name: "security",
+  aliases: ["sandbox", "policy"],
+  description: "View or set security policy (approval + sandbox modes)",
+  handler: async (ctx) => {
+    const { getPolicy, POLICY_PRESETS, applyPreset, setPolicy } = await import("./sandbox-policy");
+    const sub = ctx.args[0]?.toLowerCase();
+
+    if (!sub || sub === "status") {
+      const p = getPolicy();
+      const zh = i18n.language.startsWith("zh");
+      return `## 🔒 ${zh ? "安全策略" : "Security Policy"}
+
+| ${zh ? "项目" : "Setting"} | ${zh ? "值" : "Value"} |
+|------|------|
+| ${zh ? "审批模式" : "Approval Mode"} | \`${p.approvalMode}\` |
+| ${zh ? "沙箱模式" : "Sandbox Mode"} | \`${p.sandboxMode}\` |
+| ${zh ? "网络访问" : "Network"} | ${p.networkEnabled ? "✅ ON" : "❌ OFF"} |
+| ${zh ? "受保护路径" : "Protected Paths"} | ${p.protectedPaths.length} |
+
+${zh ? "预设" : "Presets"}: ${POLICY_PRESETS.map(p => `\`${p.name}\``).join(", ")}
+${zh ? "用法" : "Usage"}: \`/security <preset>\` ${zh ? "或" : "or"} \`/security network on|off\``;
+    }
+
+    if (sub === "network") {
+      const val = ctx.args[1]?.toLowerCase();
+      if (val === "on" || val === "true") {
+        setPolicy({ networkEnabled: true });
+        return "✅ Network access enabled";
+      } else if (val === "off" || val === "false") {
+        setPolicy({ networkEnabled: false });
+        return "✅ Network access disabled";
+      }
+      return "❌ Usage: /security network on|off";
+    }
+
+    const preset = POLICY_PRESETS.find(p => p.name === sub);
+    if (preset) {
+      applyPreset(preset.name);
+      const zh = i18n.language.startsWith("zh");
+      return `✅ ${zh ? "已切换到" : "Switched to"}: **${zh ? preset.labelZh : preset.label}**\n${zh ? preset.descriptionZh : preset.description}`;
+    }
+
+    return `❌ Unknown option: ${sub}\nPresets: ${POLICY_PRESETS.map(p => p.name).join(", ")}`;
+  },
+});
+
+// ═══════════ /review command ═══════════
+
+registerCommand({
+  name: "review",
+  aliases: ["code-review", "cr"],
+  description: "Review code changes (uncommitted, staged, branch diff)",
+  handler: async (ctx) => {
+    const sub = ctx.args[0]?.toLowerCase() || "uncommitted";
+    const zh = i18n.language.startsWith("zh");
+
+    let diffCmd = "";
+    let label = "";
+
+    switch (sub) {
+      case "staged":
+        diffCmd = "git diff --cached";
+        label = zh ? "已暂存的改动" : "Staged changes";
+        break;
+      case "branch": {
+        const base = ctx.args[1] || "main";
+        diffCmd = `git diff ${base}...HEAD`;
+        label = zh ? `相对 ${base} 的改动` : `Changes vs ${base}`;
+        break;
+      }
+      case "commit": {
+        const ref = ctx.args[1] || "HEAD";
+        diffCmd = `git show ${ref} --stat`;
+        label = zh ? `提交 ${ref}` : `Commit ${ref}`;
+        break;
+      }
+      case "uncommitted":
+      default:
+        diffCmd = "git diff";
+        label = zh ? "未提交的改动" : "Uncommitted changes";
+        break;
+    }
+
+    let diff = "";
+    try {
+      const { isTauriAvailable } = await import("./tauri-bridge");
+      if (isTauriAvailable()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        diff = await invoke("execute_command", { command: diffCmd }) as string;
+      }
+    } catch { /* not in Tauri */ }
+
+    if (!diff || diff.trim().length === 0) {
+      return zh
+        ? `📝 **${label}**: 没有改动`
+        : `📝 **${label}**: No changes found`;
+    }
+
+    const lines = diff.split("\n");
+    const stats = {
+      filesChanged: lines.filter(l => l.startsWith("diff --git")).length || "?",
+      additions: lines.filter(l => l.startsWith("+") && !l.startsWith("+++")).length,
+      deletions: lines.filter(l => l.startsWith("-") && !l.startsWith("---")).length,
+    };
+
+    const truncated = lines.length > 200 ? lines.slice(0, 200).join("\n") + "\n... (truncated)" : diff;
+
+    return `## 📝 ${label}
+
+| ${zh ? "统计" : "Stat"} | ${zh ? "值" : "Value"} |
+|------|------|
+| ${zh ? "文件" : "Files"} | ${stats.filesChanged} |
+| ${zh ? "新增行" : "Additions"} | +${stats.additions} |
+| ${zh ? "删除行" : "Deletions"} | -${stats.deletions} |
+
+\`\`\`diff
+${truncated}
+\`\`\`
+
+${zh ? "提示：发送 \"帮我审查上面的代码\" 让 AI 分析" : "Tip: Send \"review the code above\" to get AI analysis"}`;
+  },
+});
+
+// ═══════════ /model command (switch model mid-session) ═══════════
+
+registerCommand({
+  name: "model",
+  aliases: ["switch-model"],
+  description: "Switch AI model mid-session (e.g. /model claude-3-5-sonnet)",
+  handler: (ctx) => {
+    const modelArg = ctx.args[0];
+    if (!modelArg) {
+      const zh = i18n.language.startsWith("zh");
+      return `## ${zh ? "当前模型" : "Current Model"}
+
+**${ctx.config.provider}** / \`${ctx.config.model}\`
+
+${zh ? "用法" : "Usage"}: \`/model <model-id>\`
+${zh ? "例如" : "Examples"}: \`/model gpt-4o\`, \`/model claude-3-5-sonnet\`, \`/model deepseek-chat\``;
+    }
+
+    try {
+      const raw = localStorage.getItem("agent-config");
+      if (raw) {
+        const config = JSON.parse(raw);
+        const oldModel = config.model;
+        config.model = modelArg;
+        localStorage.setItem("agent-config", JSON.stringify(config));
+        return `✅ ${i18n.language.startsWith("zh") ? "模型已切换" : "Model switched"}: \`${oldModel}\` → \`${modelArg}\`\n\n⚠️ ${i18n.language.startsWith("zh") ? "刷新页面后完全生效" : "Refresh page for full effect"}`;
+      }
+    } catch { /* storage error */ }
+
+    return "❌ Failed to update model config";
+  },
+});
+
+// ═══════════ /resume command (resume last conversation) ═══════════
+
+registerCommand({
+  name: "resume",
+  aliases: ["resume-last", "last"],
+  description: "Resume the most recent conversation",
+  handler: async (ctx) => {
+    const { loadConversationsAsync } = await import("./conversations");
+    const convs = await loadConversationsAsync();
+    const zh = i18n.language.startsWith("zh");
+
+    if (convs.length === 0) {
+      return zh ? "📭 没有历史对话可以恢复" : "📭 No previous conversations to resume";
+    }
+
+    const sorted = [...convs].sort((a, b) => b.updatedAt - a.updatedAt);
+
+    if (ctx.conversation?.id === sorted[0].id) {
+      return zh ? "ℹ️ 当前已经是最新的对话" : "ℹ️ Already on the most recent conversation";
+    }
+
+    const lines = [
+      zh ? `## 📂 最近的对话` : `## 📂 Recent Conversations`,
+      "",
+      `| # | ${zh ? "标题" : "Title"} | ${zh ? "消息数" : "Messages"} | ${zh ? "更新时间" : "Updated"} |`,
+      "|---|------|------|------|",
+    ];
+
+    for (let i = 0; i < Math.min(sorted.length, 5); i++) {
+      const c = sorted[i];
+      const date = new Date(c.updatedAt).toLocaleDateString();
+      lines.push(`| ${i + 1} | ${c.title} | ${c.messages.length} | ${date} |`);
+    }
+
+    lines.push("", zh
+      ? "在侧边栏点击对话名称即可切换"
+      : "Click a conversation in the sidebar to switch");
+
+    return lines.join("\n");
+  },
+});
+
 // ═══════════ Audit log command ═══════════
 
 registerCommand({

@@ -57,6 +57,8 @@ function App() {
     startHealthMonitor();
     startStaleDetection();
     initStopHooks();
+    // Desktop notification hook for turn completion
+    import("./lib/desktop-notify").then(m => m.initDesktopNotifications()).catch(console.warn);
     // Load bundled markdown skills for workflow guidance injection
     import("./lib/skills").then(m => m.loadMarkdownSkills()).catch(console.warn);
     // Migrate API keys to secure store
