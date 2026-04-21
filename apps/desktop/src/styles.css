@@ -1,20 +1,64 @@
 /* ═══════════════════════════════════════════════════════════
    Super Excellent — Global styles
-   Modern, polished, subtle animations
+   Modern, polished, anti-AI-slop aesthetics.
+   Principles from huashu-design:
+   - OKLCH colors (perceptual uniformity)
+   - Serif display + sans body font pairing
+   - text-wrap: pretty (orphan/widow prevention)
+   - Generous whitespace over cramming
+   - No purple gradients, no emoji icons, no generic rounded corners
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+  /* ── Font pairing: serif display + sans body ── */
+  --font-display: 'Georgia', 'Songti SC', 'Noto Serif SC', serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  /* ── OKLCH palette (perceptually uniform, not hex) ── */
+  --color-primary: oklch(52% 0.18 265);        /* deep indigo */
+  --color-primary-light: oklch(92% 0.04 265);  /* soft indigo wash */
+  --color-accent: oklch(62% 0.16 310);         /* violet accent */
+  --color-success: oklch(58% 0.14 155);        /* teal green */
+  --color-warning: oklch(72% 0.16 80);         /* warm amber */
+  --color-error: oklch(55% 0.2 25);            /* clear red */
+  --color-text: oklch(22% 0.01 265);           /* near-black */
+  --color-text-secondary: oklch(52% 0.01 265); /* muted */
+  --color-bg: oklch(99% 0.003 265);            /* warm white */
+  --color-border: oklch(90% 0.01 265);         /* subtle border */
+
+  font-family: var(--font-body);
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
+/* ── Dark mode OKLCH overrides ── */
+[data-mantine-color-scheme="dark"] {
+  --color-text: oklch(92% 0.01 265);
+  --color-text-secondary: oklch(65% 0.01 265);
+  --color-bg: oklch(15% 0.01 265);
+  --color-border: oklch(28% 0.01 265);
+  --color-primary-light: oklch(22% 0.06 265);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   overflow: hidden;
+}
+
+/* ── Global text-wrap for better typography ── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+p, li, td {
+  text-wrap: pretty;
+  line-height: 1.65;
 }
 
 /* ═══════════ Animations ═══════════ */
@@ -82,7 +126,7 @@ body {
 }
 
 .msg-bubble-user {
-  background: linear-gradient(135deg, var(--mantine-color-indigo-6), var(--mantine-color-indigo-7));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   color: white;
   border-radius: 18px 18px 4px 18px;
   padding: 10px 14px;
@@ -106,12 +150,12 @@ body {
 
 .msg-bubble-thinking {
   background: linear-gradient(90deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(139, 92, 246, 0.08) 50%,
-    rgba(99, 102, 241, 0.08) 100%);
+    oklch(95% 0.03 265 / 0.5) 0%,
+    oklch(92% 0.04 310 / 0.5) 50%,
+    oklch(95% 0.03 265 / 0.5) 100%);
   background-size: 200% 100%;
   animation: shimmer 3s linear infinite;
-  border: 1px dashed rgba(99, 102, 241, 0.2);
+  border: 1px dashed oklch(75% 0.08 265 / 0.3);
   border-radius: 12px;
 }
 
@@ -238,7 +282,7 @@ body {
 .app-title {
   font-weight: 600;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, var(--mantine-color-indigo-5), var(--mantine-color-violet-5));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

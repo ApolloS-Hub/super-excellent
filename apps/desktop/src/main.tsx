@@ -6,18 +6,19 @@ import "./i18n";
 import App from "./App";
 import "./styles.css";
 
-// Modern theme — indigo primary, refined typography, better defaults
+// Anti-AI-slop theme — OKLCH-aware palette, serif/sans pairing, no generic gradients
 const theme = createTheme({
   primaryColor: "indigo",
   primaryShade: { light: 6, dark: 5 },
-  // Typography — use variable font stack with modern system fonts
+  // Typography — serif display for headings, sans body (huashu pattern)
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
   fontFamilyMonospace:
     "'SF Mono', 'Menlo', 'JetBrains Mono', 'Fira Code', Consolas, monospace",
   headings: {
+    // Serif display font for headings — creates visual hierarchy contrast
     fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif",
+      "'Georgia', 'Songti SC', 'Noto Serif SC', 'SF Pro Display', serif",
     fontWeight: "600",
   },
   defaultRadius: "md",
