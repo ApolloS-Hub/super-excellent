@@ -437,8 +437,7 @@ function App() {
               )}
               {groupedConversations.map(group => (
                 <Box key={group.label}>
-                  <Text size="xs" fw={700} c="dimmed" px="xs" pt="sm" pb={4}
-                    style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>
+                  <Text className="sidebar-section-label">
                     {group.label}
                   </Text>
                   {group.items.map(conv => (
