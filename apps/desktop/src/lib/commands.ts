@@ -236,3 +236,50 @@ registerCommand({
     return toggleRule(id) ? `✅ Toggled rule ${id}` : `❌ No rule with id ${id}`;
   },
 });
+
+// ═══════════ Audit log command ═══════════
+
+registerCommand({
+  name: "audit",
+  aliases: ["log", "trail"],
+  description: "View recent audit trail (append-only operation log)",
+  handler: async (ctx) => {
+    const { tail, sessionStats, getEntryCount } = await import("./audit-logger");
+    const n = ctx.args[0] ? parseInt(ctx.args[0]) : 20;
+    const entries = tail(n);
+    const stats = sessionStats();
+
+    if (entries.length === 0) return "📭 No audit entries yet.";
+
+    const lines = [
+      `## 📜 Audit Trail (last ${entries.length} of ${getEntryCount()})`,
+      "",
+      `**Session**: ${stats.toolCalls} tools, ${stats.errors} errors, ${stats.filesModified} files modified`,
+      "",
+      "| Time | Type | Actor | Target | Detail |",
+      "|------|------|-------|--------|--------|",
+    ];
+    for (const e of entries) {
+      const time = e.ts.slice(11, 19);
+      const ok = e.ok === false ? "❌" : e.ok === true ? "✅" : "";
+      const dur = e.durationMs ? ` (${e.durationMs}ms)` : "";
+      lines.push(`| ${time} | ${e.type} | ${e.actor} | ${e.target} | ${ok}${(e.detail || "").slice(0, 60)}${dur} |`);
+    }
+    lines.push("", "Use `/audit 50` to see more. `/audit export` to download JSONL.");
+
+    if (ctx.args[0] === "export") {
+      const { exportJsonl } = await import("./audit-logger");
+      const jsonl = exportJsonl();
+      const blob = new Blob([jsonl], { type: "application/jsonl" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return "✅ Audit log exported as JSONL";
+    }
+
+    return lines.join("\n");
+  },
+});

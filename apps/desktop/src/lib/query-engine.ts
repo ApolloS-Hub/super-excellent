@@ -21,6 +21,7 @@
 
 import type { AgentConfig, AgentEvent } from "./agent-bridge";
 import { runStopHooks } from "./stop-hooks";
+import { audit } from "./audit-logger";
 import { recordTurnUsage, initBudget } from "./token-budget";
 import i18n from "../i18n";
 
@@ -134,6 +135,12 @@ export async function runQuery(options: QueryOptions): Promise<void> {
   const complexity = estimateComplexity(message, !!worker);
   const adaptiveMaxTokens = complexity.maxTokens;
 
+  // Audit: query started
+  const queryStartedAt = Date.now();
+  audit("api_call", worker?.id ?? "secretary", config.provider,
+    `${complexity.level} | ${message.slice(0, 80)}`);
+
+
   // Initialize token budget with adaptive context awareness
   initBudget(config.model, complexity.budgetUsd);
 
@@ -158,7 +165,15 @@ export async function runQuery(options: QueryOptions): Promise<void> {
   const wrappedOnEvent: EventCallback = (event) => {
     // Capture data for post-turn hooks
     if (event.type === "text" && event.text) responseText += event.text;
-    if (event.type === "tool_use" && event.toolName) toolsUsed.push(event.toolName);
+    if (event.type === "tool_use" && event.toolName) {
+      toolsUsed.push(event.toolName);
+      audit("tool_execute", worker?.id ?? "secretary", event.toolName,
+        event.toolInput?.slice(0, 200));
+    }
+    if (event.type === "tool_result" && event.toolName) {
+      audit("tool_result", worker?.id ?? "secretary", event.toolName,
+        event.toolOutput?.slice(0, 200), { ok: !event.isError });
+    }
     onEvent(event);
   };
 
@@ -196,6 +211,11 @@ export async function runQuery(options: QueryOptions): Promise<void> {
     workerId: worker?.id,
     workerName: worker?.name,
   }).catch(() => { /* never block on hook failures */ });
+
+  // Audit: query completed
+  audit("api_call", worker?.id ?? "secretary", config.provider,
+    `completed | ${tokensIn}+${tokensOut} tokens | ${toolsUsed.length} tools | $${snapshot.estimatedCost.toFixed(4)}`,
+    { durationMs: Date.now() - queryStartedAt, ok: true });
 }
 
 /**
