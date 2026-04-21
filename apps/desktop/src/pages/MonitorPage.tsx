@@ -15,6 +15,7 @@ import { getPendingRequests, type ProtocolRequest } from "../lib/team-protocols"
 import "../lib/workflows";
 import { cronScheduler } from "../lib/cron-scheduler";
 import WorkflowViewer from "../components/WorkflowViewer";
+import HUDMonitor from "../components/HUDMonitor";
 
 interface MonitorPageProps {
   onBack: () => void;
@@ -208,6 +209,9 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {error && <Notification color="yellow" withCloseButton={false}>⚠️ {error}</Notification>}
       {repairResult && <Notification color="green" withCloseButton onClose={() => setRepairResult(null)}>{repairResult}</Notification>}
+
+      {/* HUD — live iteration/worker/context dashboard */}
+      <HUDMonitor />
 
       {/* System Health */}
       <Paper p="md" radius="md" withBorder>

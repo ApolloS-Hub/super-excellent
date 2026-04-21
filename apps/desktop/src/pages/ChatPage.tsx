@@ -21,7 +21,6 @@ import WorkerStatusIndicator from "../components/WorkerStatusIndicator";
 import ToolProgress from "../components/ToolProgress";
 import type { ToolCallEntry, ToolCallStatus } from "../components/ToolProgress";
 import CostBadge from "../components/CostBadge";
-import { collectDiagnosticsBundle, formatDiagnosticsText } from "../lib/runtime/diagnostics";
 import { getAllBackups, computeDiff, formatDiff, getRewindContent, canRewind } from "../lib/file-history";
 import type { FileBackup } from "../lib/file-history";
 import { getCachedProject } from "../lib/project-context";
@@ -633,27 +632,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
         return `📌 ${t("chat.commitHint", { msg })}`;
       }
 
-      case "doctor": {
-        const { installDefaultCheckers, runQualityGate, formatGateResult } = await import("../lib/runtime/quality-gate");
-        installDefaultCheckers();
-        const [bundle, gate] = await Promise.all([
-          Promise.resolve(collectDiagnosticsBundle({ appName: "super-excellent" })),
-          runQualityGate(),
-        ]);
-        return [
-          `## 🩺 ${t("chat.diagnosticReport")}`,
-          "",
-          "```",
-          formatDiagnosticsText(bundle).trimEnd(),
-          "```",
-          "",
-          `## ✅ ${t("chat.qualityGate")}`,
-          "",
-          "```",
-          formatGateResult(gate),
-          "```",
-        ].join("\n");
-      }
+      // /doctor is now handled by the command registry (commands.ts)
 
       case "context": {
         const cfg = loadConfig();

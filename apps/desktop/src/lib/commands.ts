@@ -673,12 +673,28 @@ registerCommand({
 registerCommand({
   name: "doctor",
   aliases: ["diagnose", "health"],
-  description: "Full doctor diagnostic (install + runtime checks)",
+  description: "Full doctor diagnostic (install + runtime + quality gate + env)",
   handler: async (ctx) => {
     const { runDoctorReport, renderDoctorReport } = await import("./health-monitor");
     const zh = i18n.language.startsWith("zh");
     const skip = ctx.args[0] === "quick" || ctx.args[0] === "no-smoke";
+
     const report = await runDoctorReport({ skipSmokeTest: skip });
-    return renderDoctorReport(report, { zh });
+    const parts: string[] = [renderDoctorReport(report, { zh })];
+
+    try {
+      const { collectDiagnosticsBundle, formatDiagnosticsText } = await import("./runtime/diagnostics");
+      const bundle = collectDiagnosticsBundle({ appName: "super-excellent" });
+      parts.push("", `### ${zh ? "运行环境" : "Runtime Environment"}`, "", "```", formatDiagnosticsText(bundle).trimEnd(), "```");
+    } catch { /* diagnostics module unavailable */ }
+
+    try {
+      const { installDefaultCheckers, runQualityGate, formatGateResult } = await import("./runtime/quality-gate");
+      installDefaultCheckers();
+      const gate = await runQualityGate();
+      parts.push("", `### ${zh ? "质量门禁" : "Quality Gate"}`, "", "```", formatGateResult(gate), "```");
+    } catch { /* quality-gate module unavailable */ }
+
+    return parts.join("\n");
   },
 });
