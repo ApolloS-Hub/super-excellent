@@ -79,6 +79,8 @@
     "exportJSON": "Export JSON",
     "exportPDF": "Export PDF",
     "exportImage": "Export Image",
+    "exportPPTX": "Export PowerPoint",
+    "exportedPPTX": "Exported as PPTX",
     "importLabel": "Import",
     "importClaudeJSONL": "Import Claude JSONL",
     "custom": "Custom",

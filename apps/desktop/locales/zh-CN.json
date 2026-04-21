@@ -79,6 +79,8 @@
     "exportJSON": "导出 JSON",
     "exportPDF": "导出 PDF",
     "exportImage": "导出图片",
+    "exportPPTX": "导出 PowerPoint",
+    "exportedPPTX": "已导出为 PPTX",
     "importLabel": "导入",
     "importClaudeJSONL": "导入 Claude JSONL",
     "custom": "自定义",

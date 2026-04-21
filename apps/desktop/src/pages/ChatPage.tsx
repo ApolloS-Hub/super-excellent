@@ -482,6 +482,28 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
     }, "image/png");
   }, [conversation, localMessages]);
 
+  // ═══════════ Export as PPTX ═══════════
+  const exportAsPptx = useCallback(async () => {
+    if (!conversation || localMessages.length === 0) return;
+    try {
+      const { conversationToPptx } = await import("../lib/html-to-pptx");
+      const messages = localMessages.map(m => ({ role: m.role, content: m.content }));
+      const blob = await conversationToPptx(messages, {
+        title: conversation.title || "Conversation",
+        author: "Super Excellent",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${conversation.title.replace(/[^a-zA-Z0-9一-鿿]/g, "_")}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportNotice(`✅ ${t("chat.exportedPPTX")}`);
+    } catch (e) {
+      setExportNotice(`❌ PPTX export failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [conversation, localMessages, t]);
+
   // ═══════════ Pause / Resume / Stop ═══════════
   const [isPausedState, setIsPausedState] = useState(false);
 
@@ -1117,6 +1139,7 @@ ${t("chat.modelUseHint")}`;
               <Menu.Item onClick={exportAsJSON}>📋 {t("chat.exportJSON")}</Menu.Item>
               <Menu.Item onClick={exportAsPDF}>📄 {t("chat.exportPDF")}</Menu.Item>
               <Menu.Item onClick={exportAsImage}>🖼️ {t("chat.exportImage")}</Menu.Item>
+              <Menu.Item onClick={exportAsPptx}>📊 {t("chat.exportPPTX")}</Menu.Item>
               <Menu.Divider />
               <Menu.Label>{t("chat.importLabel")}</Menu.Label>
               <Menu.Item onClick={importClaudeJsonl}>📥 {t("chat.importClaudeJSONL")}</Menu.Item>
