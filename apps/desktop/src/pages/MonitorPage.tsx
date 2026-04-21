@@ -16,20 +16,30 @@ import "../lib/workflows";
 import { cronScheduler } from "../lib/cron-scheduler";
 import WorkflowViewer from "../components/WorkflowViewer";
 import HUDMonitor from "../components/HUDMonitor";
+import Icon, { type IconName } from "../components/Icon";
 
 interface MonitorPageProps {
   onBack: () => void;
 }
 
-const WORKFLOW_PHASES = [
-  { id: "think", emoji: "💭", label: "Think", labelKey: "monitor.phaseThink", desc: "Clarify goals, challenge assumptions" },
-  { id: "plan", emoji: "📋", label: "Plan", labelKey: "monitor.phasePlan", desc: "Architecture, task breakdown" },
-  { id: "build", emoji: "🔨", label: "Build", labelKey: "monitor.phaseBuild", desc: "Execute, write code" },
-  { id: "review", emoji: "🔍", label: "Review", labelKey: "monitor.phaseReview", desc: "Code review, security" },
-  { id: "test", emoji: "🧪", label: "Test", labelKey: "monitor.phaseTest", desc: "Verify, validate" },
-  { id: "ship", emoji: "🚀", label: "Ship", labelKey: "monitor.phaseShip", desc: "Deploy, deliver" },
-  { id: "reflect", emoji: "🔬", label: "Reflect", labelKey: "monitor.phaseReflect", desc: "Extract learnings" },
+const WORKFLOW_PHASES: Array<{ id: string; icon: IconName; label: string; labelKey: string; desc: string }> = [
+  { id: "think",   icon: "info",    label: "Think",   labelKey: "monitor.phaseThink",   desc: "Clarify goals, challenge assumptions" },
+  { id: "plan",    icon: "sliders", label: "Plan",    labelKey: "monitor.phasePlan",    desc: "Architecture, task breakdown" },
+  { id: "build",   icon: "edit",    label: "Build",   labelKey: "monitor.phaseBuild",   desc: "Execute, write code" },
+  { id: "review",  icon: "search",  label: "Review",  labelKey: "monitor.phaseReview",  desc: "Code review, security" },
+  { id: "test",    icon: "shield",  label: "Test",    labelKey: "monitor.phaseTest",    desc: "Verify, validate" },
+  { id: "ship",    icon: "send",    label: "Ship",    labelKey: "monitor.phaseShip",    desc: "Deploy, deliver" },
+  { id: "reflect", icon: "chart",   label: "Reflect", labelKey: "monitor.phaseReflect", desc: "Extract learnings" },
 ];
+
+/** Status → short semantic label for task panels (replaces emoji icons) */
+const TASK_STATUS_COLOR: Record<string, string> = {
+  todo: "gray", pending: "gray",
+  in_progress: "blue", running: "blue",
+  blocked: "orange",
+  done: "green", completed: "green",
+  error: "red", failed: "red",
+};
 
 /* Worker 列表现在从 team.ts getTeamConfig() 动态读取 */
 
@@ -117,16 +127,16 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       let detail = "";
       switch (type) {
         case "text": detail = `${((event.text as string) || "").slice(0, 80)}${((event.text as string) || "").length > 80 ? "..." : ""}`; break;
-        case "thinking": detail = `💭 ${((event.text as string) || "").slice(0, 60)}...`; break;
-        case "tool_use": detail = `🔧 ${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`; break;
-        case "tool_result": detail = `✅ ${((event.toolOutput as string) || "").slice(0, 80)}`; break;
-        case "error": detail = `❌ ${event.text}`; break;
-        case "result": detail = `✓ ${t("monitor.completed")}`; break;
-        case "worker_activate": detail = `🟢 ${event.worker} ${t("monitor.startedWorking")}`; break;
-        case "worker_complete": detail = `⚪ ${event.worker} ${t("monitor.completed")}`; break;
-        case "user_message": detail = `💬 ${((event.text as string) || "").slice(0, 60)}`; break;
-        case "intent_analysis": detail = `🧠 ${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`; break;
-        case "worker_dispatch": detail = `🎯 ${t("monitor.dispatchedTo")} ${event.worker}`; break;
+        case "thinking": detail = `${((event.text as string) || "").slice(0, 60)}…`; break;
+        case "tool_use": detail = `${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`; break;
+        case "tool_result": detail = `${((event.toolOutput as string) || "").slice(0, 80)}`; break;
+        case "error": detail = `${event.text}`; break;
+        case "result": detail = t("monitor.completed"); break;
+        case "worker_activate": detail = `${event.worker} ${t("monitor.startedWorking")}`; break;
+        case "worker_complete": detail = `${event.worker} ${t("monitor.completed")}`; break;
+        case "user_message": detail = `${((event.text as string) || "").slice(0, 60)}`; break;
+        case "intent_analysis": detail = `${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`; break;
+        case "worker_dispatch": detail = `${t("monitor.dispatchedTo")} ${event.worker}`; break;
         default: detail = JSON.stringify(event).slice(0, 100);
       }
       setEventLog(prev => [...prev.slice(-99), { time, type, detail }]);
@@ -140,12 +150,12 @@ function MonitorPage({ onBack }: MonitorPageProps) {
         let detail = "";
         switch (event.type) {
           case "text": detail = `${(event.text || "").slice(0, 80)}`; break;
-          case "thinking": detail = `💭 ${(event.text || "").slice(0, 60)}...`; break;
-          case "tool_use": detail = `🔧 ${event.name}(${JSON.stringify(event.input).slice(0, 60)})`; break;
-          case "tool_result": detail = `✅ ${(event.output || "").slice(0, 80)}`; break;
-          case "error": detail = `❌ ${event.error}`; break;
-          case "done": detail = `✓ ${event.stop_reason}`; break;
-          case "usage": detail = `📊 in:${event.usage?.input_tokens} out:${event.usage?.output_tokens}`; break;
+          case "thinking": detail = `${(event.text || "").slice(0, 60)}…`; break;
+          case "tool_use": detail = `${event.name}(${JSON.stringify(event.input).slice(0, 60)})`; break;
+          case "tool_result": detail = `${(event.output || "").slice(0, 80)}`; break;
+          case "error": detail = `${event.error}`; break;
+          case "done": detail = `${event.stop_reason}`; break;
+          case "usage": detail = `in:${event.usage?.input_tokens} out:${event.usage?.output_tokens}`; break;
           default: detail = JSON.stringify(event).slice(0, 100);
         }
         setEventLog(prev => [...prev.slice(-99), { time, type: event.type, detail }]);
@@ -201,14 +211,32 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
   return (
     <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
-    <Stack maw={800} mx="auto" pb="xl">
+    <Stack maw={820} mx="auto" pb="xl" gap="md">
       <Group justify="space-between">
-        <Text size="xl" fw={700}>🤖 {t("monitor.title")}</Text>
-        <Button variant="subtle" onClick={onBack}>← {t("monitor.back")}</Button>
+        <Group gap={10}>
+          <Icon name="monitor" size={20} stroke={1.5} />
+          <Text size="xl" fw={620}>{t("monitor.title")}</Text>
+        </Group>
+        <Button
+          variant="subtle"
+          size="sm"
+          leftSection={<Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} />}
+          onClick={onBack}
+        >
+          {t("monitor.back")}
+        </Button>
       </Group>
 
-      {error && <Notification color="yellow" withCloseButton={false}>⚠️ {error}</Notification>}
-      {repairResult && <Notification color="green" withCloseButton onClose={() => setRepairResult(null)}>{repairResult}</Notification>}
+      {error && (
+        <Notification color="yellow" withCloseButton={false} icon={<Icon name="alert" size={14} />}>
+          {error}
+        </Notification>
+      )}
+      {repairResult && (
+        <Notification color="green" withCloseButton onClose={() => setRepairResult(null)} icon={<Icon name="check" size={14} />}>
+          {repairResult}
+        </Notification>
+      )}
 
       {/* HUD — live iteration/worker/context dashboard */}
       <HUDMonitor />
@@ -216,7 +244,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* System Health */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>{t("monitor.health")}</Text>
+          <Group gap={8}>
+            <Icon name="shield" size={15} stroke={1.6} />
+            <Text fw={600}>{t("monitor.health")}</Text>
+          </Group>
           <Group gap="xs">
             <Badge
               color={autoRefresh ? "green" : "gray"}
@@ -224,7 +255,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
               style={{ cursor: "pointer" }}
               onClick={() => setAutoRefresh(!autoRefresh)}
             >
-              {autoRefresh ? `🔄 ${refreshInterval}s` : `⏸️ ${t("chat.pause")}`}
+              {autoRefresh ? `${refreshInterval}s` : t("chat.pause")}
             </Badge>
             {lastRefresh && (
               <Text size="xs" c="dimmed">{lastRefresh.toLocaleTimeString()}</Text>
@@ -239,8 +270,8 @@ function MonitorPage({ onBack }: MonitorPageProps) {
           <Stack gap="xs">
             <Group>
               <Text size="sm">{t("settings.provider")}:</Text>
-              <Badge color={health.config_valid ? "green" : "red"}>
-                {health.config_valid ? `✅ ${t("monitor.configValid")}` : `❌ ${t("monitor.configInvalid")}`}
+              <Badge color={health.config_valid ? "green" : "red"} variant="light">
+                {health.config_valid ? t("monitor.configValid") : t("monitor.configInvalid")}
               </Badge>
             </Group>
             {health.config_error && <Code block color="red">{health.config_error}</Code>}
@@ -254,17 +285,21 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* 7-Phase Workflow Pipeline */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="md">{t("monitor.workflow")}</Text>
-        <Stepper active={-1} size="xs" color="blue">
+        <Group gap={8} mb="md">
+          <Icon name="feather" size={15} stroke={1.6} />
+          <Text fw={600}>{t("monitor.workflow")}</Text>
+        </Group>
+        <Stepper active={-1} size="xs" color="indigo">
           {WORKFLOW_PHASES.map(p => (
             <Stepper.Step
               key={p.id}
-              label={`${p.emoji} ${t(p.labelKey)}`}
+              icon={<Icon name={p.icon} size={12} stroke={1.7} />}
+              label={t(p.labelKey)}
               description={p.label}
             />
           ))}
         </Stepper>
-        <Text size="xs" c="dimmed" mt="xs" ta="center">
+        <Text size="xs" c="dimmed" mt="sm" ta="center" ff="monospace">
           Think → Plan → Build → Review → Test → Ship → Reflect
         </Text>
       </Paper>
@@ -272,33 +307,36 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* AI 员工团队 — 分团队展示 + 记忆 + 任务 */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>🤖 {t("monitor.teamStatus")} ({teamWorkers.length})</Text>
+          <Group gap={8}>
+            <Icon name="users" size={15} stroke={1.6} />
+            <Text fw={600}>{t("monitor.teamStatus")} ({teamWorkers.length})</Text>
+          </Group>
           <Badge color={teamWorkers.some(w => w.status === "working") ? "green" : "gray"} variant="light">
             {teamWorkers.filter(w => w.status === "working").length} {t("monitor.working")}
           </Badge>
         </Group>
         <Tabs defaultValue="engineering">
           <Tabs.List>
-            <Tabs.Tab value="engineering">
-              🛠️ {t("monitor.engineeringTeam")} ({teamWorkers.filter(w => ENGINEERING_IDS.has(w.id)).length})
+            <Tabs.Tab value="engineering" leftSection={<Icon name="sliders" size={13} />}>
+              {t("monitor.engineeringTeam")} ({teamWorkers.filter(w => ENGINEERING_IDS.has(w.id)).length})
             </Tabs.Tab>
-            <Tabs.Tab value="business">
-              💼 {t("monitor.businessTeam")} ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
+            <Tabs.Tab value="business" leftSection={<Icon name="chart" size={13} />}>
+              {t("monitor.businessTeam")} ({teamWorkers.filter(w => BUSINESS_IDS.has(w.id)).length})
             </Tabs.Tab>
-            <Tabs.Tab value="memory">
-              🧠 Memory
+            <Tabs.Tab value="memory" leftSection={<Icon name="book" size={13} />}>
+              Memory
             </Tabs.Tab>
-            <Tabs.Tab value="tasks">
-              📋 {t("monitor.tasks")}
+            <Tabs.Tab value="tasks" leftSection={<Icon name="menu" size={13} />}>
+              {t("monitor.tasks")}
             </Tabs.Tab>
-            <Tabs.Tab value="background">
-              ⏳ Background
+            <Tabs.Tab value="background" leftSection={<Icon name="pause" size={13} />}>
+              Background
             </Tabs.Tab>
-            <Tabs.Tab value="protocols">
-              🤝 Protocols
+            <Tabs.Tab value="protocols" leftSection={<Icon name="users" size={13} />}>
+              Protocols
             </Tabs.Tab>
-            <Tabs.Tab value="workflows">
-              🔄 {t("monitor.workflow")}
+            <Tabs.Tab value="workflows" leftSection={<Icon name="feather" size={13} />}>
+              {t("monitor.workflow")}
             </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="engineering" pt="sm">
@@ -327,7 +365,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* Cost & Usage — enhanced with charts */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">💰 {t("monitor.costOverview")}</Text>
+        <Group gap={8} mb="sm">
+          <Icon name="chart" size={15} stroke={1.6} />
+          <Text fw={600}>{t("monitor.costOverview")}</Text>
+        </Group>
         <SimpleGrid cols={4} mb="md">
           <Stack gap={0} align="center">
             <Text size="xl" fw={700}>{costData.totalCost < 0.01 ? `$${costData.totalCost.toFixed(4)}` : `$${costData.totalCost.toFixed(2)}`}</Text>
@@ -356,16 +397,26 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {fileChanges.length > 0 && (
         <Paper p="md" radius="md" withBorder>
           <Group justify="space-between" mb="sm">
-            <Text fw={600}>📁 {t("monitor.fileChanges")} ({fileChanges.length})</Text>
-            <Button size="xs" variant="light" onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}>{t("monitor.clearLog")}</Button>
+            <Group gap={8}>
+              <Icon name="file" size={15} stroke={1.6} />
+              <Text fw={600}>{t("monitor.fileChanges")} ({fileChanges.length})</Text>
+            </Group>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<Icon name="trash" size={12} />}
+              onClick={() => { import("../lib/file-tracker").then(m => m.clearFileChanges()); setFileChanges([]); }}
+            >
+              {t("monitor.clearLog")}
+            </Button>
           </Group>
           <Stack gap={2}>
             {fileChanges.slice(-20).map((fc, i: number) => (
               <Group key={i} gap="xs">
-                <Badge size="xs" color={fc.action === "create" ? "green" : fc.action === "modify" ? "yellow" : fc.action === "delete" ? "red" : "gray"}>
+                <Badge size="xs" variant="light" color={fc.action === "create" ? "green" : fc.action === "modify" ? "yellow" : fc.action === "delete" ? "red" : "gray"}>
                   {fc.action}
                 </Badge>
-                <Text size="xs" style={{ fontFamily: "monospace" }}>{fc.path}</Text>
+                <Text size="xs" ff="monospace">{fc.path}</Text>
               </Group>
             ))}
           </Stack>
@@ -374,7 +425,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* Tools & Integrations */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">Tools & Integrations</Text>
+        <Group gap={8} mb="sm">
+          <Icon name="sparkle" size={15} stroke={1.6} />
+          <Text fw={600}>Tools &amp; Integrations</Text>
+        </Group>
         <Group gap="xs">
           <Badge variant="light" color="blue">13 Built-in Tools</Badge>
           <Badge variant="light" color="green">10 LLM Providers</Badge>
@@ -388,7 +442,10 @@ function MonitorPage({ onBack }: MonitorPageProps) {
 
       {/* Activity Timeline — last 20 events */}
       <Paper p="md" radius="md" withBorder>
-        <Text fw={600} mb="sm">⏱️ {t("monitor.eventLog")}</Text>
+        <Group gap={8} mb="sm">
+          <Icon name="info" size={15} stroke={1.6} />
+          <Text fw={600}>{t("monitor.eventLog")}</Text>
+        </Group>
         <ScrollArea h={160}>
           {eventLog.length === 0 ? (
             <Text size="xs" c="dimmed" ta="center" py="md">{t("monitor.noEvents")}</Text>
@@ -396,7 +453,7 @@ function MonitorPage({ onBack }: MonitorPageProps) {
             <Stack gap={4}>
               {eventLog.slice(-20).reverse().map((entry: { time: string; type: string; detail: string }, i: number) => (
                 <Group key={i} gap="xs" wrap="nowrap" align="flex-start">
-                  <Box style={{ width: 2, minHeight: 20, background: "var(--mantine-color-blue-5)", borderRadius: 1, flexShrink: 0 }} />
+                  <Box style={{ width: 2, minHeight: 20, background: "var(--accent)", borderRadius: 1, flexShrink: 0 }} />
                   <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
                     <Group gap={6} wrap="nowrap">
                       <Text size="xs" c="dimmed" style={{ fontFamily: "monospace", flexShrink: 0 }}>{entry.time}</Text>
@@ -420,12 +477,22 @@ function MonitorPage({ onBack }: MonitorPageProps) {
       {/* Real-time Event Log */}
       <Paper p="md" radius="md" withBorder>
         <Group justify="space-between" mb="sm">
-          <Text fw={600}>📋 {t("monitor.realtimeEventLog")}</Text>
+          <Group gap={8}>
+            <Icon name="menu" size={15} stroke={1.6} />
+            <Text fw={600}>{t("monitor.realtimeEventLog")}</Text>
+          </Group>
           <Group gap="xs">
             <Badge color={eventLog.length > 0 ? "green" : "gray"} variant="light">
               {eventLog.length} {t("monitor.entries")}
             </Badge>
-            <Button size="xs" variant="light" onClick={() => { clearEventLog(); setEventLog([]); }}>{t("monitor.clearLog")}</Button>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<Icon name="trash" size={12} />}
+              onClick={() => { clearEventLog(); setEventLog([]); }}
+            >
+              {t("monitor.clearLog")}
+            </Button>
           </Group>
         </Group>
         <ScrollArea h={200} viewportRef={logViewport}>
@@ -468,41 +535,79 @@ function WorkerGrid({ workers }: { workers: TeamWorker[] }) {
         const isWorking = w.status === "working";
         const isDone = w.status === "done";
         const isError = w.status === "error";
+        const accent = isWorking ? "var(--mantine-color-blue-5)"
+          : isDone ? "var(--mantine-color-green-5)"
+          : isError ? "var(--mantine-color-red-5)"
+          : "var(--border)";
         return (
           <Paper
             key={w.id}
             p="xs"
-            radius="sm"
+            radius="md"
             withBorder
             style={{
-              borderColor: isWorking ? "var(--mantine-color-blue-5)"
-                : isDone ? "var(--mantine-color-green-5)"
-                : isError ? "var(--mantine-color-red-5)" : undefined,
-              borderWidth: isWorking ? 2 : undefined,
-              animation: isWorking ? "worker-pulse 2s ease-in-out infinite" : undefined,
+              borderColor: isWorking || isDone || isError ? accent : undefined,
+              boxShadow: isWorking ? "0 0 0 1px var(--mantine-color-blue-5) inset" : undefined,
             }}
           >
-            <Group gap={6} wrap="nowrap">
-              <Text size="lg">{w.emoji}</Text>
-              <Stack gap={0}>
-                <Text size="xs" fw={500} truncate>{w.name}</Text>
+            <Group gap={8} wrap="nowrap" align="center">
+              <Box
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 16,
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}
+                aria-hidden
+              >
+                {w.emoji}
+              </Box>
+              <Stack gap={0} style={{ minWidth: 0 }}>
+                <Text size="xs" fw={600} truncate>{w.name}</Text>
                 <Text size="xs" c="dimmed" truncate>{w.role}</Text>
               </Stack>
+              {isWorking && (
+                <Box
+                  style={{
+                    width: 6, height: 6, borderRadius: 999,
+                    background: "var(--mantine-color-blue-5)",
+                    marginLeft: "auto", flexShrink: 0,
+                    animation: "pulse-soft 1.4s ease-in-out infinite",
+                  }}
+                  aria-hidden
+                />
+              )}
             </Group>
             <Badge
               color={isWorking ? "blue" : isDone ? "green" : isError ? "red" : "gray"}
               size="xs"
-              mt={4}
+              mt={6}
               fullWidth
               variant={isWorking ? "filled" : "light"}
             >
-              {isWorking ? `🔵 ${t("monitor.working")}` : isDone ? `🟢 ${t("monitor.done")}` : isError ? `🔴 ${t("monitor.error")}` : `⚪ ${t("monitor.idle")}`}
+              {isWorking ? t("monitor.working")
+                : isDone ? t("monitor.done")
+                : isError ? t("monitor.error")
+                : t("monitor.idle")}
             </Badge>
             {w.currentTask && (
-              <Text size="xs" c="blue" mt={2} truncate>📌 {w.currentTask}</Text>
+              <Group gap={4} mt={4} wrap="nowrap" align="center">
+                <Icon name="arrow-right" size={10} stroke={2} />
+                <Text size="xs" c="blue" truncate>{w.currentTask}</Text>
+              </Group>
             )}
             {w.lastResult && (
-              <Text size="xs" c="dimmed" mt={2} truncate>📄 {w.lastResult.slice(0, 60)}</Text>
+              <Group gap={4} mt={2} wrap="nowrap" align="center">
+                <Icon name="file" size={10} stroke={1.8} style={{ color: "var(--mantine-color-dimmed)" }} />
+                <Text size="xs" c="dimmed" truncate>{w.lastResult.slice(0, 60)}</Text>
+              </Group>
             )}
           </Paper>
         );
@@ -534,9 +639,12 @@ function PermissionOverviewPanel() {
   return (
     <Paper p="md" radius="md" withBorder>
       <Group justify="space-between" mb="sm">
-        <Text fw={600}>🛡️ {t("monitor.permissionOverview")}</Text>
+        <Group gap={8}>
+          <Icon name="shield" size={15} stroke={1.6} />
+          <Text fw={600}>{t("monitor.permissionOverview")}</Text>
+        </Group>
         <Badge color={meta.color} variant="light">
-          {meta.symbol} {meta.label}
+          {meta.label}
         </Badge>
       </Group>
 
@@ -655,10 +763,6 @@ function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
     return () => clearInterval(timer);
   }, []);
 
-  const statusIcon: Record<string, string> = {
-    todo: "⬜", in_progress: "🔄", blocked: "🚫", done: "✅",
-  };
-
   return (
     <Stack gap="xs">
       <Group gap="xs">
@@ -670,11 +774,13 @@ function TaskPanel({ tasks }: { tasks: Array<{ status: string }> }) {
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
-            {allTasks.map(t => (
-              <Group key={t.taskId} gap="xs" wrap="nowrap">
-                <Text size="xs">{statusIcon[t.status] || "❓"}</Text>
-                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{t.title}</Text>
-                <Badge size="xs" variant="outline">{t.owner}</Badge>
+            {allTasks.map(task => (
+              <Group key={task.taskId} gap="xs" wrap="nowrap">
+                <Badge size="xs" variant="dot" color={TASK_STATUS_COLOR[task.status] || "gray"}>
+                  {task.status}
+                </Badge>
+                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{task.title}</Text>
+                <Badge size="xs" variant="outline">{task.owner}</Badge>
               </Group>
             ))}
           </Stack>
@@ -695,10 +801,6 @@ function BackgroundTaskPanel() {
     return () => clearInterval(timer);
   }, []);
 
-  const statusIcon: Record<string, string> = {
-    pending: "⬜", running: "🔄", completed: "✅", error: "🔴",
-  };
-
   return (
     <Stack gap="xs">
       <Group gap="xs">
@@ -711,11 +813,15 @@ function BackgroundTaskPanel() {
       ) : (
         <ScrollArea h={200}>
           <Stack gap={4}>
-            {tasks.map(t => (
-              <Group key={t.id} gap="xs" wrap="nowrap">
-                <Text size="xs">{statusIcon[t.status] || "❓"}</Text>
-                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{t.title}</Text>
-                <Text size="xs" c="dimmed">{t.completedAt ? `${((t.completedAt - t.startedAt) / 1000).toFixed(1)}s` : "..."}</Text>
+            {tasks.map(task => (
+              <Group key={task.id} gap="xs" wrap="nowrap">
+                <Badge size="xs" variant="dot" color={TASK_STATUS_COLOR[task.status] || "gray"}>
+                  {task.status}
+                </Badge>
+                <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{task.title}</Text>
+                <Text size="xs" c="dimmed" ff="monospace">
+                  {task.completedAt ? `${((task.completedAt - task.startedAt) / 1000).toFixed(1)}s` : "…"}
+                </Text>
               </Group>
             ))}
           </Stack>
@@ -737,9 +843,14 @@ function ProtocolPanel() {
   }, []);
 
   const typeLabel: Record<string, string> = {
-    plan_approval: `📋 ${t("monitor.planApproval")}`,
-    code_review: `🔍 ${t("monitor.codeReview")}`,
-    task_handoff: `🤝 ${t("monitor.taskHandoff")}`,
+    plan_approval: t("monitor.planApproval"),
+    code_review: t("monitor.codeReview"),
+    task_handoff: t("monitor.taskHandoff"),
+  };
+  const typeColor: Record<string, string> = {
+    plan_approval: "blue",
+    code_review: "violet",
+    task_handoff: "teal",
   };
 
   return (
@@ -756,7 +867,9 @@ function ProtocolPanel() {
             {pending.map(r => (
               <Paper key={r.id} p="xs" radius="sm" withBorder>
                 <Group gap="xs" wrap="nowrap">
-                  <Text size="xs">{typeLabel[r.type] || r.type}</Text>
+                  <Badge size="xs" variant="light" color={typeColor[r.type] || "gray"}>
+                    {typeLabel[r.type] || r.type}
+                  </Badge>
                   <Text size="xs" fw={500} truncate style={{ flex: 1 }}>{r.content.slice(0, 60)}</Text>
                   <Badge size="xs" variant="outline">{r.from} → {r.to}</Badge>
                 </Group>
@@ -870,10 +983,10 @@ function UsageChartPanel() {
   return (
     <Tabs defaultValue="period">
       <Tabs.List>
-        <Tabs.Tab value="period">📊 {t("monitor.periodStats")}</Tabs.Tab>
-        <Tabs.Tab value="model">🧠 {t("monitor.byModel")}</Tabs.Tab>
-        <Tabs.Tab value="provider">🏢 {t("monitor.byProvider")}</Tabs.Tab>
-        <Tabs.Tab value="cost">💵 {t("monitor.costEstimate")}</Tabs.Tab>
+        <Tabs.Tab value="period"   leftSection={<Icon name="chart"   size={13} />}>{t("monitor.periodStats")}</Tabs.Tab>
+        <Tabs.Tab value="model"    leftSection={<Icon name="bot"     size={13} />}>{t("monitor.byModel")}</Tabs.Tab>
+        <Tabs.Tab value="provider" leftSection={<Icon name="globe"   size={13} />}>{t("monitor.byProvider")}</Tabs.Tab>
+        <Tabs.Tab value="cost"     leftSection={<Icon name="sliders" size={13} />}>{t("monitor.costEstimate")}</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="period" pt="sm">
         {periodData.length > 0 ? (
