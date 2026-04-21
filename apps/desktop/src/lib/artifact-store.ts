@@ -8,11 +8,11 @@
  *
  * Storage hierarchy:
  *   {workDir}/artifacts/
- *     ├── 2025-04-12/
+ *     ├── 2026-04-21/
  *     │   ├── market-report.pptx
  *     │   ├── prototype-v1.html
  *     │   └── meeting-notes.md
- *     └── 2025-04-13/
+ *     └── 2026-04-22/
  *         └── ...
  */
 
