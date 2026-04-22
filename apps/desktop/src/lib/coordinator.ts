@@ -256,8 +256,8 @@ export async function dispatchToWorker(
     // Inject cross-session context into task prompt
     let enrichedTask = task;
     try {
-      const { buildContextPrompt } = require("./context-bootstrap") as typeof import("./context-bootstrap");
-      const ctx = buildContextPrompt();
+      const { buildContextPromptWithObservations } = require("./context-bootstrap") as typeof import("./context-bootstrap");
+      const ctx = await buildContextPromptWithObservations();
       if (ctx) enrichedTask = `${ctx}\n\n---\n\n${task}`;
     } catch { /* context bootstrap not loaded */ }
 

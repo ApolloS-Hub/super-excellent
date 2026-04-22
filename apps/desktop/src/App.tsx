@@ -72,6 +72,8 @@ function App() {
     import("./lib/scenario-engine").then(m => m.initScenarioEngine()).catch(console.warn);
     // Bootstrap cross-session context
     import("./lib/context-bootstrap").then(m => m.autoCollectContext()).catch(console.warn);
+    // Start observation log auto-capture (subscribes to event bus)
+    import("./lib/observation-log").then(m => m.startAutoCapture()).catch(console.warn);
     // Load persisted tasks from IndexedDB
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
     // Initialize memory bridge
