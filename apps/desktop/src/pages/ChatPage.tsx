@@ -68,6 +68,9 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
   useEffect(() => {
     const convId = conversation?.id;
 
+    // Link observation log to the current conversation for timeline queries
+    import("../lib/observation-log").then(m => m.setCurrentConversationId(convId)).catch(() => {});
+
     if (convId) {
       const snapshot = getSnapshot(convId);
       if (snapshot && snapshot.status === "active") {

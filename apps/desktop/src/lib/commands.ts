@@ -698,3 +698,71 @@ registerCommand({
     return parts.join("\n");
   },
 });
+
+// ═══════════ Recall — progressive memory lookup ═══════════
+
+registerCommand({
+  name: "recall",
+  aliases: ["remember", "history"],
+  description: "Search observation log (L1: compact index). Usage: /recall [keyword]",
+  handler: async (ctx) => {
+    const { observationLog } = await import("./observation-log");
+    const query = ctx.args.join(" ").trim();
+    const results = await observationLog.search(query, 20);
+    const zh = i18n.language.startsWith("zh");
+    if (results.length === 0) {
+      return zh ? "没有找到匹配的观察记录。" : "No observations found.";
+    }
+    const header = zh
+      ? `找到 ${results.length} 条观察${query ? `（关键词："${query}"）` : "（最近）"}：`
+      : `Found ${results.length} observation(s)${query ? ` for "${query}"` : " (recent)"}:`;
+    const body = results.map(r => {
+      const when = new Date(r.timestamp).toLocaleString();
+      return `- **[${r.id}]** · ${r.type}${r.worker ? ` · ${r.worker}` : ""} · ${when}\n  ${r.summary}`;
+    }).join("\n");
+    const tip = zh
+      ? "\n\n> 使用 `/recall-details <id>` 查看完整内容；`/recall-timeline <id>` 查看上下文"
+      : "\n\n> Use `/recall-details <id>` for full content; `/recall-timeline <id>` for surrounding context";
+    return `${header}\n\n${body}${tip}`;
+  },
+});
+
+registerCommand({
+  name: "recall-details",
+  description: "Fetch full detail of observations by ID (L3). Usage: /recall-details <id> [<id2> ...]",
+  handler: async (ctx) => {
+    const ids = ctx.args.filter(Boolean);
+    const zh = i18n.language.startsWith("zh");
+    if (ids.length === 0) return zh ? "请提供至少一个观察 ID。" : "Provide at least one observation ID.";
+    const { observationLog } = await import("./observation-log");
+    const found = await observationLog.getObservations(ids);
+    if (found.length === 0) return zh ? "没有找到对应的观察记录。" : "No observations found for the given IDs.";
+    return found.map(o => {
+      const when = new Date(o.timestamp).toLocaleString();
+      return `## [${o.id}] ${o.type}${o.worker ? ` · ${o.worker}` : ""}\n*${when}*\n\n${o.detail}`;
+    }).join("\n\n---\n\n");
+  },
+});
+
+registerCommand({
+  name: "recall-timeline",
+  description: "Show chronological observations around an ID (L2). Usage: /recall-timeline <id> [windowMin]",
+  handler: async (ctx) => {
+    const id = ctx.args[0];
+    const zh = i18n.language.startsWith("zh");
+    if (!id) return zh ? "请提供观察 ID。" : "Provide an observation ID.";
+    const windowMin = Number(ctx.args[1]) || 30;
+    const { observationLog } = await import("./observation-log");
+    const timeline = await observationLog.timelineAround(id, windowMin);
+    if (timeline.length === 0) return zh ? "没有找到对应的观察记录。" : "Observation not found.";
+    const lines = timeline.map(o => {
+      const when = new Date(o.timestamp).toLocaleString();
+      const marker = o.id === id ? "▶" : " ";
+      return `${marker} [${o.id}] ${when} · ${o.type} · ${o.summary}`;
+    });
+    const header = zh
+      ? `围绕 ${id} 的 ±${windowMin} 分钟内的观察（${timeline.length} 条）：`
+      : `Observations within ±${windowMin} min of ${id} (${timeline.length}):`;
+    return `${header}\n\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
+  },
+});

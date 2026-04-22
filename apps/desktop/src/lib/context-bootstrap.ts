@@ -188,6 +188,24 @@ export function buildContextPrompt(): string {
 }
 
 /**
+ * Build a prompt that combines context snapshot + compact observation index.
+ * Async because it reads from IndexedDB. Prefer this over buildContextPrompt
+ * in places where async is OK — it gives the secretary access to "what have
+ * we been doing lately" via progressive disclosure.
+ */
+export async function buildContextPromptWithObservations(): Promise<string> {
+  const base = buildContextPrompt();
+  try {
+    const { observationLog } = await import("./observation-log");
+    const index = await observationLog.buildCompactIndex(8);
+    if (!index) return base;
+    return base ? `${base}\n\n---\n\n${index}` : index;
+  } catch {
+    return base;
+  }
+}
+
+/**
  * Extract context updates from a conversation exchange.
  * Called by the coordinator after each meaningful interaction.
  * Returns the items that were learned and should be persisted.
