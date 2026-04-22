@@ -1078,19 +1078,14 @@ function LarkConfigPanel() {
   };
 
   const handleOAuthStart = async () => {
+    const m = await import("../lib/lark-integration");
+    const state = crypto.getRandomValues(new Uint8Array(16)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
+    const url = m.buildOAuthUrl(appId, "", state);
     try {
       const { open } = await import("@tauri-apps/plugin-shell");
-      const m = await import("../lib/lark-integration");
-      const state = crypto.getRandomValues(new Uint8Array(16)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
-      const url = m.buildOAuthUrl(appId, `${window.location.origin}/oauth/callback`, state);
       await open(url);
     } catch {
-      try {
-        const m = await import("../lib/lark-integration");
-        const state = crypto.getRandomValues(new Uint8Array(16)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
-        const url = m.buildOAuthUrl(appId, "https://open.larksuite.com/open-apis/authen/v1/index", state);
-        window.open(url, "_blank");
-      } catch { /* ignore */ }
+      window.open(url, "_blank");
     }
   };
 

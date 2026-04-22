@@ -178,17 +178,14 @@ export async function testConnection(): Promise<{ tenantOk: boolean; userOk: boo
 
 // ── Public: OAuth code exchange ──
 
-export function buildOAuthUrl(appId: string, redirectUri: string, state: string): string {
+export function buildOAuthUrl(appId: string, _redirectUri: string, state: string): string {
+  // Use Lark's own display page as redirect — shows the auth code to user for paste-back
+  const redirectUri = "https://open.larksuite.com/open-apis/authen/v1/index";
   const scopes = [
-    "calendar:calendar:readonly",
-    "drive:drive:readonly",
-    "task:task:read",
-    "approval:approval:readonly",
-    "mail:mail:readonly",
-    "im:message",
     "contact:user.base:readonly",
+    "im:message",
   ].join(" ");
-  return `${BASE}/open-apis/authen/v1/authorize?app_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scopes)}`;
+  return `https://accounts.larksuite.com/open-apis/authen/v1/authorize?app_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scopes)}`;
 }
 
 export async function exchangeOAuthCode(code: string): Promise<LarkUserInfo> {
