@@ -145,6 +145,19 @@ const MULTI_STEP_KEYWORDS = [
 export function analyzeIntent(message: string): IntentResult {
   const msg = message.toLowerCase();
 
+  // Scenario match — framework-first scaffolding takes priority
+  try {
+    const { matchScenario } = require("./scenario-engine") as typeof import("./scenario-engine");
+    const scenario = matchScenario(message);
+    if (scenario) {
+      return {
+        type: "multi_step",
+        workers: [...new Set(scenario.steps.map(s => s.workerId).filter(Boolean) as string[])],
+        plan: `[Scenario: ${scenario.name}] ${scenario.steps.length} structured steps`,
+      };
+    }
+  } catch { /* scenario engine not loaded yet */ }
+
   // 检查是否为多步任务
   const isMultiStep = MULTI_STEP_KEYWORDS.some(kw => {
     if (kw.includes(".*")) {
@@ -240,8 +253,41 @@ export async function dispatchToWorker(
   });
 
   try {
-    // 用 Worker 自己的 system prompt 构建上下文，调用 LLM
-    const result = await callWorkerLLM(worker, task, config, onEvent, history);
+    // Inject cross-session context into task prompt
+    let enrichedTask = task;
+    try {
+      const { buildContextPrompt } = require("./context-bootstrap") as typeof import("./context-bootstrap");
+      const ctx = buildContextPrompt();
+      if (ctx) enrichedTask = `${ctx}\n\n---\n\n${task}`;
+    } catch { /* context bootstrap not loaded */ }
+
+    // Inject environment context for planning-related tasks
+    const planKeywords = ["plan", "规划", "设计", "architecture", "架构", "schedule"];
+    if (planKeywords.some(k => task.toLowerCase().includes(k))) {
+      try {
+        const { buildEnvPrompt, getLastSnapshot } = require("./env-scanner") as typeof import("./env-scanner");
+        if (getLastSnapshot()) {
+          const envCtx = buildEnvPrompt();
+          if (envCtx) enrichedTask = `${envCtx}\n\n---\n\n${enrichedTask}`;
+        }
+      } catch { /* env scanner not loaded */ }
+    }
+
+    const result = await callWorkerLLM(worker, enrichedTask, config, onEvent, history);
+
+    // Quality gate — self-critique hard gate
+    try {
+      const { runQualityGate, buildRetryPrompt } = require("./quality-gate") as typeof import("./quality-gate");
+      const gateResult = runQualityGate(result, { workerId, taskDescription: task, userMessage: task });
+      if (!gateResult.passed && gateResult.score < 0.6) {
+        const retryPrompt = buildRetryPrompt(task, result, gateResult);
+        const retryResult = await callWorkerLLM(worker, retryPrompt, config, onEvent, history);
+        completeWorkerTask(workerId);
+        emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: true });
+        return { workerId, workerName: worker.name, success: true, output: retryResult };
+      }
+    } catch { /* quality gate not loaded */ }
+
     completeWorkerTask(workerId);
 
     // Emit worker_complete event

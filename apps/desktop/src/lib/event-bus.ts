@@ -52,34 +52,34 @@ function pushEventLog(event: Record<string, unknown>): void {
       detail = `${((event.text as string) || "").slice(0, 80)}`;
       break;
     case "thinking":
-      detail = `💭 ${((event.text as string) || "").slice(0, 60)}`;
+      detail = `${((event.text as string) || "").slice(0, 60)}`;
       break;
     case "tool_use":
-      detail = `🔧 ${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`;
+      detail = `${event.toolName}(${((event.toolInput as string) || "").slice(0, 60)})`;
       break;
     case "tool_result":
-      detail = `✅ ${((event.toolOutput as string) || "").slice(0, 80)}`;
+      detail = `${((event.toolOutput as string) || "").slice(0, 80)}`;
       break;
     case "error":
-      detail = `❌ ${event.text}`;
+      detail = `${event.text}`;
       break;
     case "result":
-      detail = "✓ 完成";
+      detail = "done";
       break;
     case "worker_activate":
-      detail = `🟢 ${event.worker} 开始工作`;
+      detail = `${event.worker} started`;
       break;
     case "worker_complete":
-      detail = `⚪ ${event.worker} 完成`;
+      detail = `${event.worker} completed`;
       break;
     case "user_message":
-      detail = `💬 ${((event.text as string) || "").slice(0, 60)}`;
+      detail = `${((event.text as string) || "").slice(0, 60)}`;
       break;
     case "intent_analysis":
-      detail = `🧠 ${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`;
+      detail = `${event.intentType}: ${((event.plan as string) || "").slice(0, 60)}`;
       break;
     case "worker_dispatch":
-      detail = `🎯 派发给 ${event.worker}`;
+      detail = `dispatched to ${event.worker}`;
       break;
     default:
       detail = JSON.stringify(event).slice(0, 100);
