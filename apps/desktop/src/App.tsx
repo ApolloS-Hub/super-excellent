@@ -68,6 +68,10 @@ function App() {
     import("./lib/mcp-client").then(m => m.loadMCPConfig()).catch(console.warn);
     // Initialize Lark integration
     import("./lib/lark-integration").then(m => m.initLark()).catch(console.warn);
+    // Initialize scenario engine (framework-first scaffolding)
+    import("./lib/scenario-engine").then(m => m.initScenarioEngine()).catch(console.warn);
+    // Bootstrap cross-session context
+    import("./lib/context-bootstrap").then(m => m.autoCollectContext()).catch(console.warn);
     // Load persisted tasks from IndexedDB
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
     // Initialize memory bridge
