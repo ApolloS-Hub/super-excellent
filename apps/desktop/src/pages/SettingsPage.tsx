@@ -450,7 +450,7 @@ function SettingsPage({ onBack }: SettingsPageProps) {
           </Stack>
         </Tabs.Panel>
 
-        {/* ── 飞书配置 (Lark/Feishu) ── */}
+        {/* ── Lark Integration ── */}
         <Tabs.Panel value="lark" pt="md">
           <Stack gap="md">
             <LarkConfigPanel />
@@ -1026,42 +1026,133 @@ function ProviderDiagnosticsPanel({ config }: { config: AgentConfig }) {
   );
 }
 
-/** Lark/Feishu Configuration Panel */
+/** Lark Configuration Panel — app credentials + user OAuth + connection test */
 function LarkConfigPanel() {
   const { t } = useTranslation();
-  const [larkCfg, setLarkCfg] = useState(() => {
-    try {
-      const raw = localStorage.getItem("lark-config");
-      return raw ? JSON.parse(raw) : { appId: "", appSecret: "", cliPath: "lark-cli", outputFormat: "pretty" };
-    } catch { return { appId: "", appSecret: "", cliPath: "lark-cli", outputFormat: "pretty" }; }
-  });
-  const [saved, setSaved] = useState(false);
+  const [appId, setAppId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [testError, setTestError] = useState("");
+  const [oauthCode, setOauthCode] = useState("");
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState("");
+  const [userInfo, setUserInfo] = useState<{ name: string; email: string } | null>(null);
+  const [hasUser, setHasUser] = useState(false);
+  const [userExpired, setUserExpired] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
     import("../lib/lark-integration").then(m => {
-      m.setLarkConfig(larkCfg);
-      m.registerLarkTools();
+      const cfg = m.getLarkConfig();
+      setAppId(cfg.appId);
+      setAppSecret(cfg.appSecret);
+      setHasUser(m.hasUserAccess());
+      const info = m.loadUserInfo();
+      if (info) setUserInfo({ name: info.name, email: info.email });
+      if (!m.hasUserAccess() && m.isRefreshTokenValid()) setUserExpired(true);
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  }, []);
+
+  const handleSaveAndTest = async () => {
+    setTestStatus("testing");
+    setTestError("");
+    const m = await import("../lib/lark-integration");
+    m.setLarkConfig({ appId, appSecret });
+    m.registerLarkTools();
+    try {
+      const result = await m.testConnection();
+      if (result.tenantOk) {
+        setTestStatus("ok");
+      } else {
+        setTestStatus("fail");
+        setTestError(result.tenantError || "Unknown error");
+      }
+      if (result.userOk && result.userName) {
+        setHasUser(true);
+        setUserInfo({ name: result.userName, email: "" });
+        setUserExpired(false);
+      }
+    } catch (e) {
+      setTestStatus("fail");
+      setTestError(e instanceof Error ? e.message : String(e));
+    }
   };
 
-  const isConfigured = !!larkCfg.appId && !!larkCfg.appSecret;
+  const handleOAuthStart = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      const m = await import("../lib/lark-integration");
+      const state = crypto.getRandomValues(new Uint8Array(16)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
+      const url = m.buildOAuthUrl(appId, `${window.location.origin}/oauth/callback`, state);
+      await open(url);
+    } catch {
+      try {
+        const m = await import("../lib/lark-integration");
+        const state = crypto.getRandomValues(new Uint8Array(16)).reduce((s, b) => s + b.toString(16).padStart(2, "0"), "");
+        const url = m.buildOAuthUrl(appId, "https://open.larksuite.com/open-apis/authen/v1/index", state);
+        window.open(url, "_blank");
+      } catch { /* ignore */ }
+    }
+  };
+
+  const handleOAuthExchange = async () => {
+    if (!oauthCode.trim()) return;
+    setOauthBusy(true);
+    setOauthError("");
+    try {
+      const m = await import("../lib/lark-integration");
+      const info = await m.exchangeOAuthCode(oauthCode.trim());
+      setUserInfo({ name: info.name, email: info.email });
+      setHasUser(true);
+      setUserExpired(false);
+      setOauthCode("");
+      m.refreshUserToolRegistration();
+    } catch (e) {
+      setOauthError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOauthBusy(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    const m = await import("../lib/lark-integration");
+    m.disconnectUser();
+    m.refreshUserToolRegistration();
+    setHasUser(false);
+    setUserInfo(null);
+    setUserExpired(false);
+  };
+
+  const isConfigured = !!appId && !!appSecret;
+
+  const USER_TOOLS = ["lark_calendar", "lark_doc", "lark_task", "lark_approval", "lark_sheet", "lark_email"];
+  const tools = [
+    { name: "lark_im", desc: t("settings.larkIM"), scope: "app" as const },
+    { name: "lark_calendar", desc: t("settings.larkCalendar"), scope: "user" as const },
+    { name: "lark_doc", desc: t("settings.larkDoc"), scope: "user" as const },
+    { name: "lark_task", desc: t("settings.larkTask"), scope: "user" as const },
+    { name: "lark_approval", desc: t("settings.larkApproval"), scope: "user" as const },
+    { name: "lark_sheet", desc: t("settings.larkSheet"), scope: "user" as const },
+    { name: "lark_email", desc: t("settings.larkEmail"), scope: "user" as const },
+  ];
 
   return (
     <Stack gap="md">
+      {/* App Credentials */}
       <Paper p="md" radius="md" withBorder>
         <Group gap={8} mb="sm">
           <Icon name="chat" size={15} />
           <Text fw={600}>{t("settings.larkIntegration")}</Text>
         </Group>
-        <Text size="sm" c="dimmed" mb="md">
-          {t("settings.larkIntegrationHint")}
-        </Text>
+        <Text size="sm" c="dimmed" mb="md">{t("settings.larkIntegrationHint")}</Text>
 
-        {saved && (
+        {testStatus === "ok" && (
           <Notification color="green" withCloseButton={false} mb="md" icon={<Icon name="check" size={14} stroke={2.2} />}>
-            {t("settings.larkConfigSaved")}
+            {t("settings.larkTestSuccess")}
+          </Notification>
+        )}
+        {testStatus === "fail" && (
+          <Notification color="red" withCloseButton={false} mb="md" icon={<Icon name="alert" size={14} />}>
+            {t("settings.larkTestFailed")}: {testError}
           </Notification>
         )}
 
@@ -1069,35 +1160,86 @@ function LarkConfigPanel() {
           <TextInput
             label="App ID"
             placeholder="cli_xxxxxxxxxx"
-            value={larkCfg.appId}
-            onChange={(e) => setLarkCfg({ ...larkCfg, appId: e.currentTarget.value })}
+            value={appId}
+            onChange={(e) => setAppId(e.currentTarget.value)}
             description={t("settings.larkAppIdHint")}
           />
-
           <PasswordInput
             label="App Secret"
             placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            value={larkCfg.appSecret}
-            onChange={(e) => setLarkCfg({ ...larkCfg, appSecret: e.currentTarget.value })}
+            value={appSecret}
+            onChange={(e) => setAppSecret(e.currentTarget.value)}
             description={t("settings.larkAppSecretHint")}
           />
-
-          <TextInput
-            label={t("settings.larkCliPath")}
-            placeholder="lark-cli"
-            value={larkCfg.cliPath}
-            onChange={(e) => setLarkCfg({ ...larkCfg, cliPath: e.currentTarget.value })}
-            description={t("settings.larkCliPathHint")}
-          />
-
-          <Group>
-            <Button onClick={handleSave} flex={1}>
-              {t("settings.saveLarkConfig")}
-            </Button>
-          </Group>
+          <Button
+            onClick={handleSaveAndTest}
+            loading={testStatus === "testing"}
+            disabled={!appId || !appSecret}
+            leftSection={<Icon name="shield" size={14} />}
+          >
+            {testStatus === "testing" ? t("settings.larkTestTesting") : t("settings.saveLarkConfig")}
+          </Button>
         </Stack>
       </Paper>
 
+      {/* User OAuth */}
+      {isConfigured && (
+        <Paper p="md" radius="md" withBorder>
+          <Group gap={8} mb="sm">
+            <Icon name="users" size={15} />
+            <Text fw={600}>{t("settings.larkOAuthConnect")}</Text>
+            {hasUser && (
+              <Badge color="green" variant="light" size="sm">{t("settings.larkOAuthConnected")}</Badge>
+            )}
+            {userExpired && (
+              <Badge color="orange" variant="light" size="sm">{t("settings.larkOAuthExpired")}</Badge>
+            )}
+          </Group>
+          <Text size="sm" c="dimmed" mb="md">{t("settings.larkOAuthHint")}</Text>
+
+          {hasUser && userInfo ? (
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Icon name="check" size={14} />
+                <Text size="sm" fw={500}>{userInfo.name}</Text>
+                {userInfo.email && <Text size="xs" c="dimmed">{userInfo.email}</Text>}
+              </Group>
+              <Button variant="light" color="red" size="xs" onClick={handleDisconnect}>
+                {t("settings.larkOAuthDisconnect")}
+              </Button>
+            </Group>
+          ) : (
+            <Stack gap="sm">
+              <Button variant="light" onClick={handleOAuthStart} leftSection={<Icon name="globe" size={14} />}>
+                {t("settings.larkOAuthConnect")}
+              </Button>
+              <Divider label={t("settings.larkOAuthPasteHint")} labelPosition="center" />
+              <Group gap="xs" wrap="nowrap">
+                <TextInput
+                  flex={1}
+                  size="sm"
+                  placeholder={t("settings.larkOAuthPasteCode")}
+                  value={oauthCode}
+                  onChange={(e) => setOauthCode(e.currentTarget.value)}
+                />
+                <Button
+                  size="sm"
+                  onClick={handleOAuthExchange}
+                  loading={oauthBusy}
+                  disabled={!oauthCode.trim()}
+                >
+                  {t("settings.larkOAuthExchange")}
+                </Button>
+              </Group>
+              {oauthError && (
+                <Text size="xs" c="red">{oauthError}</Text>
+              )}
+            </Stack>
+          )}
+        </Paper>
+      )}
+
+      {/* Tool Registry */}
       <Paper p="md" radius="md" withBorder>
         <Group gap={8} mb="sm">
           <Icon name="sliders" size={15} />
@@ -1107,23 +1249,28 @@ function LarkConfigPanel() {
           <Badge color={isConfigured ? "green" : "gray"} variant="light">
             {isConfigured ? t("settings.configured") : t("settings.notConfigured")}
           </Badge>
+          {isConfigured && (
+            <Badge color={hasUser ? "green" : "orange"} variant="light">
+              {hasUser ? t("settings.larkOAuthConnected") : t("settings.larkOAuthNotConnected")}
+            </Badge>
+          )}
         </Group>
         <Stack gap="xs">
-          {[
-            { name: "lark_calendar", desc: t("settings.larkCalendar") },
-            { name: "lark_im", desc: t("settings.larkIM") },
-            { name: "lark_doc", desc: t("settings.larkDoc") },
-            { name: "lark_task", desc: t("settings.larkTask") },
-            { name: "lark_approval", desc: t("settings.larkApproval") },
-            { name: "lark_sheet", desc: t("settings.larkSheet") },
-          ].map(tool => (
-            <Group key={tool.name} gap="xs" wrap="nowrap">
-              <Badge size="xs" variant="outline" color={isConfigured ? "blue" : "gray"}>
-                {tool.name}
-              </Badge>
-              <Text size="xs" c="dimmed">{tool.desc}</Text>
-            </Group>
-          ))}
+          {tools.map(tool => {
+            const needsUser = USER_TOOLS.includes(tool.name);
+            const available = needsUser ? hasUser : isConfigured;
+            return (
+              <Group key={tool.name} gap="xs" wrap="nowrap">
+                <Badge size="xs" variant="outline" color={available ? "blue" : "gray"}>
+                  {tool.name}
+                </Badge>
+                <Badge size="xs" variant="light" color={needsUser ? "violet" : "teal"}>
+                  {needsUser ? t("settings.larkScopeUser") : t("settings.larkScopeApp")}
+                </Badge>
+                <Text size="xs" c={available ? undefined : "dimmed"}>{tool.desc}</Text>
+              </Group>
+            );
+          })}
         </Stack>
       </Paper>
     </Stack>

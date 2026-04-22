@@ -1,12 +1,12 @@
 /**
- * Remote Bridge — 飞书远程控制
- * Inspired by CodePilot's bridge architecture
- * Allows controlling the AI assistant via Feishu/Lark messages
+ * Remote Bridge — Lark remote control
+ * Allows controlling the AI assistant via Lark messages.
  *
  * Architecture:
- *   BridgeManager → ChannelAdapter (Feishu) → MessageRouter → Agent → Response
+ *   BridgeManager → LarkAdapter → MessageRouter → Agent → Response
  */
-import { LarkCLI, isLarkConfigured } from "./lark-integration";
+import * as lark from "./lark-client";
+import { isLarkConfigured } from "./lark-integration";
 import { sendMessage, loadConfig } from "./agent-bridge";
 import { emitAgentEvent } from "./event-bus";
 
@@ -14,9 +14,9 @@ import { emitAgentEvent } from "./event-bus";
 
 export interface RemoteBridgeConfig {
   enabled: boolean;
-  allowedChatIds: string[];   // restrict to specific chats (empty = all)
-  pollIntervalMs: number;     // polling interval (default 3000ms)
-  maxMessageLength: number;   // max response length per chunk
+  allowedChatIds: string[];
+  pollIntervalMs: number;
+  maxMessageLength: number;
 }
 
 export interface InboundMessage {
@@ -62,21 +62,12 @@ export function loadBridgeConfig(): RemoteBridgeConfig {
   return { ..._bridgeConfig };
 }
 
-// ═══════════ Channel Adapter ═══════════
+// ═══════════ Lark Adapter ═══════════
 
-/**
- * FeishuAdapter — polls for new messages via lark-cli event subscribe
- * Uses long-polling pattern: periodically checks for new messages
- */
-class FeishuAdapter {
-  private cli: LarkCLI;
+class LarkAdapter {
   private running = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastMessageId = "";
-
-  constructor() {
-    this.cli = new LarkCLI();
-  }
 
   isRunning(): boolean {
     return this.running;
@@ -86,28 +77,33 @@ class FeishuAdapter {
     if (this.running) return;
     this.running = true;
 
-    emitAgentEvent({ type: "worker_activate", worker: "remote_bridge", text: "飞书远程控制已启动" });
+    emitAgentEvent({ type: "worker_activate", worker: "remote_bridge", text: "Lark Remote Bridge started" });
 
     this.pollTimer = setInterval(async () => {
       try {
-        const result = await this.cli.execute([
-          "im", "+messages-receive",
-          "--after", this.lastMessageId || "0",
-          "--limit", "10",
-        ]);
+        const data = await lark.imListMessages(
+          _bridgeConfig.allowedChatIds[0] || "",
+          10,
+        ) as { items?: Array<Record<string, unknown>> };
 
-        // Parse messages from CLI output
-        const messages = this.parseMessages(result);
-        for (const msg of messages) {
-          // Skip if already processed
-          if (msg.messageId === this.lastMessageId) continue;
+        const items = data?.items || [];
+        for (const item of items) {
+          const msgId = String(item.message_id || "");
+          if (!msgId || msgId === this.lastMessageId) continue;
 
-          // Check allowed chats
+          const chatId = String(item.chat_id || "");
           if (_bridgeConfig.allowedChatIds.length > 0 &&
-              !_bridgeConfig.allowedChatIds.includes(msg.chatId)) continue;
+              !_bridgeConfig.allowedChatIds.includes(chatId)) continue;
 
-          this.lastMessageId = msg.messageId;
-          onMessage(msg);
+          this.lastMessageId = msgId;
+          onMessage({
+            messageId: msgId,
+            chatId,
+            senderId: String((item.sender as Record<string, unknown>)?.sender_id || ""),
+            senderName: String((item.sender as Record<string, unknown>)?.sender_id || "Unknown"),
+            text: this.extractText(item),
+            timestamp: item.create_time ? Number(item.create_time) : Date.now(),
+          });
         }
       } catch {
         // Polling error — silently retry next interval
@@ -121,42 +117,14 @@ class FeishuAdapter {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
-    emitAgentEvent({ type: "worker_complete", worker: "remote_bridge", text: "飞书远程控制已停止" });
+    emitAgentEvent({ type: "worker_complete", worker: "remote_bridge", text: "Lark Remote Bridge stopped" });
   }
 
   async sendResponse(chatId: string, text: string): Promise<void> {
-    // Chunk long messages to respect platform limits
     const chunks = this.chunkText(text, _bridgeConfig.maxMessageLength);
     for (const chunk of chunks) {
-      await this.cli.execute([
-        "im", "+messages-send",
-        "--chat-id", chatId,
-        "--msg-type", "text",
-        "--text", chunk,
-      ]);
+      await lark.imSendMessage(chatId, chunk);
     }
-  }
-
-  private parseMessages(output: string): InboundMessage[] {
-    const messages: InboundMessage[] = [];
-    try {
-      // Try JSON parse first
-      const data = JSON.parse(output);
-      const items = Array.isArray(data) ? data : data.items || data.data?.items || [];
-      for (const item of items) {
-        messages.push({
-          messageId: item.message_id || item.messageId || String(Date.now()),
-          chatId: item.chat_id || item.chatId || "",
-          senderId: item.sender?.sender_id?.open_id || item.senderId || "",
-          senderName: item.sender?.sender_id?.name || item.senderName || "Unknown",
-          text: this.extractText(item),
-          timestamp: item.create_time ? Number(item.create_time) : Date.now(),
-        });
-      }
-    } catch {
-      // Non-JSON output — skip
-    }
-    return messages;
   }
 
   private extractText(item: Record<string, unknown>): string {
@@ -177,11 +145,7 @@ class FeishuAdapter {
     const chunks: string[] = [];
     let remaining = text;
     while (remaining.length > 0) {
-      if (remaining.length <= maxLen) {
-        chunks.push(remaining);
-        break;
-      }
-      // Try to break at newline
+      if (remaining.length <= maxLen) { chunks.push(remaining); break; }
       let breakIdx = remaining.lastIndexOf("\n", maxLen);
       if (breakIdx < maxLen * 0.5) breakIdx = maxLen;
       chunks.push(remaining.slice(0, breakIdx));
@@ -209,10 +173,7 @@ class MessageRouter {
   addMessage(chatId: string, role: "user" | "assistant", content: string): void {
     const session = this.getOrCreateSession(chatId);
     session.history.push({ role, content });
-    // Keep last 20 messages for context
-    if (session.history.length > 20) {
-      session.history = session.history.slice(-20);
-    }
+    if (session.history.length > 20) session.history = session.history.slice(-20);
   }
 
   getHistory(chatId: string): Array<{ role: "user" | "assistant"; content: string }> {
@@ -227,13 +188,10 @@ class MessageRouter {
     return Array.from(this.sessions.values());
   }
 
-  /** Clean up stale sessions older than 1 hour */
   cleanup(): void {
     const cutoff = Date.now() - 3600_000;
     for (const [chatId, session] of this.sessions) {
-      if (session.lastActivity < cutoff) {
-        this.sessions.delete(chatId);
-      }
+      if (session.lastActivity < cutoff) this.sessions.delete(chatId);
     }
   }
 }
@@ -241,13 +199,13 @@ class MessageRouter {
 // ═══════════ Bridge Manager ═══════════
 
 class BridgeManager {
-  private adapter: FeishuAdapter;
+  private adapter: LarkAdapter;
   private router: MessageRouter;
   private processing = new Set<string>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    this.adapter = new FeishuAdapter();
+    this.adapter = new LarkAdapter();
     this.router = new MessageRouter();
   }
 
@@ -257,14 +215,12 @@ class BridgeManager {
 
   start(): void {
     if (!isLarkConfigured()) {
-      emitAgentEvent({ type: "error", text: "Remote Bridge: 飞书未配置" });
+      emitAgentEvent({ type: "error", text: "Remote Bridge: Lark not configured" });
       return;
     }
     if (this.adapter.isRunning()) return;
 
     this.adapter.start((msg) => this.handleInbound(msg));
-
-    // Periodic session cleanup
     this.cleanupTimer = setInterval(() => this.router.cleanup(), 300_000);
   }
 
@@ -282,56 +238,41 @@ class BridgeManager {
 
   private async handleInbound(msg: InboundMessage): Promise<void> {
     const { chatId, text, senderName } = msg;
-
-    // Skip empty messages
     if (!text.trim()) return;
-
-    // Avoid processing duplicate messages concurrently
     if (this.processing.has(msg.messageId)) return;
     this.processing.add(msg.messageId);
 
     emitAgentEvent({
       type: "user_message",
-      text: `[飞书 ${senderName}] ${text.slice(0, 60)}`,
+      text: `[Lark ${senderName}] ${text.slice(0, 60)}`,
       worker: "remote_bridge",
     });
 
-    // Record user message
     this.router.addMessage(chatId, "user", text);
 
     try {
-      // Process through Agent
       const config = loadConfig();
-      const history = this.router.getHistory(chatId).slice(0, -1); // exclude current
+      const history = this.router.getHistory(chatId).slice(0, -1);
 
       let responseText = "";
       await sendMessage(text, config, (event) => {
-        if (event.type === "text") {
-          responseText += event.text || "";
-        } else if (event.type === "result") {
-          responseText = event.text || responseText;
-        }
+        if (event.type === "text") responseText += event.text || "";
+        else if (event.type === "result") responseText = event.text || responseText;
       }, history);
 
       if (responseText) {
-        // Record assistant response
         this.router.addMessage(chatId, "assistant", responseText);
-
-        // Send back to Feishu
         await this.adapter.sendResponse(chatId, responseText);
-
         emitAgentEvent({
           type: "result",
-          text: `[飞书回复] ${responseText.slice(0, 60)}`,
+          text: `[Lark reply] ${responseText.slice(0, 60)}`,
           worker: "remote_bridge",
         });
       }
     } catch (err) {
-      const errMsg = `处理消息失败: ${err instanceof Error ? err.message : String(err)}`;
+      const errMsg = `Failed to process message: ${err instanceof Error ? err.message : String(err)}`;
       emitAgentEvent({ type: "error", text: errMsg, worker: "remote_bridge" });
-
-      // Send error message back
-      await this.adapter.sendResponse(chatId, `❌ ${errMsg}`).catch(() => {});
+      await this.adapter.sendResponse(chatId, errMsg).catch(() => {});
     } finally {
       this.processing.delete(msg.messageId);
     }
@@ -343,17 +284,13 @@ class BridgeManager {
 let _bridgeManager: BridgeManager | null = null;
 
 export function getBridgeManager(): BridgeManager {
-  if (!_bridgeManager) {
-    _bridgeManager = new BridgeManager();
-  }
+  if (!_bridgeManager) _bridgeManager = new BridgeManager();
   return _bridgeManager;
 }
 
 export function startRemoteBridge(): void {
   loadBridgeConfig();
-  if (_bridgeConfig.enabled) {
-    getBridgeManager().start();
-  }
+  if (_bridgeConfig.enabled) getBridgeManager().start();
 }
 
 export function stopRemoteBridge(): void {

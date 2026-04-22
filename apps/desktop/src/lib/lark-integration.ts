@@ -1,258 +1,74 @@
 /**
- * Lark CLI Integration — 飞书生态全接入
- * Wraps lark-cli commands and registers them as Agent tools
- * Capabilities: Calendar, IM, Doc, Task, Approval, Sheet
+ * Lark Integration — direct HTTP via open.larksuite.com
+ *
+ * Two-tier auth: tenant_access_token (bot/app scope) + user_access_token
+ * (personal calendar/docs/tasks). User-scope tools are only registered
+ * when a valid user OAuth token exists.
  */
-import { registerTool, type ToolDefinition } from "./tool-registry";
+import { registerTool, unregisterTool, type ToolDefinition } from "./tool-registry";
+import * as lark from "./lark-client";
 
-// ═══════════ Config ═══════════
+// ═══════════ Config (compat shim for SettingsPage) ═══════════
 
 export interface LarkConfig {
   appId: string;
   appSecret: string;
-  cliPath: string;       // default: "lark-cli"
-  outputFormat: string;  // default: "pretty"
 }
-
-const DEFAULT_CONFIG: LarkConfig = {
-  appId: "",
-  appSecret: "",
-  cliPath: "lark-cli",
-  outputFormat: "pretty",
-};
-
-let _config: LarkConfig = { ...DEFAULT_CONFIG };
 
 export function getLarkConfig(): LarkConfig {
-  return { ..._config };
+  return lark.loadLarkAppConfig();
 }
 
-export function setLarkConfig(partial: Partial<LarkConfig>): void {
-  _config = { ..._config, ...partial };
-  saveLarkConfig();
-}
-
-function saveLarkConfig(): void {
-  try {
-    localStorage.setItem("lark-config", JSON.stringify(_config));
-  } catch { /* quota exceeded */ }
+export function setLarkConfig(cfg: Partial<LarkConfig>): void {
+  const prev = lark.loadLarkAppConfig();
+  lark.setLarkAppConfig({ appId: cfg.appId ?? prev.appId, appSecret: cfg.appSecret ?? prev.appSecret });
 }
 
 export function loadLarkConfig(): LarkConfig {
-  try {
-    const raw = localStorage.getItem("lark-config");
-    if (raw) {
-      _config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-    }
-  } catch { /* corrupt */ }
-  return { ..._config };
+  return lark.loadLarkAppConfig();
 }
 
 export function isLarkConfigured(): boolean {
-  return !!_config.appId && !!_config.appSecret;
+  return lark.isLarkConfigured();
 }
 
-// ═══════════ LarkCLI Class ═══════════
-
-export class LarkCLI {
-  private config: LarkConfig;
-
-  constructor(config?: Partial<LarkConfig>) {
-    this.config = { ..._config, ...config };
-  }
-
-  /** Execute a lark-cli command and return stdout */
-  async execute(args: string[]): Promise<string> {
-    const fullArgs = [
-      ...args,
-      "--output", this.config.outputFormat,
-    ];
-
-    // Try Tauri shell execute first, fall back to simulation
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const result = await invoke<string>("execute_command", {
-        program: this.config.cliPath,
-        args: fullArgs,
-        env: {
-          LARK_APP_ID: this.config.appId,
-          LARK_APP_SECRET: this.config.appSecret,
-        },
-      });
-      return result;
-    } catch {
-      // Fallback: return descriptive message for non-Tauri environments
-      return `[lark-cli] ${this.config.cliPath} ${fullArgs.join(" ")}\n(Tauri shell not available — command would execute in production)`;
-    }
-  }
-
-  // ── Calendar ──
-  async calendarAgenda(days?: number): Promise<string> {
-    return this.execute(["calendar", "+agenda", ...(days ? ["--days", String(days)] : [])]);
-  }
-  async calendarCreate(title: string, start: string, end: string, attendees?: string[]): Promise<string> {
-    const args = ["calendar", "+create", "--summary", title, "--start", start, "--end", end];
-    if (attendees?.length) args.push("--attendees", attendees.join(","));
-    args.push("--dry-run");
-    return this.execute(args);
-  }
-  async calendarFreebusy(userIds: string[], start: string, end: string): Promise<string> {
-    return this.execute(["calendar", "+freebusy", "--user-ids", userIds.join(","), "--start", start, "--end", end]);
-  }
-
-  // ── IM (Messenger) ──
-  async imSendMessage(chatId: string, text: string): Promise<string> {
-    return this.execute(["im", "+messages-send", "--chat-id", chatId, "--msg-type", "text", "--text", text]);
-  }
-  async imSearchMessages(query: string, chatId?: string): Promise<string> {
-    const args = ["im", "+messages-search", "--query", query];
-    if (chatId) args.push("--chat-id", chatId);
-    return this.execute(args);
-  }
-  async imListChats(): Promise<string> {
-    return this.execute(["im", "chats", "list"]);
-  }
-
-  // ── Docs ──
-  async docCreate(title: string, content?: string): Promise<string> {
-    const args = ["doc", "+create", "--title", title];
-    if (content) args.push("--content", content);
-    return this.execute(args);
-  }
-  async docRead(docToken: string): Promise<string> {
-    return this.execute(["doc", "+read", "--document-id", docToken]);
-  }
-  async docSearch(query: string): Promise<string> {
-    return this.execute(["drive", "+search", "--query", query]);
-  }
-
-  // ── Tasks ──
-  async taskCreate(title: string, dueDate?: string): Promise<string> {
-    const args = ["task", "+create", "--summary", title];
-    if (dueDate) args.push("--due", dueDate);
-    return this.execute(args);
-  }
-  async taskList(): Promise<string> {
-    return this.execute(["task", "tasks", "list"]);
-  }
-  async taskComplete(taskId: string): Promise<string> {
-    return this.execute(["task", "+complete", "--task-id", taskId]);
-  }
-
-  // ── Approval ──
-  async approvalQuery(status?: string): Promise<string> {
-    const args = ["approval", "+query"];
-    if (status) args.push("--status", status);
-    return this.execute(args);
-  }
-  async approvalApprove(instanceId: string, comment?: string): Promise<string> {
-    const args = ["approval", "+approve", "--instance-id", instanceId];
-    if (comment) args.push("--comment", comment);
-    return this.execute(args);
-  }
-  async approvalReject(instanceId: string, comment?: string): Promise<string> {
-    const args = ["approval", "+reject", "--instance-id", instanceId];
-    if (comment) args.push("--comment", comment);
-    return this.execute(args);
-  }
-
-  // ── Sheets ──
-  async sheetRead(spreadsheetToken: string, range?: string): Promise<string> {
-    const args = ["sheets", "+read", "--spreadsheet-token", spreadsheetToken];
-    if (range) args.push("--range", range);
-    return this.execute(args);
-  }
-  async sheetWrite(spreadsheetToken: string, range: string, values: string): Promise<string> {
-    return this.execute(["sheets", "+write", "--spreadsheet-token", spreadsheetToken, "--range", range, "--values", values]);
-  }
-  async sheetCreate(title: string): Promise<string> {
-    return this.execute(["sheets", "+create", "--title", title]);
-  }
-
-  // ── Email (Feishu Mail) ──
-  async emailList(folder?: string, limit?: number): Promise<string> {
-    const args = ["mail", "+list"];
-    if (folder) args.push("--folder", folder);
-    if (limit) args.push("--limit", String(limit));
-    return this.execute(args);
-  }
-  async emailSend(to: string, subject: string, body: string, cc?: string): Promise<string> {
-    const args = ["mail", "+send", "--to", to, "--subject", subject, "--body", body];
-    if (cc) args.push("--cc", cc);
-    args.push("--dry-run");
-    return this.execute(args);
-  }
-  async emailReply(messageId: string, body: string): Promise<string> {
-    return this.execute(["mail", "+reply", "--message-id", messageId, "--body", body, "--dry-run"]);
-  }
-  async emailSearch(query: string): Promise<string> {
-    return this.execute(["mail", "+search", "--query", query]);
-  }
-  async emailRead(messageId: string): Promise<string> {
-    return this.execute(["mail", "+read", "--message-id", messageId]);
-  }
-}
+// Re-export client functions for Settings UI
+export { testConnection, buildOAuthUrl, exchangeOAuthCode, disconnectUser, hasUserAccess, hasTenantAccess } from "./lark-client";
+export { loadUserInfo, isRefreshTokenValid, clearUserToken, isUserTokenValid } from "./lark-token-store";
 
 // ═══════════ Tool Definitions ═══════════
 
-const lark = new LarkCLI();
+const NOT_CONFIGURED = "Lark not configured. Please set App ID and App Secret in Settings > Lark.";
+const NEEDS_OAUTH = "This feature requires personal authorization. Connect your Lark account in Settings > Lark.";
 
-const larkCalendarTool: ToolDefinition = {
-  name: "lark_calendar",
-  description: "Lark Calendar — view agenda, create meetings, check availability / 飞书日程管理",
-  searchHint: "calendar agenda meeting schedule feishu lark 日程 会议",
-  category: "web",
-  permission: "medium",
-  inputSchema: {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["agenda", "create", "freebusy"],
-        description: "agenda=view agenda, create=new event, freebusy=check availability",
-      },
-      days: { type: "number", description: "agenda: days ahead (default 1)" },
-      title: { type: "string", description: "create: event title" },
-      start: { type: "string", description: "create/freebusy: start time ISO8601" },
-      end: { type: "string", description: "create/freebusy: end time ISO8601" },
-      attendees: { type: "string", description: "create: attendee emails, comma-separated" },
-      user_ids: { type: "string", description: "freebusy: user IDs, comma-separated" },
-    },
-    required: ["action"],
-  },
-  execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
-      case "agenda":
-        return lark.calendarAgenda(args.days ? Number(args.days) : undefined);
-      case "create":
-        if (!args.title || !args.start || !args.end) return "❌ create requires title, start, end";
-        return lark.calendarCreate(String(args.title), String(args.start), String(args.end),
-          args.attendees ? String(args.attendees).split(",") : undefined);
-      case "freebusy":
-        if (!args.user_ids || !args.start || !args.end) return "❌ freebusy requires user_ids, start, end";
-        return lark.calendarFreebusy(String(args.user_ids).split(","), String(args.start), String(args.end));
-      default:
-        return `❌ Unknown action: ${action}. Available: agenda, create, freebusy`;
-    }
-  },
-};
+function checkTenant(): string | null {
+  if (!lark.isLarkConfigured()) return NOT_CONFIGURED;
+  return null;
+}
+
+function checkUser(): string | null {
+  const t = checkTenant();
+  if (t) return t;
+  if (!lark.hasUserAccess()) return NEEDS_OAUTH;
+  return null;
+}
+
+function json(data: unknown): string {
+  return JSON.stringify(data, null, 2);
+}
+
+// ── IM (tenant token — bot scope, always available) ──
 
 const larkImTool: ToolDefinition = {
   name: "lark_im",
-  description: "Lark Messenger — send messages, search chat history / 飞书消息发送",
-  searchHint: "message chat send im feishu lark 消息 群聊",
+  description: "Lark Messenger — send messages, list chats, search chat history",
+  searchHint: "message chat send im lark",
   category: "web",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["send", "search", "list_chats"],
-        description: "send=send message, search=search messages, list_chats=list chats",
-      },
+      action: { type: "string", enum: ["send", "search", "list_chats"], description: "send=send message, search=search messages, list_chats=list chats" },
       chat_id: { type: "string", description: "send/search: chat ID (oc_xxx)" },
       text: { type: "string", description: "send: message text" },
       query: { type: "string", description: "search: search keyword" },
@@ -260,257 +76,294 @@ const larkImTool: ToolDefinition = {
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
+    const err = checkTenant();
+    if (err) return err;
+    switch (String(args.action)) {
       case "send":
-        if (!args.chat_id || !args.text) return "❌ send requires chat_id and text";
-        return lark.imSendMessage(String(args.chat_id), String(args.text));
+        if (!args.chat_id || !args.text) return "send requires chat_id and text";
+        return json(await lark.imSendMessage(String(args.chat_id), String(args.text)));
       case "search":
-        if (!args.query) return "❌ search requires query";
-        return lark.imSearchMessages(String(args.query), args.chat_id ? String(args.chat_id) : undefined);
+        if (!args.query) return "search requires query";
+        return json(await lark.imSearchMessages(String(args.query), args.chat_id ? String(args.chat_id) : undefined));
       case "list_chats":
-        return lark.imListChats();
+        return json(await lark.imListChats());
       default:
-        return `❌ Unknown action: ${action}. Available: send, search, list_chats`;
+        return `Unknown action: ${args.action}. Available: send, search, list_chats`;
     }
   },
 };
 
-const larkDocTool: ToolDefinition = {
-  name: "lark_doc",
-  description: "Lark Docs — create, read, and search documents / 飞书文档操作",
-  searchHint: "document doc create read search feishu lark 文档",
+// ── Calendar (user token) ──
+
+const larkCalendarTool: ToolDefinition = {
+  name: "lark_calendar",
+  description: "Lark Calendar — view events, create meetings, check free/busy (requires personal authorization)",
+  searchHint: "calendar agenda meeting schedule lark",
   category: "web",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["create", "read", "search"],
-        description: "create=new doc, read=read doc, search=search docs",
-      },
-      title: { type: "string", description: "create: document title" },
-      content: { type: "string", description: "create: document content (Markdown)" },
-      doc_token: { type: "string", description: "read: document token" },
-      query: { type: "string", description: "search: search keyword" },
+      action: { type: "string", enum: ["list", "create", "freebusy"], description: "list=upcoming events, create=new event, freebusy=check availability" },
+      calendar_id: { type: "string", description: "list: calendar ID (default: primary)" },
+      start_time: { type: "string", description: "ISO 8601 or Unix timestamp" },
+      end_time: { type: "string", description: "ISO 8601 or Unix timestamp" },
+      summary: { type: "string", description: "create: event title" },
+      attendees: { type: "string", description: "create: comma-separated emails" },
+      user_ids: { type: "string", description: "freebusy: comma-separated open_ids" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
+      case "list":
+        return json(await lark.calendarListEvents(
+          args.calendar_id ? String(args.calendar_id) : undefined,
+          args.start_time ? String(args.start_time) : undefined,
+          args.end_time ? String(args.end_time) : undefined,
+        ));
       case "create":
-        if (!args.title) return "❌ create requires title";
-        return lark.docCreate(String(args.title), args.content ? String(args.content) : undefined);
-      case "read":
-        if (!args.doc_token) return "❌ read requires doc_token";
-        return lark.docRead(String(args.doc_token));
-      case "search":
-        if (!args.query) return "❌ search requires query";
-        return lark.docSearch(String(args.query));
+        if (!args.summary || !args.start_time || !args.end_time) return "create requires summary, start_time, end_time";
+        return json(await lark.calendarCreateEvent(
+          String(args.summary), String(args.start_time), String(args.end_time),
+          args.attendees ? String(args.attendees).split(",").map(s => s.trim()) : undefined,
+        ));
+      case "freebusy":
+        if (!args.user_ids || !args.start_time || !args.end_time) return "freebusy requires user_ids, start_time, end_time";
+        return json(await lark.calendarFreeBusy(
+          String(args.user_ids).split(",").map(s => s.trim()),
+          String(args.start_time), String(args.end_time),
+        ));
       default:
-        return `❌ Unknown action: ${action}. Available: create, read, search`;
+        return `Unknown action: ${args.action}. Available: list, create, freebusy`;
     }
   },
 };
 
+// ── Drive / Docs (user token) ──
+
+const larkDocTool: ToolDefinition = {
+  name: "lark_doc",
+  description: "Lark Docs — search, read, and create documents (requires personal authorization)",
+  searchHint: "document doc create read search lark",
+  category: "web",
+  permission: "medium",
+  inputSchema: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["search", "read", "create"], description: "search=find docs, read=read content, create=new doc" },
+      query: { type: "string", description: "search: keyword" },
+      doc_token: { type: "string", description: "read: document token" },
+      title: { type: "string", description: "create: document title" },
+    },
+    required: ["action"],
+  },
+  execute: async (args) => {
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
+      case "search":
+        if (!args.query) return "search requires query";
+        return json(await lark.driveSearch(String(args.query)));
+      case "read":
+        if (!args.doc_token) return "read requires doc_token";
+        return json(await lark.driveGetDoc(String(args.doc_token)));
+      case "create":
+        if (!args.title) return "create requires title";
+        return json(await lark.driveCreateDoc(String(args.title)));
+      default:
+        return `Unknown action: ${args.action}. Available: search, read, create`;
+    }
+  },
+};
+
+// ── Tasks (user token) ──
+
 const larkTaskTool: ToolDefinition = {
   name: "lark_task",
-  description: "Lark Tasks — create, list, and complete tasks / 飞书任务管理",
-  searchHint: "task todo create complete feishu lark 任务",
+  description: "Lark Tasks — list, create, and complete tasks (requires personal authorization)",
+  searchHint: "task todo create complete lark",
   category: "task",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["create", "list", "complete"],
-        description: "create=new task, list=list tasks, complete=mark done",
-      },
-      title: { type: "string", description: "create: task title" },
-      due_date: { type: "string", description: "create: due date ISO8601" },
+      action: { type: "string", enum: ["list", "create", "complete"], description: "list=all tasks, create=new task, complete=mark done" },
+      summary: { type: "string", description: "create: task title" },
+      due: { type: "string", description: "create: due date ISO8601" },
       task_id: { type: "string", description: "complete: task ID" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
-      case "create":
-        if (!args.title) return "❌ create requires title";
-        return lark.taskCreate(String(args.title), args.due_date ? String(args.due_date) : undefined);
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
       case "list":
-        return lark.taskList();
+        return json(await lark.taskList());
+      case "create":
+        if (!args.summary) return "create requires summary";
+        return json(await lark.taskCreate(String(args.summary), args.due ? String(args.due) : undefined));
       case "complete":
-        if (!args.task_id) return "❌ complete requires task_id";
-        return lark.taskComplete(String(args.task_id));
+        if (!args.task_id) return "complete requires task_id";
+        return json(await lark.taskComplete(String(args.task_id)));
       default:
-        return `❌ Unknown action: ${action}. Available: create, list, complete`;
+        return `Unknown action: ${args.action}. Available: list, create, complete`;
     }
   },
 };
 
+// ── Approval (user token) ──
+
 const larkApprovalTool: ToolDefinition = {
   name: "lark_approval",
-  description: "Lark Approval — query, approve, or reject approval requests / 飞书审批处理",
-  searchHint: "approval approve reject feishu lark 审批",
+  description: "Lark Approval — query, approve, or reject approval requests (requires personal authorization)",
+  searchHint: "approval approve reject lark",
   category: "web",
   permission: "high",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["query", "approve", "reject"],
-        description: "query=list approvals, approve=approve, reject=reject",
-      },
-      status: { type: "string", description: "query: filter by status (pending/approved/rejected)" },
-      instance_id: { type: "string", description: "approve/reject: approval instance ID" },
+      action: { type: "string", enum: ["list", "approve", "reject"], description: "list=pending approvals, approve/reject by instance_id" },
+      approval_code: { type: "string", description: "list: filter by approval template code" },
+      instance_id: { type: "string", description: "approve/reject: instance ID" },
       comment: { type: "string", description: "approve/reject: comment" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
-      case "query":
-        return lark.approvalQuery(args.status ? String(args.status) : undefined);
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
+      case "list":
+        return json(await lark.approvalList(args.approval_code ? String(args.approval_code) : undefined));
       case "approve":
-        if (!args.instance_id) return "❌ approve requires instance_id";
-        return lark.approvalApprove(String(args.instance_id), args.comment ? String(args.comment) : undefined);
+        if (!args.instance_id) return "approve requires instance_id";
+        return json(await lark.approvalApprove(String(args.instance_id), args.comment ? String(args.comment) : undefined));
       case "reject":
-        if (!args.instance_id) return "❌ reject requires instance_id";
-        return lark.approvalReject(String(args.instance_id), args.comment ? String(args.comment) : undefined);
+        if (!args.instance_id) return "reject requires instance_id";
+        return json(await lark.approvalReject(String(args.instance_id), args.comment ? String(args.comment) : undefined));
       default:
-        return `❌ Unknown action: ${action}. Available: query, approve, reject`;
+        return `Unknown action: ${args.action}. Available: list, approve, reject`;
     }
   },
 };
 
+// ── Sheets (user token) ──
+
 const larkSheetTool: ToolDefinition = {
   name: "lark_sheet",
-  description: "Lark Sheets — read/write spreadsheet data, create sheets / 飞书表格数据",
-  searchHint: "sheet spreadsheet read write data feishu lark 表格 数据",
+  description: "Lark Sheets — read/write spreadsheet data, create sheets (requires personal authorization)",
+  searchHint: "sheet spreadsheet read write data lark",
   category: "web",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["read", "write", "create"],
-        description: "read=read data, write=write data, create=new sheet",
-      },
+      action: { type: "string", enum: ["read", "write", "create"], description: "read=read data, write=write data, create=new sheet" },
       spreadsheet_token: { type: "string", description: "read/write: spreadsheet token" },
       range: { type: "string", description: "read/write: cell range (e.g. Sheet1!A1:C10)" },
-      values: { type: "string", description: "write: data in JSON format" },
+      values: { type: "string", description: "write: data as JSON 2D array" },
       title: { type: "string", description: "create: sheet title" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
       case "read":
-        if (!args.spreadsheet_token) return "❌ read requires spreadsheet_token";
-        return lark.sheetRead(String(args.spreadsheet_token), args.range ? String(args.range) : undefined);
+        if (!args.spreadsheet_token) return "read requires spreadsheet_token";
+        return json(await lark.sheetRead(String(args.spreadsheet_token), args.range ? String(args.range) : undefined));
       case "write":
-        if (!args.spreadsheet_token || !args.range || !args.values) return "❌ write requires spreadsheet_token, range, values";
-        return lark.sheetWrite(String(args.spreadsheet_token), String(args.range), String(args.values));
+        if (!args.spreadsheet_token || !args.range || !args.values) return "write requires spreadsheet_token, range, values";
+        return json(await lark.sheetWrite(String(args.spreadsheet_token), String(args.range), JSON.parse(String(args.values))));
       case "create":
-        if (!args.title) return "❌ create requires title";
-        return lark.sheetCreate(String(args.title));
+        if (!args.title) return "create requires title";
+        return json(await lark.sheetCreate(String(args.title)));
       default:
-        return `❌ Unknown action: ${action}. Available: read, write, create`;
+        return `Unknown action: ${args.action}. Available: read, write, create`;
     }
   },
 };
 
+// ── Email (user token) ──
+
 const larkEmailTool: ToolDefinition = {
   name: "lark_email",
-  description: "Lark Mail — list / read / send / reply / search emails / 飞书邮件操作",
-  searchHint: "email mail send read reply search feishu lark 邮件 收件 发件",
+  description: "Lark Mail — list, read, send, reply, search emails (requires personal authorization)",
+  searchHint: "email mail send read reply search lark",
   category: "web",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: {
-        type: "string",
-        enum: ["list", "read", "send", "reply", "search"],
-        description: "list=inbox, read=get one email, send=new email, reply=to existing, search=by keyword",
-      },
-      folder: { type: "string", description: "list: folder name (inbox/sent/drafts), default: inbox" },
+      action: { type: "string", enum: ["list", "read", "send", "reply", "search"], description: "list=inbox, read=get one email, send=new, reply=reply, search=search" },
+      folder: { type: "string", description: "list: folder (INBOX/SENT/DRAFTS)" },
       limit: { type: "number", description: "list: max results (default 20)" },
       message_id: { type: "string", description: "read/reply: email ID" },
-      to: { type: "string", description: "send: comma-separated recipient emails" },
-      cc: { type: "string", description: "send: comma-separated CC recipients" },
+      to: { type: "string", description: "send: comma-separated emails" },
+      cc: { type: "string", description: "send: comma-separated CCs" },
       subject: { type: "string", description: "send: subject line" },
-      body: { type: "string", description: "send/reply: plain text or HTML body" },
-      query: { type: "string", description: "search: search query" },
+      body: { type: "string", description: "send/reply: body text" },
+      query: { type: "string", description: "search: search keyword" },
     },
     required: ["action"],
   },
   execute: async (args) => {
-    if (!isLarkConfigured()) return "❌ Lark not configured. Please set App ID and App Secret in Settings.";
-    const action = String(args.action);
-    switch (action) {
+    const err = checkUser();
+    if (err) return err;
+    switch (String(args.action)) {
       case "list":
-        return lark.emailList(
-          args.folder ? String(args.folder) : undefined,
-          args.limit ? Number(args.limit) : undefined,
-        );
+        return json(await lark.mailList(args.folder ? String(args.folder) : undefined, args.limit ? Number(args.limit) : undefined));
       case "read":
-        if (!args.message_id) return "❌ read requires message_id";
-        return lark.emailRead(String(args.message_id));
+        if (!args.message_id) return "read requires message_id";
+        return json(await lark.mailRead(String(args.message_id)));
       case "send":
-        if (!args.to || !args.subject || !args.body) return "❌ send requires to, subject, body";
-        return lark.emailSend(
-          String(args.to),
-          String(args.subject),
-          String(args.body),
-          args.cc ? String(args.cc) : undefined,
-        );
-      case "reply":
-        if (!args.message_id || !args.body) return "❌ reply requires message_id and body";
-        return lark.emailReply(String(args.message_id), String(args.body));
+        if (!args.to || !args.subject || !args.body) return "send requires to, subject, body";
+        return json(await lark.mailSend(
+          String(args.to).split(",").map(s => s.trim()),
+          String(args.subject), String(args.body),
+          args.cc ? String(args.cc).split(",").map(s => s.trim()) : undefined,
+        ));
       case "search":
-        if (!args.query) return "❌ search requires query";
-        return lark.emailSearch(String(args.query));
+        if (!args.query) return "search requires query";
+        return json(await lark.mailSearch(String(args.query)));
       default:
-        return `❌ Unknown action: ${action}. Available: list, read, send, reply, search`;
+        return `Unknown action: ${args.action}. Available: list, read, send, reply, search`;
     }
   },
 };
 
 // ═══════════ Registration ═══════════
 
-const LARK_TOOLS: ToolDefinition[] = [
-  larkCalendarTool,
-  larkImTool,
-  larkDocTool,
-  larkTaskTool,
-  larkApprovalTool,
-  larkSheetTool,
-  larkEmailTool,
-];
+const TENANT_TOOLS: ToolDefinition[] = [larkImTool];
+const USER_TOOLS: ToolDefinition[] = [larkCalendarTool, larkDocTool, larkTaskTool, larkApprovalTool, larkSheetTool, larkEmailTool];
+const USER_TOOL_NAMES = USER_TOOLS.map(t => t.name);
 
-/** Register all Lark tools into the tool registry */
 export function registerLarkTools(): void {
-  for (const tool of LARK_TOOLS) {
-    registerTool(tool);
+  for (const tool of TENANT_TOOLS) registerTool(tool);
+  refreshUserToolRegistration();
+}
+
+export function refreshUserToolRegistration(): void {
+  const hasUser = lark.hasUserAccess();
+  for (const tool of USER_TOOLS) {
+    if (hasUser) {
+      registerTool(tool);
+    } else {
+      unregisterTool(tool.name);
+    }
   }
 }
 
-/** Initialize Lark: load config + register tools */
+export function getUserToolNames(): string[] {
+  return USER_TOOL_NAMES;
+}
+
 export function initLark(): void {
-  loadLarkConfig();
+  lark.loadLarkAppConfig();
   registerLarkTools();
 }
