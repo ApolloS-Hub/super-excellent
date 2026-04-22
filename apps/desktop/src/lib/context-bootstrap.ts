@@ -183,8 +183,9 @@ export function buildContextPrompt(): string {
     sections.push(`## User Preferences\n${snap.userPreferences.map(p => `- ${p}`).join("\n")}`);
   }
 
-  const output = sections.join("\n\n");
-  return output.length > 50 ? output : ""; // Don't inject if basically empty
+  // Only emit if there's actual content beyond the header
+  if (sections.length <= 1) return "";
+  return sections.join("\n\n");
 }
 
 /**
