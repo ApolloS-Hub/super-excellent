@@ -25,7 +25,10 @@ export function emitAgentEvent(event: Record<string, unknown>): void {
   // Push to global event log
   pushEventLog(event);
   for (const h of handlers) {
-    try { h(event); } catch { /* ignore */ }
+    try { h(event); } catch (e) {
+      // Don't crash the event loop on a bad subscriber, but log so bugs surface
+      console.warn("event-bus handler threw on event", event?.type, e);
+    }
   }
 }
 

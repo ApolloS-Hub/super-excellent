@@ -6,6 +6,141 @@ All notable changes to Super Excellent.
 
 ---
 
+## v0.3.0 (2026-04-23)
+
+Lark OAuth rewrite · Scenario engine · Observation log · Spec-driven pipeline ·
+11 new cross-functional skills · UI polish (dark-mode contrast + Icon system) ·
+490 tests passing.
+
+Inspired by product-playbook, claude-mem, OpenSpec, lenny-skills.
+
+### Lark integration — architectural rewrite
+
+- **`lark-client.ts` + `lark-token-store.ts` (NEW)** — direct HTTP client to
+  `open.larksuite.com` via `@tauri-apps/plugin-http`. Killed the `lark-cli`
+  external binary dependency entirely.
+- **Two-tier auth**:
+  - `tenant_access_token` (app credentials → auto-refreshed every ~2h)
+    for bot-scope IM messaging
+  - `user_access_token` (browser OAuth paste-back → refresh token 30 days)
+    for personal calendar / docs / tasks / approval / sheets / mail
+- **Connection test on save** (`LarkConfigPanel`): validates App ID + Secret
+  via a real token exchange before persisting.
+- **Tool gating**: user-scope tools (6 of 7) only register when user OAuth
+  is valid; IM is always available. UI shows `tenant` vs `user` scope badges.
+- **Brand cleanup**: all `飞书` / `Feishu` / `lark-cli` / `LarkCLI` /
+  `FeishuAdapter` references purged from code, locales, and docs.
+- **OAuth fixes**: removed invalid `mail:mail:readonly` scope (Lark error 20043);
+  redirect URI routed to Lark's own display page (not `tauri://localhost`).
+
+### Scenario engine (NEW — `scenario-engine.ts`)
+
+Framework-first scaffolding: vague request → structured multi-step state
+machine. 6 built-in scenarios, each with explicit worker + IO contracts.
+
+- `weekly_planning` — gather → prioritize → conflicts → schedule → sync
+- `meeting_prep` — context → research → agenda → prep-doc → action items
+- `email_triage` — fetch → classify → summarize → drafts
+- `daily_standup` — yesterday → today → blockers → report
+- `doc_review` — read → clarity → accuracy → structure → final
+- `spec_driven` (OpenSpec-inspired) — proposal → spec → design → tasks → review
+
+Coordinator's `analyzeIntent()` gives scenario match priority over keyword
+matching — "规划本周" no longer guesses, it runs the state machine.
+
+### Artifact graph (NEW — `artifact-graph.ts`)
+
+DAG of artifacts with BFS stale propagation + topological regeneration.
+Upstream artifact changes cascade stale marks to all transitive downstream
+artifacts. Supports `derives-from` / `blocks` / `informs` / `contradicts`
+relations. `linkScenarioArtifacts()` wires scenario steps into the graph.
+
+### Context bootstrap (NEW — `context-bootstrap.ts`)
+
+Cross-session structured markdown context: active projects, pending tasks,
+recent decisions, user preferences, weekly focus, blockers, deadlines.
+Auto-collects from `memory-store` and runtime tasks; auto-extracts from
+conversations via regex patterns. Injected into every worker's prompt via
+`buildContextPromptWithObservations()`.
+
+### Quality gates (NEW — `quality-gate.ts`)
+
+Per-worker self-critique hard gates. Universal checks (not empty, no
+hallucinated URLs, answers the question, no refusal leaks) + role-specific
+checks (developer → code blocks; writer → structure; researcher → sources;
+code_reviewer → specificity; PM → action items). Score &lt; 0.6 triggers
+feedback-guided retry.
+
+### Environment scanner (NEW — `env-scanner.ts`)
+
+Proactive scan of git repos, tech stacks (package.json, Cargo.toml, go.mod,
+pyproject.toml), branch state, recent commits. For planning tasks, prompts
+are enriched with real-world constraints instead of hallucinated assumptions.
+
+### Observation log (NEW — `observation-log.ts`, claude-mem inspired)
+
+Auto-capture via event bus (tool_use / tool_result / user_message /
+assistant_result / worker_dispatch). Jaccard similarity dedup (threshold
+0.85 against last 50 same-type). LRU-ish pruning (max 2000, weighted by
+access × recency). Privacy tag: `&lt;private&gt;...&lt;/private&gt;` content redacted.
+Three-layer progressive disclosure retrieval:
+
+- `/recall [keyword]` — compact index (ID + summary, ~50–100 tokens)
+- `/recall-timeline &lt;id&gt; [min]` — chronological ±N minute window
+- `/recall-details &lt;id&gt; [&lt;id&gt;...]` — full detail fetch, bumps access count
+
+### Spec-driven pipeline (NEW — OpenSpec-inspired)
+
+Three commands turn vague ideas into traceable artifacts:
+
+- `/propose &lt;idea&gt;` — runs the `spec_driven` scenario (5 steps: proposal →
+  spec → design → tasks → review). Each step becomes an artifact in the
+  dependency graph.
+- `/apply` — parses the tasks checklist from the last `/propose`, logs each
+  task to the observation log.
+- `/archive` — writes a one-line summary to `context-bootstrap`'s
+  `recentDecisions`; clears the active instance.
+
+### 11 new skills (lenny-skills inspired)
+
+Cross-functional skills in Lark / dev / personal productivity gaps:
+`running-effective-meetings`, `difficult-conversations`, `written-communication`,
+`decision-frameworks`, `prioritization`, `energy-and-focus`,
+`stakeholder-alignment`, `giving-feedback`, `weekly-review`, `inbox-zero`,
+`saying-no`. Total skills: 24 → 35.
+
+### UI polish
+
+- **Dark-mode contrast bump** — `--surface` 16→18%, `--border` 24→28%,
+  `--fg-muted` 72→76%, override of `--mantine-color-dimmed` for legibility.
+- **Icon system everywhere** — ToolProgress, CostBadge, SettingsPage,
+  MonitorPage stripped of hardcoded emoji (🔧 💰 📊 ⏹ ▶ etc.) in favor of
+  stroke-based `Icon` component with design-token colors.
+- **MonitorPage rebuild** — workflow stepper, team grid, event log all use
+  Icons; broken `worker-pulse` keyframe reference fixed to `pulse-soft`.
+- **SettingsPage Lark panel** — redesigned with OAuth connect / disconnect
+  flow, connection test, user name display, tool scope badges.
+
+### Test & quality
+
+- **37 test files / 490 tests passing** (was 25 / 321; +12 files / +169 tests)
+- New e2e tests: scenario-engine, artifact-graph, context-bootstrap,
+  quality-gate, env-scanner, observation-log, lark-client,
+  lark-token-store, lark-integration, openspec-commands, event-bus,
+  tool-registry
+- Silent error-swallowing `catch {}` patterns replaced with
+  `catch (e) { console.warn(...) }` so bugs surface.
+- Dead exports marked `@deprecated` (`orchestrateMultiStep`, `getWorkerTools`).
+
+### Infrastructure
+
+- `@tauri-apps/plugin-shell` used for OAuth browser launch
+- Event-bus internal log formatter no longer bakes emoji into detail strings
+- `context-bootstrap.buildContextPrompt()` now correctly returns `""` when
+  only the header exists (previous 50-char threshold was buggy)
+
+---
+
 ## v0.2.0 (2026-04-21)
 
 Codex 风格的安全控制层 + oh-my-codex 7 个工作流模式 + 增强诊断。

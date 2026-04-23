@@ -18,8 +18,16 @@ super-excellent/
 │       │   │   ├── stream-manager.ts      # 全局流管理单例 Global stream singleton
 │       │   │   ├── error-classifier.ts    # 16 类错误分类 Error classifier
 │       │   │   ├── cost-tracker.ts        # Token 用量统计 Token cost tracking
-│       │   │   ├── lark-integration.ts    # 飞书 6 模块 Lark CLI 6 modules
-│       │   │   ├── remote-bridge.ts       # 远程控制桥 Remote control bridge
+│       │   │   ├── lark-client.ts         # Lark HTTP 客户端 + token 管理 HTTP client + token mgmt
+│       │   │   ├── lark-token-store.ts    # OAuth token 混淆存储 OAuth token obfuscated storage
+│       │   │   ├── lark-integration.ts    # 7 个 Lark 工具（IM tenant / Calendar Doc Task Approval Sheet Mail user）
+│       │   │   ├── remote-bridge.ts       # Lark 远程控制桥 Lark remote control bridge
+│       │   │   ├── scenario-engine.ts     # 结构化多步场景引擎 Scenario state machine (6 built-in)
+│       │   │   ├── artifact-graph.ts      # 变更传播 DAG Change propagation DAG
+│       │   │   ├── context-bootstrap.ts   # 跨会话上下文 Cross-session context
+│       │   │   ├── quality-gate.ts        # 品质自检门禁 Worker output self-critique
+│       │   │   ├── env-scanner.ts         # Build mode 环境扫描 Environment scanner
+│       │   │   ├── observation-log.ts     # 自动观察日志 Auto-capture + 3-layer retrieval
 │       │   │   ├── file-history.ts        # 会话倒回 Session rewind
 │       │   │   ├── conversations.ts       # 对话管理/搜索 Conversation mgmt/search
 │       │   │   ├── permission-engine.ts   # 权限引擎 Permission engine
@@ -120,10 +128,10 @@ super-excellent/
 ### 远程控制流 / Remote Control Flow
 
 ```
-飞书消息 Feishu message
+Lark 消息 Lark message
   → Remote Bridge（长轮询 Long-polling, 3s interval）
   → Agent 处理 Agent processing
-  → 响应回飞书 Response back to Feishu
+  → 响应回 Lark Response back to Lark
 ```
 
 ### 记忆流 / Memory Flow

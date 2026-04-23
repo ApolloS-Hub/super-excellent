@@ -8,6 +8,7 @@ import {
 } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { getConversationUsage, formatCost, formatTokens } from "../lib/cost-tracker";
+import Icon from "./Icon";
 
 interface CostBadgeProps {
   conversationId: string | null;
@@ -66,10 +67,10 @@ export default function CostBadge({ conversationId, compact }: CostBadgeProps) {
   return (
     <Tooltip label={tooltipContent} multiline withArrow>
       <Group gap={6} style={{ cursor: "default" }}>
-        <Badge size="sm" variant="light" color="yellow" leftSection="💰">
+        <Badge size="sm" variant="light" color="yellow" leftSection={<Icon name="chart" size={10} stroke={2} />}>
           {formatCost(totalCost)}
         </Badge>
-        <Badge size="sm" variant="light" color="blue" leftSection="📊">
+        <Badge size="sm" variant="light" color="blue" leftSection={<Icon name="chart" size={10} stroke={2} />}>
           {formatTokens(total)} tokens
         </Badge>
         <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>

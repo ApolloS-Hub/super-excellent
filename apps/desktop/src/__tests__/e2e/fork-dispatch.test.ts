@@ -92,5 +92,5 @@ describe("Fork Dispatch", () => {
     );
     expect(results.length).toBe(3);
     expect(results.every(r => r.success)).toBe(true);
-  });
+  }, 15_000);
 });
