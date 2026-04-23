@@ -20,7 +20,11 @@ function deobfuscate(e: string): string {
 }
 
 function save(key: string, data: unknown): void {
-  try { localStorage.setItem(KEY_PREFIX + key, obfuscate(JSON.stringify(data))); } catch { /* quota */ }
+  try {
+    localStorage.setItem(KEY_PREFIX + key, obfuscate(JSON.stringify(data)));
+  } catch (e) {
+    console.warn(`lark-token-store: failed to save "${key}"`, e);
+  }
 }
 
 function load<T>(key: string): T | null {

@@ -1350,8 +1350,9 @@ function RemoteBridgePanel() {
           color={running ? "red" : "green"}
           variant="light"
           fullWidth
+          leftSection={<Icon name={running ? "stop" : "send"} size={14} />}
         >
-          {running ? `⏹ ${t("settings.stopRemoteBridge")}` : `▶ ${t("settings.startRemoteBridge")}`}
+          {running ? t("settings.stopRemoteBridge") : t("settings.startRemoteBridge")}
         </Button>
       </Stack>
     </Paper>

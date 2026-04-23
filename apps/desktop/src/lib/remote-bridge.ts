@@ -51,14 +51,20 @@ export function getBridgeConfig(): RemoteBridgeConfig {
 
 export function setBridgeConfig(partial: Partial<RemoteBridgeConfig>): void {
   _bridgeConfig = { ..._bridgeConfig, ...partial };
-  try { localStorage.setItem("remote-bridge-config", JSON.stringify(_bridgeConfig)); } catch {}
+  try {
+    localStorage.setItem("remote-bridge-config", JSON.stringify(_bridgeConfig));
+  } catch (e) {
+    console.warn("remote-bridge: failed to persist config", e);
+  }
 }
 
 export function loadBridgeConfig(): RemoteBridgeConfig {
   try {
     const raw = localStorage.getItem("remote-bridge-config");
     if (raw) _bridgeConfig = { ...DEFAULT_BRIDGE_CONFIG, ...JSON.parse(raw) };
-  } catch {}
+  } catch (e) {
+    console.warn("remote-bridge: failed to parse stored config", e);
+  }
   return { ..._bridgeConfig };
 }
 
@@ -272,7 +278,9 @@ class BridgeManager {
     } catch (err) {
       const errMsg = `Failed to process message: ${err instanceof Error ? err.message : String(err)}`;
       emitAgentEvent({ type: "error", text: errMsg, worker: "remote_bridge" });
-      await this.adapter.sendResponse(chatId, errMsg).catch(() => {});
+      await this.adapter.sendResponse(chatId, errMsg).catch(e => {
+        emitAgentEvent({ type: "error", text: `Lark sendResponse failed: ${e instanceof Error ? e.message : String(e)}`, worker: "remote_bridge" });
+      });
     } finally {
       this.processing.delete(msg.messageId);
     }

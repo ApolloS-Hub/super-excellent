@@ -549,8 +549,11 @@ async function callWorkerLLMInner(
 // ═══════════ 多步骤编排 ═══════════
 
 /**
- * 多步骤任务编排
- * 按依赖关系顺序/并行执行
+ * @deprecated Superseded by scenario-engine's runScenario(). Kept for
+ *             backward compat in case callers return. Prefer runScenario
+ *             for new multi-step orchestration.
+ *
+ * 多步骤任务编排 — 按依赖关系顺序/并行执行
  */
 export async function orchestrateMultiStep(
   message: string,
@@ -678,6 +681,8 @@ function getWorkerToolWhitelist(role: string): string[] {
 }
 
 /**
+ * @deprecated Currently unused — kept for potential UI display of per-role tool lists.
+ *
  * 获取 Worker 工具白名单（对外暴露，供 UI 展示用）
  */
 export function getWorkerTools(role: string): string[] {

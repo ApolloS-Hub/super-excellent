@@ -9,6 +9,7 @@ import {
   Progress, Paper, useMantineColorScheme, Collapse,
 } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+import Icon, { type IconName } from "./Icon";
 
 export type ToolCallStatus = "running" | "success" | "error";
 
@@ -28,10 +29,10 @@ interface ToolProgressProps {
   calls: ToolCallEntry[];
 }
 
-const STATUS_CONFIG: Record<ToolCallStatus, { color: string; icon: string; labelKey: string }> = {
-  running: { color: "blue", icon: "🔄", labelKey: "tools.statusRunning" },
-  success: { color: "green", icon: "✅", labelKey: "tools.statusSuccess" },
-  error: { color: "red", icon: "❌", labelKey: "tools.statusError" },
+const STATUS_CONFIG: Record<ToolCallStatus, { color: string; icon: IconName; labelKey: string }> = {
+  running: { color: "blue", icon: "sliders", labelKey: "tools.statusRunning" },
+  success: { color: "green", icon: "check", labelKey: "tools.statusSuccess" },
+  error: { color: "red", icon: "alert", labelKey: "tools.statusError" },
 };
 
 function paramSummary(input: string): string {
@@ -72,8 +73,8 @@ const ToolCallItem = memo(function ToolCallItem({ call }: { call: ToolCallEntry 
       <UnstyledButton onClick={() => setExpanded(v => !v)} w="100%">
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-            <Text size="xs">{expanded ? "▼" : "▶"}</Text>
-            <Badge size="xs" variant="light" color={cfg.color} leftSection={cfg.icon}>
+            <Icon name={expanded ? "chevron-down" : "chevron-right"} size={11} stroke={2} />
+            <Badge size="xs" variant="light" color={cfg.color} leftSection={<Icon name={cfg.icon} size={10} stroke={2} />}>
               {call.name}
             </Badge>
             {summary && (
@@ -166,8 +167,9 @@ export default function ToolProgress({ calls }: ToolProgressProps) {
 
   return (
     <Stack gap={4}>
-      <Group gap="xs">
-        <Text size="xs" fw={600}>🔧 {t("tools.toolCalls")}</Text>
+      <Group gap={6}>
+        <Icon name="sliders" size={12} stroke={1.8} />
+        <Text size="xs" fw={600}>{t("tools.toolCalls")}</Text>
         <Text size="xs" c="dimmed">
           {running > 0 && t("tools.summaryRunning", { count: running })}
           {running > 0 && succeeded > 0 && " · "}

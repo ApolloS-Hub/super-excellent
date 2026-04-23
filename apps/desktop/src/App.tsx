@@ -101,8 +101,7 @@ function App() {
         const status = await healthCheck();
         if (!status.config_valid) {
           console.warn("Config invalid on startup, auto-repairing:", status.config_error);
-          const result = await repairConfig();
-          console.log("Auto-repair result:", result);
+          await repairConfig();
         }
       } catch (e) {
         console.warn("Startup health check failed:", e);
@@ -114,7 +113,6 @@ function App() {
   useEffect(() => {
     check().then(async (update) => {
       if (update) {
-        console.log(`Update available: ${update.version}`);
         if (window.confirm(`New version ${update.version} available. Update now?`)) {
           await update.downloadAndInstall();
         }
@@ -143,9 +141,15 @@ function App() {
       // Also sync to localStorage as backup
       try {
         localStorage.setItem("conversations", JSON.stringify(conversations));
-      } catch { /* quota exceeded */ }
+      } catch (e) {
+        console.warn("localStorage quota exceeded on conversations backup:", e);
+      }
     } else {
-      try { localStorage.removeItem("conversations"); } catch {}
+      try {
+        localStorage.removeItem("conversations");
+      } catch (e) {
+        console.warn("localStorage removeItem(conversations) failed:", e);
+      }
     }
   }, [conversations]);
 
