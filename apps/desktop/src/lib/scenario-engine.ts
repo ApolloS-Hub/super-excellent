@@ -128,6 +128,21 @@ const DOC_REVIEW: ScenarioTemplate = {
   ],
 };
 
+const SPEC_DRIVEN: ScenarioTemplate = {
+  id: "spec_driven",
+  name: "需求规格化",
+  nameEn: "Spec-Driven Development",
+  description: "Turn a vague idea into a structured proposal → spec → design → tasks pipeline (OpenSpec-inspired)",
+  triggerKeywords: ["propose", "proposal", "写需求", "需求文档", "spec", "写方案", "feature request", "功能提案"],
+  steps: [
+    { id: "proposal",  label: "生成提案",   labelEn: "Generate Proposal",   workerId: "product",           action: "Write a concise proposal for this change. Include: 1) Problem statement — what pain point does this solve? 2) Proposed solution — high-level approach, 3) Scope boundaries — what's in and what's explicitly NOT in, 4) Risks and open questions, 5) Success criteria — how do we know it worked? Format as structured markdown." },
+    { id: "spec",      label: "详细规格",   labelEn: "Detailed Spec",       workerId: "product",           action: "Based on the proposal, write detailed specs. For each user scenario: Given [context], When [action], Then [expected outcome]. Cover the happy path, edge cases, and error cases. List acceptance criteria as a checkable list.", inputFrom: ["proposal"] },
+    { id: "design",    label: "技术方案",   labelEn: "Technical Design",    workerId: "architect",         action: "Based on the proposal and specs, write a technical design. Cover: 1) Architecture / component changes, 2) Data model changes (if any), 3) API / interface changes, 4) Dependencies and integration points, 5) Migration / rollback plan. Keep it actionable — a developer should be able to start coding from this.", inputFrom: ["proposal", "spec"] },
+    { id: "tasks",     label: "任务拆分",   labelEn: "Task Breakdown",      workerId: "project_manager",   action: "Based on the design, break down into an ordered task list. Each task: title, owner (worker role), estimated effort (S/M/L), dependencies on other tasks. Output as a markdown checklist: - [ ] Task title (owner, size). Order by dependency — independent tasks first.", inputFrom: ["design"] },
+    { id: "review",    label: "方案评审",   labelEn: "Review & Refine",     workerId: "code_reviewer",     action: "Review the full proposal→spec→design→tasks pipeline for: 1) Gaps — any scenario not covered? 2) Risks — any technical risk not mitigated? 3) Scope creep — anything that should be deferred? 4) Clarity — would a new team member understand this? Output a short review with verdict: APPROVE / REVISE (with specific items).", inputFrom: ["proposal", "spec", "design", "tasks"], optional: true },
+  ],
+};
+
 // ── Registry ──
 
 const _templates = new Map<string, ScenarioTemplate>();
@@ -135,7 +150,7 @@ const _instances = new Map<string, ScenarioInstance>();
 let _instanceCounter = 0;
 
 function registerDefaults(): void {
-  for (const t of [WEEKLY_PLANNING, MEETING_PREP, EMAIL_TRIAGE, DAILY_STANDUP, DOC_REVIEW]) {
+  for (const t of [WEEKLY_PLANNING, MEETING_PREP, EMAIL_TRIAGE, DAILY_STANDUP, DOC_REVIEW, SPEC_DRIVEN]) {
     _templates.set(t.id, t);
   }
 }

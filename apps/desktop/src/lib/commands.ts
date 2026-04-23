@@ -766,3 +766,149 @@ registerCommand({
     return `${header}\n\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
   },
 });
+
+// ═══════════ OpenSpec-inspired: /propose, /apply, /archive ═══════════
+
+registerCommand({
+  name: "propose",
+  aliases: ["spec", "opsx"],
+  description: "Generate a structured proposal → spec → design → tasks pipeline for an idea. Usage: /propose <idea description>",
+  handler: async (ctx) => {
+    const idea = ctx.args.join(" ").trim();
+    const zh = i18n.language.startsWith("zh");
+    if (!idea) return zh ? "请提供需求描述。用法：/propose 添加暗色模式" : "Provide an idea. Usage: /propose add dark mode";
+
+    const { initScenarioEngine, runScenario, collectScenarioOutput } = await import("./scenario-engine");
+    const { createArtifact, addDependency } = await import("./artifact-graph");
+    const { dispatchToWorker } = await import("./coordinator");
+    const { loadConfig } = await import("./agent-bridge");
+
+    initScenarioEngine();
+    const config = loadConfig();
+    const noop = () => {};
+
+    const instance = await runScenario(
+      "spec_driven",
+      async (workerId, task) => {
+        const result = await dispatchToWorker(workerId, task, config, noop);
+        return result.output;
+      },
+      { idea },
+      (_step, _inst) => {},
+    );
+
+    // Store each step as an artifact with dependency chain
+    const stepIds = ["proposal", "spec", "design", "tasks", "review"];
+    let prevArtifactId: string | null = null;
+    for (const stepId of stepIds) {
+      const sr = instance.stepResults[stepId];
+      if (!sr || sr.status !== "done") continue;
+      const artId = `propose:${instance.instanceId}:${stepId}`;
+      createArtifact(artId, stepId === "tasks" ? "task" : "document", stepId, sr.output, undefined, stepId);
+      if (prevArtifactId) addDependency(prevArtifactId, artId);
+      prevArtifactId = artId;
+    }
+
+    // Store instance ID for /apply to pick up
+    try { localStorage.setItem("openspec-active-instance", instance.instanceId); } catch {}
+
+    const output = collectScenarioOutput(instance);
+    const status = instance.status === "completed"
+      ? (zh ? "✓ 提案已生成完毕" : "✓ Proposal pipeline complete")
+      : (zh ? "⚠ 部分步骤未完成" : "⚠ Some steps incomplete");
+    const tip = zh
+      ? "\n\n> 使用 `/apply` 按任务清单执行；完成后使用 `/archive` 归档"
+      : "\n\n> Use `/apply` to execute the task list; `/archive` when done";
+    return `${status}\n\n${output}${tip}`;
+  },
+});
+
+registerCommand({
+  name: "apply",
+  description: "Execute the task list from the last /propose. Checks off tasks one by one.",
+  handler: async () => {
+    const zh = i18n.language.startsWith("zh");
+    const instanceId = localStorage.getItem("openspec-active-instance");
+    if (!instanceId) return zh ? "没有活跃的提案。先使用 /propose 生成一个。" : "No active proposal. Run /propose first.";
+
+    const { getScenarioInstance } = await import("./scenario-engine");
+    const { observationLog } = await import("./observation-log");
+
+    const instance = getScenarioInstance(instanceId);
+    if (!instance) return zh ? "找不到提案实例。请重新 /propose。" : "Proposal instance not found. Run /propose again.";
+
+    const tasksResult = instance.stepResults["tasks"];
+    if (!tasksResult || tasksResult.status !== "done") return zh ? "提案中没有任务清单。" : "No task list in the proposal.";
+
+    // Parse checklist items from the tasks output
+    const lines = tasksResult.output.split("\n");
+    const tasks = lines
+      .filter(l => /^[-*]\s*\[[ x]\]/.test(l.trim()))
+      .map(l => l.replace(/^[-*]\s*\[[ x]\]\s*/, "").trim());
+
+    if (tasks.length === 0) return zh ? "任务清单为空或格式无法解析。" : "Task list is empty or could not be parsed.";
+
+    // Log each task as an observation
+    for (const task of tasks) {
+      await observationLog.save({
+        type: "decision",
+        detail: `[apply] Task from proposal ${instanceId}: ${task}`,
+        tags: ["openspec", "apply"],
+      });
+    }
+
+    const taskList = tasks.map((t, i) => `${i + 1}. ${t}`).join("\n");
+    const header = zh
+      ? `从提案 ${instanceId} 中提取了 ${tasks.length} 个任务：`
+      : `Extracted ${tasks.length} tasks from proposal ${instanceId}:`;
+    const tip = zh
+      ? "\n\n> 请逐项完成上述任务。完成后使用 `/archive` 归档整个提案。"
+      : "\n\n> Complete these tasks in order. Use `/archive` when done.";
+    return `${header}\n\n${taskList}${tip}`;
+  },
+});
+
+registerCommand({
+  name: "archive",
+  description: "Archive the active proposal into context-bootstrap as historical knowledge.",
+  handler: async () => {
+    const zh = i18n.language.startsWith("zh");
+    const instanceId = localStorage.getItem("openspec-active-instance");
+    if (!instanceId) return zh ? "没有活跃的提案可归档。" : "No active proposal to archive.";
+
+    const { getScenarioInstance, collectScenarioOutput } = await import("./scenario-engine");
+    const { addToContext } = await import("./context-bootstrap");
+    const { observationLog } = await import("./observation-log");
+
+    const instance = getScenarioInstance(instanceId);
+    if (!instance) return zh ? "找不到提案实例。" : "Proposal instance not found.";
+
+    // Extract a one-line summary from the proposal step
+    const proposalText = instance.stepResults["proposal"]?.output || "";
+    const firstLine = proposalText.split("\n").find(l => l.trim().length > 10)?.trim() || instanceId;
+    const summary = `[archived] ${firstLine.slice(0, 100)}`;
+
+    // Add to context-bootstrap as a recent decision
+    addToContext("recentDecisions", summary);
+
+    // Log the archival
+    await observationLog.save({
+      type: "decision",
+      detail: `[archive] Proposal ${instanceId} archived: ${summary}`,
+      tags: ["openspec", "archive"],
+    });
+
+    // Clear active instance
+    localStorage.removeItem("openspec-active-instance");
+
+    const output = collectScenarioOutput(instance);
+    const header = zh
+      ? `提案 ${instanceId} 已归档到历史决策中。`
+      : `Proposal ${instanceId} archived to historical decisions.`;
+    const archived = zh
+      ? `\n\n**归档摘要**: ${summary}`
+      : `\n\n**Archived summary**: ${summary}`;
+
+    return `${header}${archived}\n\n---\n\n<details><summary>${zh ? "完整提案内容" : "Full proposal content"}</summary>\n\n${output}\n\n</details>`;
+  },
+});
