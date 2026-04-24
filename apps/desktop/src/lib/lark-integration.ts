@@ -146,17 +146,24 @@ const larkCalendarTool: ToolDefinition = {
 
 const larkDocTool: ToolDefinition = {
   name: "lark_doc",
-  description: "Lark Docs — search, read, and create documents (requires personal authorization)",
-  searchHint: "document doc create read search lark",
+  description: "Lark Docs — search, read, create, update, and manage documents (requires personal authorization). Supports block-level editing for precise updates.",
+  searchHint: "document doc create read search update write edit lark",
   category: "web",
   permission: "medium",
   inputSchema: {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["search", "read", "create"], description: "search=find docs, read=read content, create=new doc" },
+      action: {
+        type: "string",
+        enum: ["search", "read", "read_content", "create", "update", "list_blocks", "append", "delete_block"],
+        description: "search=find docs, read=doc metadata, read_content=full text, create=new doc, update=replace entire content, list_blocks=show doc structure, append=add content at end, delete_block=remove a block",
+      },
       query: { type: "string", description: "search: keyword" },
-      doc_token: { type: "string", description: "read: document token" },
+      doc_token: { type: "string", description: "read/read_content/update/list_blocks/append/delete_block: document token (from search results or doc URL)" },
       title: { type: "string", description: "create: document title" },
+      folder_token: { type: "string", description: "create: target folder token (optional)" },
+      content: { type: "string", description: "update/append: the text content (paragraphs separated by double newlines)" },
+      block_id: { type: "string", description: "delete_block: specific block ID to remove" },
     },
     required: ["action"],
   },
@@ -170,11 +177,36 @@ const larkDocTool: ToolDefinition = {
       case "read":
         if (!args.doc_token) return "read requires doc_token";
         return json(await lark.driveGetDoc(String(args.doc_token)));
+      case "read_content":
+        if (!args.doc_token) return "read_content requires doc_token";
+        return json(await lark.driveGetDocContent(String(args.doc_token)));
       case "create":
         if (!args.title) return "create requires title";
-        return json(await lark.driveCreateDoc(String(args.title)));
+        return json(await lark.driveCreateDoc(String(args.title), args.folder_token ? String(args.folder_token) : undefined));
+      case "update":
+        if (!args.doc_token) return "update requires doc_token";
+        if (!args.content) return "update requires content";
+        return json(await lark.driveReplaceDocContent(String(args.doc_token), String(args.content)));
+      case "list_blocks":
+        if (!args.doc_token) return "list_blocks requires doc_token";
+        return json(await lark.driveListBlocks(String(args.doc_token)));
+      case "append": {
+        if (!args.doc_token) return "append requires doc_token";
+        if (!args.content) return "append requires content";
+        const docInfo = await lark.driveGetDoc(String(args.doc_token)) as { document?: { document_id: string } };
+        const pageBlockId = docInfo?.document?.document_id || String(args.doc_token);
+        const paragraphs = String(args.content).split(/\n{2,}/).filter((p: string) => p.trim());
+        const children = paragraphs.map((p: string) => ({
+          block_type: 2,
+          paragraph: { elements: [{ text_run: { content: p.trim() } }] },
+        }));
+        return json(await lark.driveCreateBlock(String(args.doc_token), pageBlockId, children));
+      }
+      case "delete_block":
+        if (!args.doc_token || !args.block_id) return "delete_block requires doc_token and block_id";
+        return json(await lark.driveDeleteBlock(String(args.doc_token), String(args.block_id)));
       default:
-        return `Unknown action: ${args.action}. Available: search, read, create`;
+        return `Unknown action: ${args.action}. Available: search, read, read_content, create, update, list_blocks, append, delete_block`;
     }
   },
 };
