@@ -129,4 +129,31 @@ describe("lark-integration: re-exported OAuth utilities", () => {
     const url = lark.buildOAuthUrl("x", "", "s");
     expect(url).not.toContain("mail%3Amail");
   });
+
+  it("buildOAuthUrl includes docx:document scope for doc write access", () => {
+    const url = lark.buildOAuthUrl("x", "", "s");
+    expect(url).toContain("docx");
+    expect(url).toContain("drive");
+  });
+});
+
+describe("lark-integration: lark_doc tool definition", () => {
+  it("getUserToolNames includes lark_doc", () => {
+    const names = lark.getUserToolNames();
+    expect(names).toContain("lark_doc");
+  });
+
+  it("lark_doc is user-scope (not registered without OAuth token)", async () => {
+    const { getTool } = await import("../../lib/tool-registry");
+    lark.setLarkConfig({ appId: "cli_x", appSecret: "s" });
+    lark.registerLarkTools();
+    lark.refreshUserToolRegistration(); // no user token → unregisters user tools
+    expect(getTool("lark_doc")).toBeUndefined();
+  });
+
+  it("OAuth URL now includes docx:document + drive:drive scopes for doc write", () => {
+    const url = lark.buildOAuthUrl("cli_x", "", "s");
+    expect(url).toContain("docx%3Adocument");
+    expect(url).toContain("drive%3Adrive");
+  });
 });

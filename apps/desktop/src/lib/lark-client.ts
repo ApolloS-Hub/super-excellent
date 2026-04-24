@@ -179,11 +179,12 @@ export async function testConnection(): Promise<{ tenantOk: boolean; userOk: boo
 // ── Public: OAuth code exchange ──
 
 export function buildOAuthUrl(appId: string, _redirectUri: string, state: string): string {
-  // Use Lark's own display page as redirect — shows the auth code to user for paste-back
   const redirectUri = "https://open.larksuite.com/open-apis/authen/v1/index";
   const scopes = [
     "contact:user.base:readonly",
     "im:message",
+    "docx:document",
+    "drive:drive",
   ].join(" ");
   return `https://accounts.larksuite.com/open-apis/authen/v1/authorize?app_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scopes)}`;
 }
@@ -307,8 +308,87 @@ export async function driveGetDoc(docToken: string): Promise<unknown> {
   return request("GET", `/open-apis/docx/v1/documents/${docToken}`, undefined, "user");
 }
 
-export async function driveCreateDoc(title: string): Promise<unknown> {
-  return request("POST", "/open-apis/docx/v1/documents", { title }, "user");
+export async function driveGetDocContent(docToken: string): Promise<unknown> {
+  return request("GET", `/open-apis/docx/v1/documents/${docToken}/raw_content`, undefined, "user");
+}
+
+export async function driveListBlocks(docToken: string, pageSize = 50): Promise<unknown> {
+  return request("GET", `/open-apis/docx/v1/documents/${docToken}/blocks`, undefined, "user", {
+    page_size: String(pageSize),
+  });
+}
+
+export async function driveGetBlock(docToken: string, blockId: string): Promise<unknown> {
+  return request("GET", `/open-apis/docx/v1/documents/${docToken}/blocks/${blockId}`, undefined, "user");
+}
+
+export async function driveCreateDoc(title: string, folderToken?: string): Promise<unknown> {
+  const body: Record<string, unknown> = { title };
+  if (folderToken) body.folder_token = folderToken;
+  return request("POST", "/open-apis/docx/v1/documents", body, "user");
+}
+
+export async function driveCreateBlock(
+  docToken: string,
+  parentBlockId: string,
+  children: unknown[],
+  index?: number,
+): Promise<unknown> {
+  const body: Record<string, unknown> = { children };
+  if (index !== undefined) body.index = index;
+  return request("POST", `/open-apis/docx/v1/documents/${docToken}/blocks/${parentBlockId}/children`, body, "user");
+}
+
+export async function driveUpdateBlock(
+  docToken: string,
+  blockId: string,
+  updateBody: unknown,
+): Promise<unknown> {
+  return request("PATCH", `/open-apis/docx/v1/documents/${docToken}/blocks/${blockId}`, updateBody, "user");
+}
+
+export async function driveDeleteBlock(docToken: string, blockId: string): Promise<unknown> {
+  return request("DELETE", `/open-apis/docx/v1/documents/${docToken}/blocks/${blockId}`, undefined, "user");
+}
+
+/**
+ * High-level helper: replace all body content of a document with new text.
+ * Creates paragraph blocks from markdown-like text (split by double newline).
+ * Steps: 1) list existing blocks, 2) delete non-page blocks, 3) create new blocks.
+ */
+export async function driveReplaceDocContent(docToken: string, content: string): Promise<unknown> {
+  // Step 1: Get document info to find the page block (root)
+  const docInfo = await driveGetDoc(docToken) as { document?: { document_id: string } };
+  const pageBlockId = docInfo?.document?.document_id || docToken;
+
+  // Step 2: List all blocks
+  const blockData = await driveListBlocks(docToken) as { items?: Array<{ block_id: string; block_type: number; parent_id: string }> };
+  const blocks = blockData?.items || [];
+
+  // Step 3: Delete existing child blocks (skip the page block itself, block_type=1)
+  for (const block of blocks) {
+    if (block.block_type !== 1 && block.parent_id === pageBlockId) {
+      try { await driveDeleteBlock(docToken, block.block_id); } catch { /* skip if already gone */ }
+    }
+  }
+
+  // Step 4: Create new paragraph blocks from content
+  const paragraphs = content.split(/\n{2,}/).filter(p => p.trim());
+  const children = paragraphs.map(p => ({
+    block_type: 2, // paragraph
+    paragraph: {
+      elements: [{
+        text_run: {
+          content: p.trim(),
+        },
+      }],
+    },
+  }));
+
+  if (children.length > 0) {
+    return driveCreateBlock(docToken, pageBlockId, children);
+  }
+  return { success: true, message: "Document cleared (no content to add)" };
 }
 
 // Tasks (user token)

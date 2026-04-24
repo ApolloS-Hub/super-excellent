@@ -138,6 +138,20 @@ describe("lark-client: testConnection", () => {
   });
 });
 
+describe("lark-client: OAuth scopes include docx:document", () => {
+  it("buildOAuthUrl includes docx:document scope for doc write access", () => {
+    const url = buildOAuthUrl("cli_test", "", "s");
+    expect(url).toContain("docx");
+    expect(url).toContain("drive");
+  });
+
+  it("still includes contact + im scopes", () => {
+    const url = buildOAuthUrl("cli_test", "", "s");
+    expect(url).toContain("contact");
+    expect(url).toContain("im");
+  });
+});
+
 describe("lark-client: exchangeOAuthCode", () => {
   it("throws LarkApiError when code is invalid", async () => {
     setLarkAppConfig({ appId: "cli_x", appSecret: "s" });
