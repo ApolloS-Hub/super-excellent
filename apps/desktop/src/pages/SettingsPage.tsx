@@ -480,8 +480,20 @@ function SettingsPage({ onBack }: SettingsPageProps) {
                   description={t("settings.proxyHint")}
                 />
 
-                <Button onClick={handleSave} variant="light">
-                  {`💾 ${t("settings.saveWorkspace")}`}
+                <TextInput
+                  label={t("settings.costQuota") || "Cost Quota per Conversation ($)"}
+                  placeholder="10.00"
+                  value={localStorage.getItem("cost-quota-per-conversation") || ""}
+                  onChange={(e) => {
+                    const val = e.currentTarget.value;
+                    if (val) localStorage.setItem("cost-quota-per-conversation", val);
+                    else localStorage.removeItem("cost-quota-per-conversation");
+                  }}
+                  description={t("settings.costQuotaHint") || "Maximum spend per conversation (soft ceiling — allows the current turn to finish). Leave empty for no limit."}
+                />
+
+                <Button onClick={handleSave} variant="light" leftSection={<Icon name="check" size={14} />}>
+                  {t("settings.saveWorkspace")}
                 </Button>
               </Stack>
             </Paper>

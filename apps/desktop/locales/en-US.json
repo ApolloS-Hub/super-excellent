@@ -313,6 +313,8 @@
     "workspace": "Workspace",
     "proxySettings": "Proxy Settings",
     "proxyHint": "Network requests from tools (search, web scraping) will use this proxy",
+    "costQuota": "Cost Quota per Conversation ($)",
+    "costQuotaHint": "Maximum spend per conversation (soft ceiling — allows the current turn to finish). Leave empty for no limit.",
     "saveWorkspace": "Save Workspace",
     "permissionsAndDiagnostics": "Permissions & Diagnostics",
     "permissionsHint": "Control permission policies when AI Agent executes tools, and view denial analytics",

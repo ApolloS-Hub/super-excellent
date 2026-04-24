@@ -313,6 +313,8 @@
     "workspace": "工作环境",
     "proxySettings": "代理设置",
     "proxyHint": "工具的网络请求（搜索、抓取网页）会走此代理",
+    "costQuota": "单次对话预算上限（$）",
+    "costQuotaHint": "每个对话的最大花费（软上限 — 允许当前轮完成后才拒绝）。留空不限制。",
     "saveWorkspace": "保存工作环境",
     "permissionsAndDiagnostics": "权限 & 诊断",
     "permissionsHint": "控制 AI Agent 执行工具时的权限审批策略，查看拒绝分析",
