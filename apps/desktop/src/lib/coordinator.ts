@@ -247,6 +247,30 @@ export async function dispatchToWorker(
   emitAgentEvent({ type: "worker_activate", worker: worker.name, workerId, team });
   emitAgentEvent({ type: "worker_dispatch", worker: worker.name, workerId, team });
 
+  // ── #2: Soft-ceiling cost quota check ──
+  try {
+    const { getConversationUsage } = require("./cost-tracker") as typeof import("./cost-tracker");
+    const budgetStr = localStorage.getItem("cost-quota-per-conversation");
+    if (budgetStr) {
+      const maxCost = parseFloat(budgetStr);
+      if (maxCost > 0) {
+        const convId = (globalThis as Record<string, unknown>).__currentConversationId as string | undefined;
+        if (convId) {
+          const usage = await getConversationUsage(convId);
+          if (usage && usage.totalCost >= maxCost) {
+            completeWorkerTask(workerId);
+            return {
+              workerId,
+              workerName: worker.name,
+              success: false,
+              output: `Budget exceeded: $${usage.totalCost.toFixed(4)} / $${maxCost.toFixed(2)} cap. Adjust in Settings > General > Cost Quota.`,
+            };
+          }
+        }
+      }
+    }
+  } catch { /* cost tracker not loaded or quota not set */ }
+
   onEvent({
     type: "thinking",
     text: `\n🎯 ${t("coordinator.dispatchTo", { emoji: worker.emoji, name: worker.name, team })}\n`,
@@ -273,7 +297,32 @@ export async function dispatchToWorker(
       } catch { /* env scanner not loaded */ }
     }
 
-    const result = await callWorkerLLM(worker, enrichedTask, config, onEvent, history);
+    // ── #1: Subagent observability — capture worker intermediate events as timeline ──
+    const dispatchId = `dispatch_${Date.now()}_${workerId}`;
+    const workerEvents: Array<{ type: string; content: string; ts: number }> = [];
+    const wrappedOnEvent: EventCallback = (event) => {
+      onEvent(event);
+      const type = event.type as string;
+      if (type === "tool_use" || type === "tool_result" || type === "thinking") {
+        workerEvents.push({ type, content: (event.text as string || "").slice(0, 200), ts: Date.now() });
+      }
+    };
+
+    const result = await callWorkerLLM(worker, enrichedTask, config, wrappedOnEvent, history);
+
+    // Record worker's mini-timeline in observation-log for subagent visibility
+    try {
+      const { observationLog } = require("./observation-log") as typeof import("./observation-log");
+      const timeline = workerEvents.length > 0
+        ? workerEvents.map(e => `[${e.type}] ${e.content}`).join("\n")
+        : "(no intermediate steps)";
+      await observationLog.save({
+        type: "worker_dispatch",
+        detail: `[${dispatchId}] ${worker.name} (${workerId})\nTask: ${task.slice(0, 120)}\n\n--- Timeline ---\n${timeline}\n\n--- Result ---\n${result.slice(0, 300)}`,
+        worker: workerId,
+        tags: ["subagent", dispatchId],
+      });
+    } catch { /* observation log not loaded */ }
 
     // Quality gate — self-critique hard gate
     try {

@@ -270,6 +270,7 @@ export async function executeScenarioStep(
       instance.status = "completed";
     }
     instance.updatedAt = Date.now();
+    persistInstances(); // durable checkpoint after each step
   } catch (err) {
     result.status = "failed";
     result.output = err instanceof Error ? err.message : String(err);
@@ -279,6 +280,7 @@ export async function executeScenarioStep(
       instance.currentStepIndex++;
       if (instance.currentStepIndex >= template.steps.length) instance.status = "completed";
     }
+    persistInstances(); // persist even on failure
     instance.updatedAt = Date.now();
   }
 
@@ -323,8 +325,57 @@ export function collectScenarioOutput(instance: ScenarioInstance): string {
   return `# ${template.name}\n\n${sections.join("\n\n---\n\n")}`;
 }
 
+// ── Durable persistence (crash recovery) ──
+
+const PERSIST_KEY = "scenario-engine-instances";
+
+function persistInstances(): void {
+  try {
+    const running = Array.from(_instances.values()).filter(i => i.status === "running" || i.status === "paused");
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(running));
+  } catch (e) {
+    console.warn("scenario-engine: failed to persist instances", e);
+  }
+}
+
+export function restoreInstances(): ScenarioInstance[] {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return [];
+    const instances = JSON.parse(raw) as ScenarioInstance[];
+    for (const inst of instances) {
+      // Mark as paused (was running when app crashed)
+      if (inst.status === "running") inst.status = "paused";
+      _instances.set(inst.instanceId, inst);
+    }
+    return instances;
+  } catch {
+    return [];
+  }
+}
+
+export function getPausedInstances(): ScenarioInstance[] {
+  return Array.from(_instances.values()).filter(i => i.status === "paused");
+}
+
+export function resumeScenarioInstance(instanceId: string): ScenarioInstance | null {
+  const inst = _instances.get(instanceId);
+  if (!inst || inst.status !== "paused") return null;
+  inst.status = "running";
+  inst.updatedAt = Date.now();
+  return inst;
+}
+
 // ── Init ──
 
 export function initScenarioEngine(): void {
   registerDefaults();
+  const restored = restoreInstances();
+  if (restored.length > 0) {
+    emitAgentEvent({
+      type: "intent_analysis",
+      intentType: "scenario_restore",
+      text: `Restored ${restored.length} paused scenario(s) from previous session`,
+    });
+  }
 }

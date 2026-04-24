@@ -300,6 +300,8 @@ let _currentConversationId: string | undefined;
 
 export function setCurrentConversationId(id: string | undefined): void {
   _currentConversationId = id;
+  // Also expose globally for cost-quota check in coordinator (which can't import observation-log sync)
+  (globalThis as Record<string, unknown>).__currentConversationId = id;
 }
 
 export function startAutoCapture(): void {
