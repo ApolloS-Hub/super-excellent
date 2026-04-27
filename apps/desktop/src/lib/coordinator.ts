@@ -533,13 +533,22 @@ async function callWorkerLLMInner(
   );
 
   // ── 上下文隔离：独立 messages，不包含父 agent 历史 ──
+  // Karpathy principles injected into every worker's system prompt
+  const karpathyPrinciples = [
+    "\n\n## Operating Principles",
+    "1. THINK BEFORE ACTING: If anything is unclear, surface the ambiguity and ask — never assume silently. State your reasoning before producing output.",
+    "2. SIMPLICITY FIRST: Deliver exactly what was requested, nothing more. Do not add speculative features, unnecessary abstractions, or \"nice to have\" extras unless explicitly asked.",
+    "3. SURGICAL CHANGES: Touch only what the task requires. Do not make orthogonal edits, reformat unrelated code, or rename things \"while you're at it.\"",
+    "4. GOAL-DRIVEN: Convert tasks into success criteria. Verify your output meets those criteria before delivering. If it doesn't, revise — don't explain why it's close enough.",
+  ].join("\n");
+
   const isolatedMessages: Array<{
     role: string;
     content: string | null;
     tool_call_id?: string;
     tool_calls?: unknown[];
   }> = [
-    { role: "system", content: worker.systemPrompt + `\n\n${t("coordinator.todayDateHint", { date: new Date().toISOString().split("T")[0] })}` },
+    { role: "system", content: worker.systemPrompt + `\n\n${t("coordinator.todayDateHint", { date: new Date().toISOString().split("T")[0] })}` + karpathyPrinciples },
     { role: "user", content: task },
   ];
 
