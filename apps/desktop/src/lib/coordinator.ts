@@ -285,6 +285,30 @@ export async function dispatchToWorker(
       if (ctx) enrichedTask = `${ctx}\n\n---\n\n${task}`;
     } catch { /* context bootstrap not loaded */ }
 
+    // ── Experience recall (AgentEvolver self-navigating pattern) ──
+    // Search observation-log for past successful dispatches with similar tasks.
+    // Injects "what worked before" so the secretary improves with use.
+    try {
+      const { observationLog } = require("./observation-log") as typeof import("./observation-log");
+      const pastHits = await observationLog.search(task.slice(0, 60), 3);
+      const relevantPast = pastHits.filter(h => h.type === "worker_dispatch");
+      if (relevantPast.length > 0) {
+        const obs = await observationLog.getObservations(relevantPast.map(h => h.id));
+        const pastExperience = obs
+          .filter(o => o.detail.includes("--- Result ---"))
+          .slice(0, 2)
+          .map(o => {
+            const resultMatch = o.detail.match(/--- Result ---\n([\s\S]*)/);
+            const result = resultMatch ? resultMatch[1].trim().slice(0, 200) : o.summary;
+            return `- ${o.summary}\n  Result: ${result}`;
+          })
+          .join("\n");
+        if (pastExperience) {
+          enrichedTask = `[Past experience with similar tasks]\n${pastExperience}\n\n---\n\n${enrichedTask}`;
+        }
+      }
+    } catch { /* observation log not loaded */ }
+
     // Inject environment context for planning-related tasks
     const planKeywords = ["plan", "规划", "设计", "architecture", "架构", "schedule"];
     if (planKeywords.some(k => task.toLowerCase().includes(k))) {
