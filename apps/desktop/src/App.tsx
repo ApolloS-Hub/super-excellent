@@ -76,6 +76,20 @@ function App() {
     import("./lib/context-bootstrap").then(m => m.autoCollectContext()).catch(console.warn);
     // Start observation log auto-capture (subscribes to event bus)
     import("./lib/observation-log").then(m => m.startAutoCapture()).catch(console.warn);
+    // Start memory nudges (proactive memory from conversations)
+    import("./lib/memory-nudge").then(async (nudge) => {
+      const { onAgentEvent } = await import("./lib/event-bus");
+      let lastUserMsg = "";
+      onAgentEvent((event) => {
+        const type = event.type as string;
+        if (type === "user_message") lastUserMsg = (event.text as string) || "";
+        if (type === "result" && lastUserMsg) {
+          const assistantText = (event.text as string) || "";
+          nudge.nudgeMemory(lastUserMsg, assistantText).catch(() => {});
+          lastUserMsg = "";
+        }
+      });
+    }).catch(console.warn);
     // Load persisted tasks from IndexedDB
     import("./lib/runtime/task-store").then(m => m.loadTasksFromIDB()).catch(console.warn);
     // Initialize memory bridge

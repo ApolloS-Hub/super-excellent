@@ -767,6 +767,160 @@ registerCommand({
   },
 });
 
+// ═══════════ Hermes-inspired: /schedule ═══════════
+
+registerCommand({
+  name: "schedule",
+  aliases: ["cron", "remind", "timer"],
+  description: "Natural-language scheduled tasks. Usage: /schedule <description> or /schedule list or /schedule cancel <id>",
+  handler: async (ctx) => {
+    const { cronScheduler } = await import("./cron-scheduler");
+    const zh = i18n.language.startsWith("zh");
+    const sub = ctx.args[0]?.toLowerCase();
+
+    // /schedule list
+    if (sub === "list" || sub === "ls") {
+      const all = cronScheduler.getAllSchedules();
+      if (all.length === 0) return zh ? "没有定时任务。" : "No scheduled tasks.";
+      const lines = all.map(s => {
+        const status = s.enabled ? "✓" : "✗";
+        const last = s.lastRun ? new Date(s.lastRun).toLocaleString() : "-";
+        return `${status} **${s.id}** \`${s.cron}\` — ${s.task}\n  Last: ${last}`;
+      });
+      return `${zh ? "定时任务" : "Scheduled Tasks"} (${all.length}):\n\n${lines.join("\n\n")}`;
+    }
+
+    // /schedule cancel <id>
+    if (sub === "cancel" || sub === "remove" || sub === "delete") {
+      const id = ctx.args[1];
+      if (!id) return zh ? "请提供任务 ID。用法：/schedule cancel cron_xxx" : "Provide task ID. Usage: /schedule cancel cron_xxx";
+      const ok = cronScheduler.removeSchedule(id);
+      return ok
+        ? (zh ? `已取消定时任务 ${id}` : `Cancelled scheduled task ${id}`)
+        : (zh ? `找不到定时任务 ${id}` : `Task ${id} not found`);
+    }
+
+    // /schedule pause/resume <id>
+    if (sub === "pause" || sub === "resume") {
+      const id = ctx.args[1];
+      if (!id) return zh ? "请提供任务 ID。" : "Provide task ID.";
+      const enabled = sub === "resume";
+      const ok = cronScheduler.enableSchedule(id, enabled);
+      return ok
+        ? (zh ? `${enabled ? "恢复" : "暂停"}了 ${id}` : `${enabled ? "Resumed" : "Paused"} ${id}`)
+        : (zh ? `找不到 ${id}` : `${id} not found`);
+    }
+
+    // /schedule <natural language description> → parse to cron + register
+    const desc = ctx.args.join(" ").trim();
+    if (!desc) {
+      return zh
+        ? "用法：\n- `/schedule 每天早上9点检查邮件`\n- `/schedule every Monday at 10am review tasks`\n- `/schedule list` — 查看所有\n- `/schedule cancel <id>` — 取消"
+        : "Usage:\n- `/schedule check emails every day at 9am`\n- `/schedule every Monday at 10am review tasks`\n- `/schedule list` — list all\n- `/schedule cancel <id>` — cancel";
+    }
+
+    const cron = parseNaturalCron(desc);
+    if (!cron) {
+      return zh
+        ? `无法解析时间。请用类似格式：\n- "每天早上9点 XXX"\n- "every hour XXX"\n- "每周一 XXX"\n- "0 9 * * 1 XXX"（直接写 cron 表达式）`
+        : `Couldn't parse timing. Try:\n- "every day at 9am XXX"\n- "every hour XXX"\n- "every Monday XXX"\n- "0 9 * * 1 XXX" (raw cron)`;
+    }
+
+    const id = cronScheduler.addSchedule(cron.expr, cron.task);
+    return zh
+      ? `已设定定时任务：\n- ID: \`${id}\`\n- Cron: \`${cron.expr}\`\n- 任务: ${cron.task}\n\n> 用 \`/schedule list\` 查看所有；\`/schedule cancel ${id}\` 取消`
+      : `Scheduled task created:\n- ID: \`${id}\`\n- Cron: \`${cron.expr}\`\n- Task: ${cron.task}\n\n> Use \`/schedule list\` to view all; \`/schedule cancel ${id}\` to cancel`;
+  },
+});
+
+/** Parse natural language into cron expression + task description */
+function parseNaturalCron(input: string): { expr: string; task: string } | null {
+  const lower = input.toLowerCase();
+
+  // Raw cron: "0 9 * * 1 check emails"
+  const rawCron = input.match(/^(\d+\s+\d+\s+[\d*\/]+\s+[\d*\/]+\s+[\d*\/]+)\s+(.+)/);
+  if (rawCron) return { expr: rawCron[1], task: rawCron[2] };
+
+  // "every hour" / "每小时"
+  if (/every\s+hour|每\s*小时/i.test(lower)) {
+    const task = input.replace(/every\s+hour|每\s*小时/i, "").trim() || "hourly task";
+    return { expr: "0 * * * *", task };
+  }
+
+  // "every day at Xam/pm" / "每天X点"
+  const dailyEn = lower.match(/every\s+day\s+(?:at\s+)?(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?/i);
+  if (dailyEn) {
+    let h = parseInt(dailyEn[1]);
+    if (dailyEn[3] === "pm" && h < 12) h += 12;
+    if (dailyEn[3] === "am" && h === 12) h = 0;
+    const m = dailyEn[2] ? parseInt(dailyEn[2]) : 0;
+    const task = input.replace(/every\s+day\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?/i, "").trim() || "daily task";
+    return { expr: `${m} ${h} * * *`, task };
+  }
+  const dailyZh = input.match(/每天\s*(?:早上|上午|下午|晚上)?\s*(\d{1,2})\s*[:：点]\s*(\d{0,2})/);
+  if (dailyZh) {
+    let h = parseInt(dailyZh[1]);
+    if (/下午|晚上/.test(input) && h < 12) h += 12;
+    const m = dailyZh[2] ? parseInt(dailyZh[2]) : 0;
+    const task = input.replace(/每天\s*(?:早上|上午|下午|晚上)?\s*\d{1,2}\s*[:：点]\s*\d{0,2}/, "").trim() || "daily task";
+    return { expr: `${m} ${h} * * *`, task };
+  }
+
+  // "every Monday/Tuesday..." / "每周一/二..."
+  const dayMap: Record<string, number> = {
+    sunday: 0, sun: 0, 日: 0, 天: 0,
+    monday: 1, mon: 1, 一: 1,
+    tuesday: 2, tue: 2, 二: 2,
+    wednesday: 3, wed: 3, 三: 3,
+    thursday: 4, thu: 4, 四: 4,
+    friday: 5, fri: 5, 五: 5,
+    saturday: 6, sat: 6, 六: 6,
+  };
+  const weeklyEn = lower.match(/every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)(?:\s+at\s+(\d{1,2})\s*(am|pm)?)?/i);
+  if (weeklyEn) {
+    const dow = dayMap[weeklyEn[1].toLowerCase()] ?? 1;
+    let h = weeklyEn[2] ? parseInt(weeklyEn[2]) : 9;
+    if (weeklyEn[3] === "pm" && h < 12) h += 12;
+    const task = input.replace(/every\s+\w+(?:\s+at\s+\d{1,2}\s*(?:am|pm)?)?/i, "").trim() || "weekly task";
+    return { expr: `0 ${h} * * ${dow}`, task };
+  }
+  const weeklyZh = input.match(/每\s*(?:周|星期)\s*([一二三四五六日天])(?:\s*(\d{1,2})\s*[:：点])?/);
+  if (weeklyZh) {
+    const dow = dayMap[weeklyZh[1]] ?? 1;
+    const h = weeklyZh[2] ? parseInt(weeklyZh[2]) : 9;
+    const task = input.replace(/每\s*(?:周|星期)\s*[一二三四五六日天](?:\s*\d{1,2}\s*[:：点])?/, "").trim() || "weekly task";
+    return { expr: `0 ${h} * * ${dow}`, task };
+  }
+
+  // "every N minutes" / "每N分钟"
+  const everyNMin = lower.match(/every\s+(\d+)\s*min(?:ute)?s?|每\s*(\d+)\s*分钟/);
+  if (everyNMin) {
+    const n = parseInt(everyNMin[1] || everyNMin[2]);
+    if (n > 0 && n <= 60) {
+      const task = input.replace(/every\s+\d+\s*min(?:ute)?s?|每\s*\d+\s*分钟/i, "").trim() || "periodic task";
+      return { expr: `*/${n} * * * *`, task };
+    }
+  }
+
+  // "tomorrow at X" / "明天X点" → single-use approximation as daily (user should cancel after)
+  const tomorrowEn = lower.match(/tomorrow\s+(?:at\s+)?(\d{1,2})\s*(am|pm)?/i);
+  if (tomorrowEn) {
+    let h = parseInt(tomorrowEn[1]);
+    if (tomorrowEn[2] === "pm" && h < 12) h += 12;
+    const task = input.replace(/tomorrow\s+(?:at\s+)?\d{1,2}\s*(?:am|pm)?/i, "").trim() || "reminder";
+    return { expr: `0 ${h} * * *`, task: `[one-time] ${task}` };
+  }
+  const tomorrowZh = input.match(/明天\s*(?:早上|上午|下午|晚上)?\s*(\d{1,2})\s*[:：点]/);
+  if (tomorrowZh) {
+    let h = parseInt(tomorrowZh[1]);
+    if (/下午|晚上/.test(input) && h < 12) h += 12;
+    const task = input.replace(/明天\s*(?:早上|上午|下午|晚上)?\s*\d{1,2}\s*[:：点]/, "").trim() || "reminder";
+    return { expr: `0 ${h} * * *`, task: `[one-time] ${task}` };
+  }
+
+  return null;
+}
+
 // ═══════════ Evolver-inspired: /strategy ═══════════
 
 registerCommand({
