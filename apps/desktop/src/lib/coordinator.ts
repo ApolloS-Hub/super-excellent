@@ -315,7 +315,8 @@ export async function dispatchToWorker(
           .map(o => {
             const resultMatch = o.detail.match(/--- Result ---\n([\s\S]*)/);
             const result = resultMatch ? resultMatch[1].trim().slice(0, 200) : o.summary;
-            return `- ${o.summary}\n  Result: ${result}`;
+            // Include [[obs_id]] so the new dispatch observation links back to its source
+            return `- [[${o.id}]] ${o.summary}\n  Result: ${result}`;
           })
           .join("\n");
         if (pastExperience) {

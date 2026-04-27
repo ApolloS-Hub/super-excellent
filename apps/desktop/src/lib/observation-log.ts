@@ -24,6 +24,7 @@ export interface Observation {
   worker?: string;
   tags: string[];
   accessCount: number;
+  links: string[];        // [[obs_id]] references extracted from detail
 }
 
 export interface SearchResultEntry {
@@ -32,6 +33,7 @@ export interface SearchResultEntry {
   timestamp: number;
   type: ObservationType;
   worker?: string;
+  relatedCount?: number;  // how many backlinks point to this observation
 }
 
 // ═══════════ Constants ═══════════
@@ -118,10 +120,52 @@ function summarize(_type: ObservationType, detail: string, worker?: string): str
   return `${prefix}${body}`;
 }
 
+// ═══════════ Bidirectional Links ═══════════
+
+const LINK_PATTERN = /\[\[(obs_[a-z0-9_]+)\]\]/g;
+
+export function extractLinks(text: string): string[] {
+  const links: string[] = [];
+  let match;
+  const regex = new RegExp(LINK_PATTERN.source, "g");
+  while ((match = regex.exec(text)) !== null) {
+    if (!links.includes(match[1])) links.push(match[1]);
+  }
+  return links;
+}
+
+// In-memory backlink index: target → set of sources that link TO it
+const _backlinks = new Map<string, Set<string>>();
+
+function indexLinks(sourceId: string, links: string[]): void {
+  for (const target of links) {
+    let set = _backlinks.get(target);
+    if (!set) { set = new Set(); _backlinks.set(target, set); }
+    set.add(sourceId);
+  }
+}
+
+export function getBacklinks(obsId: string): string[] {
+  return Array.from(_backlinks.get(obsId) || []);
+}
+
+export function getForwardLinks(obs: Observation): string[] {
+  return obs.links || [];
+}
+
+export function getAllLinked(obsId: string, observations: Observation[]): Observation[] {
+  const backIds = getBacklinks(obsId);
+  const obs = observations.find(o => o.id === obsId);
+  const forwardIds = obs?.links || [];
+  const relatedIds = new Set([...backIds, ...forwardIds]);
+  relatedIds.delete(obsId);
+  return observations.filter(o => relatedIds.has(o.id));
+}
+
 // ═══════════ ObservationLog ═══════════
 
 export class ObservationLog {
-  async save(obs: Omit<Observation, "id" | "timestamp" | "accessCount" | "summary"> & { summary?: string }): Promise<string | null> {
+  async save(obs: Omit<Observation, "id" | "timestamp" | "accessCount" | "summary" | "links"> & { summary?: string; links?: string[] }): Promise<string | null> {
     // Privacy filter
     if (hasPrivateTag(obs.detail)) {
       obs.detail = stripPrivate(obs.detail);
@@ -144,6 +188,7 @@ export class ObservationLog {
     }
 
     const id = `obs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const links = extractLinks(obs.detail);
     const record: Observation = {
       id,
       timestamp: Date.now(),
@@ -154,8 +199,10 @@ export class ObservationLog {
       worker: obs.worker,
       tags: obs.tags || [],
       accessCount: 0,
+      links,
     };
 
+    indexLinks(id, links);
     await this.put(record);
     await this.pruneIfNeeded();
     return id;
@@ -268,6 +315,16 @@ export class ObservationLog {
     return found;
   }
 
+  /**
+   * Get observations linked to/from a given observation (bidirectional).
+   * Returns both forward links ([[target]] in this obs) and backlinks
+   * (other obs that reference this one).
+   */
+  async getRelated(obsId: string): Promise<Observation[]> {
+    const all = await this.loadAll();
+    return getAllLinked(obsId, all);
+  }
+
   // ── Summary for prompt injection ──
 
   async buildCompactIndex(limit = 10): Promise<string> {
@@ -293,6 +350,18 @@ function formatAgo(ts: number): string {
 
 export const observationLog = new ObservationLog();
 
+// ═══════════ Backlink index rebuild ═══════════
+
+async function rebuildBacklinkIndex(): Promise<void> {
+  try {
+    const all = await observationLog.loadAll();
+    for (const obs of all) {
+      if (!obs.links) obs.links = extractLinks(obs.detail);
+      if (obs.links.length > 0) indexLinks(obs.id, obs.links);
+    }
+  } catch { /* IDB not ready */ }
+}
+
 // ═══════════ Auto-capture via event bus ═══════════
 
 let _autoCapture = false;
@@ -307,6 +376,9 @@ export function setCurrentConversationId(id: string | undefined): void {
 export function startAutoCapture(): void {
   if (_autoCapture) return;
   _autoCapture = true;
+
+  // Rebuild backlink index from existing observations
+  rebuildBacklinkIndex().catch(() => {});
 
   onAgentEvent((event) => {
     const type = (event.type as string) || "unknown";

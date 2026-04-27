@@ -734,13 +734,25 @@ registerCommand({
     const ids = ctx.args.filter(Boolean);
     const zh = i18n.language.startsWith("zh");
     if (ids.length === 0) return zh ? "请提供至少一个观察 ID。" : "Provide at least one observation ID.";
-    const { observationLog } = await import("./observation-log");
+    const { observationLog, getBacklinks } = await import("./observation-log");
     const found = await observationLog.getObservations(ids);
     if (found.length === 0) return zh ? "没有找到对应的观察记录。" : "No observations found for the given IDs.";
-    return found.map(o => {
+    const sections = [];
+    for (const o of found) {
       const when = new Date(o.timestamp).toLocaleString();
-      return `## [${o.id}] ${o.type}${o.worker ? ` · ${o.worker}` : ""}\n*${when}*\n\n${o.detail}`;
-    }).join("\n\n---\n\n");
+      let section = `## [${o.id}] ${o.type}${o.worker ? ` · ${o.worker}` : ""}\n*${when}*\n\n${o.detail}`;
+
+      // Show bidirectional links
+      const forwardLinks = o.links || [];
+      const backlinks = getBacklinks(o.id);
+      const allRelated = [...new Set([...forwardLinks, ...backlinks])].filter(id => id !== o.id);
+      if (allRelated.length > 0) {
+        const relatedLabel = zh ? "关联观察" : "Related observations";
+        section += `\n\n**${relatedLabel}**: ${allRelated.map(id => `\`${id}\``).join(", ")}`;
+      }
+      sections.push(section);
+    }
+    return sections.join("\n\n---\n\n");
   },
 });
 
