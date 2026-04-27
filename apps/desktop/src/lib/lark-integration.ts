@@ -38,8 +38,8 @@ export { loadUserInfo, isRefreshTokenValid, clearUserToken, isUserTokenValid } f
 
 // ═══════════ Tool Definitions ═══════════
 
-const NOT_CONFIGURED = "Lark not configured. Please set App ID and App Secret in Settings > Lark.";
-const NEEDS_OAUTH = "This feature requires personal authorization. Connect your Lark account in Settings > Lark.";
+const NOT_CONFIGURED = "Lark not configured. Please set App ID and App Secret in Settings > Lark.\n\n💡 You can still do this manually in Lark — open the Lark app and perform the action there, then tell me the result.";
+const NEEDS_OAUTH = "This feature requires personal authorization. Connect your Lark account in Settings > Lark > 'Connect Lark Account'.\n\n💡 In the meantime, you can open Lark manually to access your calendar/docs/tasks, and tell me what you find.";
 
 function checkTenant(): string | null {
   if (!lark.isLarkConfigured()) return NOT_CONFIGURED;
