@@ -279,6 +279,21 @@ export async function dispatchToWorker(
   try {
     // Inject cross-session context into task prompt
     let enrichedTask = task;
+
+    // ── Bounded context check: inject summary hint if conversation is long ──
+    try {
+      const { checkBounds, buildSummaryHint, recordTurn, markSummarized } = require("./bounded-context") as typeof import("./bounded-context");
+      const convId = (globalThis as Record<string, unknown>).__currentConversationId as string | undefined;
+      if (convId) {
+        recordTurn(convId, task.length, 0);
+        const check = checkBounds(convId);
+        if (check.shouldSummarize) {
+          enrichedTask = `${buildSummaryHint(check)}\n\n---\n\n${task}`;
+          markSummarized(convId);
+        }
+      }
+    } catch { /* bounded context not loaded */ }
+
     try {
       const { buildContextPromptWithObservations } = require("./context-bootstrap") as typeof import("./context-bootstrap");
       const ctx = await buildContextPromptWithObservations();
