@@ -407,13 +407,65 @@ export async function dispatchToWorker(
     // Emit worker_complete event (with failure)
     emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: false });
 
+    // ── Graceful degradation: human-as-fallback (EmptyOS-inspired) ──
+    const fallback = buildHumanFallback(workerId, task, errMsg);
+
     return {
       workerId,
       workerName: worker.name,
       success: false,
-      output: `${t("coordinator.executionFailed")}: ${errMsg}`,
+      output: `${t("coordinator.executionFailed")}: ${errMsg}\n\n${fallback}`,
     };
   }
+}
+
+/**
+ * Build a human-actionable fallback suggestion when a worker dispatch fails.
+ * Instead of just "error: timeout", tells the user what they can do manually.
+ * Inspired by EmptyOS's "human is the ultimate capability provider" pattern.
+ */
+function buildHumanFallback(_workerId: string, task: string, error: string): string {
+  const isTimeout = /timeout|timed?\s*out|ETIMEDOUT/i.test(error);
+  const isAuth = /auth|401|403|token|unauthorized|forbidden/i.test(error);
+  const isNetwork = /network|ECONNREFUSED|ECONNRESET|fetch|DNS|ENOTFOUND/i.test(error);
+  const isQuota = /quota|429|rate.?limit|too many/i.test(error);
+  const isLark = /lark|calendar|document|approval/i.test(task);
+
+  const suggestions: string[] = [];
+
+  if (isTimeout) {
+    suggestions.push("⏱ The AI took too long. You can:");
+    suggestions.push("  1. Try again with a simpler request");
+    suggestions.push("  2. Switch to a faster model (`/model`)");
+    suggestions.push("  3. Break the task into smaller pieces");
+  } else if (isAuth) {
+    suggestions.push("🔑 Authentication failed. You can:");
+    suggestions.push("  1. Check your API key in Settings > Model");
+    if (isLark) suggestions.push("  2. Re-authorize Lark in Settings > Lark");
+    suggestions.push(`  ${isLark ? "3" : "2"}. Run \`/doctor\` to diagnose the issue`);
+  } else if (isNetwork) {
+    suggestions.push("🌐 Network error. You can:");
+    suggestions.push("  1. Check your internet connection");
+    suggestions.push("  2. Check if a proxy is needed (Settings > General > Proxy)");
+    suggestions.push("  3. Run `/doctor` for a full connection test");
+  } else if (isQuota) {
+    suggestions.push("💰 Rate limit or quota exceeded. You can:");
+    suggestions.push("  1. Wait a minute and try again");
+    suggestions.push("  2. Switch to a different provider (`/model`)");
+    suggestions.push("  3. Check your usage in the cost panel");
+  } else if (isLark) {
+    suggestions.push("📋 Lark operation failed. You can:");
+    suggestions.push("  1. Open Lark manually and do it there");
+    suggestions.push("  2. Check if the App has the right permissions in Lark Open Platform");
+    suggestions.push("  3. Re-authorize in Settings > Lark if your token expired");
+  } else {
+    suggestions.push("💡 The worker couldn't complete the task. You can:");
+    suggestions.push("  1. Rephrase your request with more detail");
+    suggestions.push("  2. Try a different approach or break it into steps");
+    suggestions.push("  3. Run `/doctor` to check system health");
+  }
+
+  return suggestions.join("\n");
 }
 
 /**
