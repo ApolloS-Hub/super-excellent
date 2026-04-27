@@ -297,6 +297,17 @@ export async function runScenario(
   const template = _templates.get(templateId)!;
 
   while (instance.status === "running") {
+    // Bounded context: enforce max step limit
+    try {
+      const { checkScenarioBounds } = require("./bounded-context") as typeof import("./bounded-context");
+      const bounds = checkScenarioBounds(instance.currentStepIndex, template.steps.length);
+      if (!bounds.allowed) {
+        instance.status = "completed";
+        emitAgentEvent({ type: "intent_analysis", intentType: "bounded_context", text: bounds.message || "Scenario step limit reached" });
+        break;
+      }
+    } catch { /* bounded context not loaded */ }
+
     const result = await executeScenarioStep(instance, executeWorker);
     onStepComplete?.(result, instance);
   }
