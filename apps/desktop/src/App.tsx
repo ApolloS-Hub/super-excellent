@@ -70,6 +70,8 @@ function App() {
     import("./lib/lark-integration").then(m => m.initLark()).catch(console.warn);
     // Initialize scenario engine (framework-first scaffolding)
     import("./lib/scenario-engine").then(m => m.initScenarioEngine()).catch(console.warn);
+    // Initialize strategy presets (evolver-inspired)
+    import("./lib/strategy-presets").then(m => m.initStrategy()).catch(console.warn);
     // Bootstrap cross-session context
     import("./lib/context-bootstrap").then(m => m.autoCollectContext()).catch(console.warn);
     // Start observation log auto-capture (subscribes to event bus)
