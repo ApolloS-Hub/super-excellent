@@ -324,18 +324,46 @@ export async function dispatchToWorker(
       });
     } catch { /* observation log not loaded */ }
 
-    // Quality gate — self-critique hard gate
+    // Quality gate — self-critique hard gate (threshold from strategy preset)
     try {
       const { runQualityGate, buildRetryPrompt } = require("./quality-gate") as typeof import("./quality-gate");
+      const { getStrategy, recordFailure, isStagnant, suggestAlternativeWorker, clearFailures } = require("./strategy-presets") as typeof import("./strategy-presets");
+      const strategy = getStrategy();
       const gateResult = runQualityGate(result, { workerId, taskDescription: task, userMessage: task });
-      if (!gateResult.passed && gateResult.score < 0.6) {
-        const retryPrompt = buildRetryPrompt(task, result, gateResult);
-        const retryResult = await callWorkerLLM(worker, retryPrompt, config, onEvent, history);
-        completeWorkerTask(workerId);
-        emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: true });
-        return { workerId, workerName: worker.name, success: true, output: retryResult };
+
+      if (!gateResult.passed && gateResult.score < strategy.qualityGateThreshold) {
+        recordFailure(workerId, gateResult.failedChecks.map(f => f.checkId).join(","));
+
+        // Stagnation detection: if this worker keeps failing, try an alternative
+        if (isStagnant(workerId)) {
+          const alt = suggestAlternativeWorker(workerId);
+          if (alt) {
+            emitAgentEvent({ type: "intent_analysis", intentType: "stagnation", text: `${workerId} stagnant (${gateResult.failedChecks.length} failures) → switching to ${alt}` });
+            completeWorkerTask(workerId);
+            const altWorker = getWorker(alt);
+            if (altWorker) {
+              assignTask(alt, task.slice(0, 50));
+              const altResult = await callWorkerLLM(altWorker, enrichedTask, config, onEvent, history);
+              completeWorkerTask(alt);
+              clearFailures(workerId);
+              emitAgentEvent({ type: "worker_complete", worker: altWorker.name, workerId: alt, team: getWorkerTeam(alt), success: true });
+              return { workerId: alt, workerName: altWorker.name, success: true, output: altResult };
+            }
+          }
+        }
+
+        // Standard retry (up to strategy.maxRetries)
+        if (strategy.maxRetries > 0) {
+          const retryPrompt = buildRetryPrompt(task, result, gateResult);
+          const retryResult = await callWorkerLLM(worker, retryPrompt, config, onEvent, history);
+          completeWorkerTask(workerId);
+          emitAgentEvent({ type: "worker_complete", worker: worker.name, workerId, team, success: true });
+          return { workerId, workerName: worker.name, success: true, output: retryResult };
+        }
+      } else if (gateResult.passed) {
+        clearFailures(workerId);
       }
-    } catch { /* quality gate not loaded */ }
+    } catch { /* quality gate or strategy not loaded */ }
 
     completeWorkerTask(workerId);
 

@@ -767,6 +767,41 @@ registerCommand({
   },
 });
 
+// ═══════════ Evolver-inspired: /strategy ═══════════
+
+registerCommand({
+  name: "strategy",
+  aliases: ["mode", "preset"],
+  description: "View or change the secretary's strategy preset. Usage: /strategy [balanced|innovate|harden|repair]",
+  handler: async (ctx) => {
+    const { getStrategy, setStrategy, getPresetNames, getPresetDescription } = await import("./strategy-presets");
+    const zh = i18n.language.startsWith("zh");
+    const arg = ctx.args[0]?.toLowerCase();
+
+    if (!arg) {
+      const current = getStrategy();
+      const lines = getPresetNames().map(p => {
+        const marker = p === current.preset ? "▶" : " ";
+        return `${marker} **${p}** — ${getPresetDescription(p)}`;
+      });
+      const header = zh ? `当前策略：**${current.preset}**\n\n可用预设：` : `Current strategy: **${current.preset}**\n\nAvailable presets:`;
+      const tip = zh ? "\n\n> 用法：`/strategy innovate` 切换预设" : "\n\n> Usage: `/strategy innovate` to switch";
+      return `${header}\n\n${lines.join("\n")}${tip}`;
+    }
+
+    const valid = getPresetNames();
+    if (!valid.includes(arg as typeof valid[number])) {
+      return zh ? `无效预设 "${arg}"。可选：${valid.join(", ")}` : `Invalid preset "${arg}". Available: ${valid.join(", ")}`;
+    }
+
+    const cfg = setStrategy(arg as typeof valid[number]);
+    const desc = getPresetDescription(cfg.preset);
+    return zh
+      ? `策略已切换到 **${cfg.preset}**\n\n${desc}\n\n质量门槛: ${cfg.qualityGateThreshold} · 重试: ${cfg.maxRetries}x · 创造力: ${(cfg.creativityBias * 100).toFixed(0)}%`
+      : `Strategy switched to **${cfg.preset}**\n\n${desc}\n\nQuality threshold: ${cfg.qualityGateThreshold} · Retries: ${cfg.maxRetries}x · Creativity: ${(cfg.creativityBias * 100).toFixed(0)}%`;
+  },
+});
+
 // ═══════════ OpenSpec-inspired: /propose, /apply, /archive ═══════════
 
 registerCommand({
