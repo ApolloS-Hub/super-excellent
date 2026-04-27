@@ -73,6 +73,16 @@ Use CSS custom properties from `styles.css`:
 - No `@ts-ignore` or `@ts-expect-error`.
 - Mark unused function params with `_` prefix.
 
+### Simplicity test
+If 200 lines could be 50, rewrite it. No abstractions for single-use
+code. No error handling for scenarios that can't happen. No "flexibility"
+or "configurability" that wasn't requested.
+
+### Orphan cleanup rule
+When your changes create orphaned imports, variables, or functions,
+remove ONLY what YOUR changes made unused. Do not remove pre-existing
+dead code unless explicitly asked.
+
 ## 3. Architecture Patterns
 
 ### Framework-First Scaffolding (product-playbook)
@@ -92,6 +102,11 @@ Memory retrieval uses 3 layers — compact index → timeline → details.
 Never dump full history into prompts. Use `observationLog.search()`
 for L1, `timelineAround()` for L2, `getObservations()` for L3.
 
+**Token budgets**: ~50-100 tokens per L1 result, ~200-500 per L2,
+~500-1000 per L3. Target 10x savings vs. dumping full history.
+Always batch ID fetches — never call `getObservations()` one ID
+at a time.
+
 ### Experience Recall (AgentEvolver)
 Before each worker dispatch, the coordinator searches observation-log
 for past successful approaches to similar tasks and injects them as
@@ -102,6 +117,10 @@ for past successful approaches to similar tasks and injects them as
 artifacts. Each step becomes a node in the artifact graph. New
 commands should follow this pattern: generate → execute → archive.
 
+Context hygiene: clear your context window between planning and
+implementation phases. Each change gets its own artifact set — do
+not mix multiple changes in one spec folder.
+
 ### Strategy Presets (Evolver)
 The secretary has 4 "moods": balanced / innovate / harden / repair.
 These affect quality-gate threshold, retry count, and creativity.
@@ -110,6 +129,17 @@ Use `getStrategy()` to read, `/strategy` to switch.
 ### Bounded Context (garden-skills)
 Long conversations auto-trigger a summary hint at 15 turns or ~50K
 tokens. Scenarios cap at 10 steps. This prevents token waste.
+
+### Event Bus Communication
+Modules communicate via event bus (`emitAgentEvent`), not direct
+imports between peers. One action should ripple to all dependents
+through events, not tight coupling.
+
+### Imperative → Declarative Transformation
+Transform imperative tasks into declarative goals with verification:
+"Add validation" → "Write tests for invalid inputs, then make them
+pass." Multi-step tasks need a brief plan:
+`1. [Step] → verify: [check]`
 
 ## 4. Error Handling Philosophy (EmptyOS)
 
@@ -121,6 +151,14 @@ quota / Lark / generic) and produces tailored guidance.
 
 The secretary should NEVER just say "error" and stop. It should
 always offer a path forward.
+
+**Soft-ceiling quota semantics**: A session near its cost limit
+gets one more turn to finish; the next request is rejected. Never
+abort mid-operation.
+
+**Subagent transcripts must be inspectable**: Worker dispatch
+results include a mini-timeline (thinking + tool_use + tool_result).
+Never hide agent work behind opaque result strings.
 
 ## 5. Memory & Context Rules
 
@@ -141,10 +179,26 @@ with no content are omitted.
 Supports `<private>...</private>` tags for content the user doesn't
 want stored. Jaccard dedup prevents storing the same thing twice.
 
+**`<private>` tags are absolute**: tagged content must never be
+stored, logged, or included in prompts. No exceptions.
+
+**Dedup threshold**: 0.85 Jaccard similarity against last 50
+same-type observations. Above threshold = skip save, bump access count.
+
+**Cooldowns**: Memory nudge 30s cooldown per content hash.
+Auto-GitHub-issue 24h cooldown per error signature.
+
 ### Stagnation Detection (Evolver)
 If a worker fails quality-gate 3+ times in 10 minutes, the system
 detects stagnation and auto-switches to a fallback worker via role
 affinity mapping. Don't add retry loops — use this mechanism.
+
+### Quality Self-Check Hard Gate
+Every worker output passes through role-specific quality checks
+BEFORE delivery. This is not optional. The quality gate critiques
+output against explicit standards, flags gaps, and demands
+improvement. Threshold comes from the active strategy preset:
+balanced=0.6, innovate=0.4, harden=0.75, repair=0.5.
 
 ## 6. Lark Integration Rules
 
@@ -173,12 +227,23 @@ Currently: `contact:user.base:readonly`, `im:message`,
 `docx:document`, `drive:drive`. Add new scopes to `buildOAuthUrl()`
 in lark-client.ts AND document them here.
 
+### Secrets are write-only
+Credential material (tokens, secrets) must never be returned from
+any GET/LIST API. Token rotation = delete old + create new.
+
 ## 7. UI Standards
 
 ### Design direction
 Linear / Claude.ai / Raycast: tight chrome, system fonts, restrained
 color, deliberate elevation. No cartoon-y shadows, no serif fonts,
 no rainbow gradients.
+
+### Anti-cliché blocklist (garden-skills)
+- No purple-pink gradients
+- No Inter font as the "default modern" choice
+- No emoji as functional icons
+- No gratuitous dark-mode-only design
+- No parallax or animated backgrounds
 
 ### Dark mode
 All custom colors must work in both light and dark. Test both.
@@ -216,7 +281,43 @@ Red Flags, Verification. Follow existing skills as templates.
 
 Currently 35 skills. Do not delete existing ones without asking.
 
-## 9. Git Workflow
+### Skill description contract
+The `description` field is the **activation contract** — the agent
+uses this single sentence to decide whether to load the skill.
+It must be clear, specific, and testable. Vague descriptions like
+"helps with coding" are bugs. Good: "Use when the user needs to
+run a weekly retrospective on their own work."
+
+### Skill quality bar
+Skills must include diagnostic questions, not just frameworks.
+Skills without clear trigger conditions will not fire. Improving
+existing skills means increasing "actionability and specificity."
+
+## 9. Security Boundaries
+
+### Protected content
+- Never store passwords, API keys, tokens, or SSH keys in memory,
+  observation log, or context bootstrap
+- `<private>` tags in user messages must be honored absolutely
+- Credential material is write-only — never return it from reads
+
+### Command validation (Evolver)
+If executing user-specified commands:
+- Whitelist prefixes only: `node`, `npm`, `npx`
+- Reject command substitution: backticks, `$()`
+- Reject shell operators after quote stripping: `;`, `&`, `|`, `>`, `<`
+- Enforce 180-second timeout per command
+- Scope execution to repo root (`cwd`)
+
+### Rate limiting
+Rate limiting must run BEFORE auth so unauthenticated floods cannot
+exhaust system resources.
+
+### Cloud data consent
+Cloud AI features require explicit user consent. Vault data never
+syncs to cloud without approval.
+
+## 10. Git Workflow
 
 - Develop on `claude/complete-agent-system-iOqvq` branch
 - Merge to `main` with `--no-ff` for clean history
@@ -224,8 +325,31 @@ Currently 35 skills. Do not delete existing ones without asking.
 - Always verify before commit: `npx tsc -b && pnpm test && pnpm build`
 - Never force-push to main
 - Never skip pre-commit hooks
+- AI-generated code must be tested and verified. Mention the agent
+  and model used in PR descriptions.
 
-## 10. Slash Commands Reference
+## 11. Specific Thresholds
+
+These numbers encode institutional knowledge. Change with caution:
+
+| Threshold | Value | Source |
+|-----------|-------|--------|
+| Quality gate threshold (balanced) | 0.6 | Evolver presets |
+| Quality gate threshold (harden) | 0.75 | Evolver presets |
+| Stagnation: failures before switch | 3 in 10min | Evolver |
+| Bounded context: turns before summary | 15 | garden-skills |
+| Bounded context: token estimate limit | ~50K | garden-skills |
+| Scenario max steps | 10 | garden-skills |
+| Observation dedup: Jaccard threshold | 0.85 | claude-mem |
+| Observation store max entries | 2000 | claude-mem |
+| Memory nudge cooldown | 30s | Hermes |
+| Command execution timeout | 180s | Evolver |
+| Progressive disclosure L1 tokens | ~50-100/result | claude-mem |
+| Progressive disclosure L3 tokens | ~500-1000/result | claude-mem |
+| Cost quota soft ceiling | allows current turn | openclaw |
+| `as any` instances allowed | 4 max | TypeScript policy |
+
+## 12. Slash Commands Reference
 
 | Command | Source | Purpose |
 |---------|--------|---------|
@@ -250,7 +374,7 @@ Currently 35 skills. Do not delete existing ones without asking.
 | `/inbox` | lenny-skills | Inbox zero methodology |
 | `/say-no` | lenny-skills | Saying no skill |
 
-## 11. Provenance Map
+## 13. Provenance Map
 
 Every major system traces back to an open-source project we studied:
 
