@@ -779,7 +779,95 @@ registerCommand({
   },
 });
 
-// ═══════════ Hermes-inspired: /schedule ═══════════
+// ═══════════ Hermes-inspired: /insights + /schedule ═══════════
+
+registerCommand({
+  name: "insights",
+  aliases: ["stats", "analytics"],
+  description: "Usage analytics — worker dispatches, token spend, active skills, task patterns. Usage: /insights [--days N]",
+  handler: async (ctx) => {
+    const zh = i18n.language.startsWith("zh");
+    const daysArg = ctx.args.find(a => /^\d+$/.test(a)) || ctx.args[ctx.args.indexOf("--days") + 1];
+    const days = Math.min(parseInt(daysArg || "7") || 7, 90);
+    const cutoff = Date.now() - days * 86400_000;
+
+    const { observationLog } = await import("./observation-log");
+    const { getTotalUsage } = await import("./cost-tracker");
+    const { getStrategy } = await import("./strategy-presets");
+    const { getContextSnapshot } = await import("./context-bootstrap");
+
+    const all = await observationLog.loadAll();
+    const recent = all.filter(o => o.timestamp >= cutoff);
+
+    // Worker dispatch stats
+    const dispatches = recent.filter(o => o.type === "worker_dispatch");
+    const workerCounts: Record<string, number> = {};
+    for (const d of dispatches) {
+      const w = d.worker || "unknown";
+      workerCounts[w] = (workerCounts[w] || 0) + 1;
+    }
+    const topWorkers = Object.entries(workerCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+
+    // Type breakdown
+    const typeCounts: Record<string, number> = {};
+    for (const o of recent) {
+      typeCounts[o.type] = (typeCounts[o.type] || 0) + 1;
+    }
+
+    // Cost
+    const usage = await getTotalUsage();
+
+    // Context snapshot
+    const ctx2 = getContextSnapshot();
+    const strategy = getStrategy();
+
+    // Format output
+    const header = zh
+      ? `# 使用分析（过去 ${days} 天）`
+      : `# Usage Insights (last ${days} days)`;
+
+    const sections: string[] = [header];
+
+    sections.push(zh ? "\n## 活动概览" : "\n## Activity Overview");
+    sections.push(`- ${zh ? "观察总数" : "Total observations"}: **${recent.length}**`);
+    sections.push(`- ${zh ? "Worker 派发" : "Worker dispatches"}: **${dispatches.length}**`);
+    sections.push(`- ${zh ? "用户消息" : "User messages"}: **${recent.filter(o => o.type === "user_message").length}**`);
+    sections.push(`- ${zh ? "工具调用" : "Tool calls"}: **${recent.filter(o => o.type === "tool_use").length}**`);
+
+    if (topWorkers.length > 0) {
+      sections.push(zh ? "\n## 最活跃的 Worker" : "\n## Top Workers");
+      for (const [w, count] of topWorkers) {
+        const bar = "█".repeat(Math.min(20, Math.round(count / (topWorkers[0][1] || 1) * 20)));
+        sections.push(`- **${w}**: ${count}x ${bar}`);
+      }
+    }
+
+    sections.push(zh ? "\n## 费用概览" : "\n## Cost Summary");
+    sections.push(`- ${zh ? "总花费" : "Total cost"}: **$${usage.totalCost.toFixed(4)}**`);
+    sections.push(`- ${zh ? "总 Token" : "Total tokens"}: **${usage.totalTokens.toLocaleString()}**`);
+
+    sections.push(zh ? "\n## 当前状态" : "\n## Current State");
+    sections.push(`- ${zh ? "策略预设" : "Strategy preset"}: **${strategy.preset}**`);
+    sections.push(`- ${zh ? "活跃项目" : "Active projects"}: ${ctx2.activeProjects.length > 0 ? ctx2.activeProjects.join(", ") : (zh ? "无" : "none")}`);
+    sections.push(`- ${zh ? "待办任务" : "Pending tasks"}: ${ctx2.pendingTasks.length}`);
+    sections.push(`- ${zh ? "本周焦点" : "Weekly focus"}: ${ctx2.weeklyFocus || (zh ? "未设定" : "not set")}`);
+
+    // Linked observations (knowledge graph density)
+    const linked = all.filter(o => (o.links?.length || 0) > 0);
+    sections.push(zh ? "\n## 知识网络" : "\n## Knowledge Graph");
+    sections.push(`- ${zh ? "有链接的观察" : "Linked observations"}: **${linked.length}** / ${all.length}`);
+    sections.push(`- ${zh ? "总链接数" : "Total links"}: **${linked.reduce((s, o) => s + (o.links?.length || 0), 0)}**`);
+
+    const tip = zh
+      ? "\n\n> 用 `/insights 30` 查看过去 30 天；`/recall` 搜索具体事件"
+      : "\n\n> Use `/insights 30` for last 30 days; `/recall` to search specific events";
+    sections.push(tip);
+
+    return sections.join("\n");
+  },
+});
 
 registerCommand({
   name: "schedule",
