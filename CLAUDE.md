@@ -78,6 +78,20 @@ If 200 lines could be 50, rewrite it. No abstractions for single-use
 code. No error handling for scenarios that can't happen. No "flexibility"
 or "configurability" that wasn't requested.
 
+### Module size limits (Codex AGENTS.md)
+Target modules under 500 LoC (excluding tests). Files exceeding ~800
+LoC should be split into new modules rather than continuing to grow.
+This applies especially to coordinator.ts, commands.ts, and team.ts.
+
+### No single-use helpers (Codex AGENTS.md)
+Do not extract a function that is called exactly once. Inline it.
+Helpers earn their existence by being called 2+ times.
+
+### Enums over booleans (Codex AGENTS.md)
+Prefer named types over `true/false` parameters. A function signature
+like `dispatch(task, true, false)` is unreadable. Use enums or option
+objects instead.
+
 ### Orphan cleanup rule
 When your changes create orphaned imports, variables, or functions,
 remove ONLY what YOUR changes made unused. Do not remove pre-existing
@@ -399,6 +413,8 @@ Every major system traces back to an open-source project we studied:
 | Graceful Degradation | emptyos | coordinator.ts |
 | Bounded Context | garden-skills | bounded-context.ts |
 | Karpathy Principles | andrej-karpathy-skills | coordinator.ts |
+| Module Size / Helper / Enum Rules | openai/codex AGENTS.md | CLAUDE.md §2 |
+| Bidirectional Links | bkywksj/knowledge-base | observation-log.ts |
 | Lark HTTP + OAuth | original (replaced lark-cli) | lark-client.ts, lark-token-store.ts |
 | Icon System | original (replaced emoji) | Icon.tsx |
 | Dark Mode Fix | original | styles.css |
