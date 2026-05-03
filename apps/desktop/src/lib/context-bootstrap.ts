@@ -143,6 +143,106 @@ export async function autoCollectContext(): Promise<ContextSnapshot> {
   return snap;
 }
 
+/**
+ * Memory Consolidation — GBrain "dream cycle" pattern.
+ *
+ * Compiles observation-log timeline entries into compiled truth:
+ * scans recent observations, extracts durable knowledge (decisions,
+ * projects, deadlines), and OVERWRITES context-bootstrap sections
+ * with the latest understanding.
+ *
+ * Should run periodically (hourly via cron-scheduler) or on demand.
+ */
+export async function consolidateMemory(): Promise<{ updated: number; snapshot: ContextSnapshot }> {
+  const snap = loadSnapshot();
+  let updated = 0;
+
+  try {
+    const { observationLog } = await import("./observation-log");
+    const recent = await observationLog.loadRecent(200);
+
+    const decisions: string[] = [];
+    const projects: string[] = [];
+    const deadlines: string[] = [];
+
+    for (const obs of recent) {
+      // Decisions from worker dispatch results
+      if (obs.type === "worker_dispatch" || obs.type === "decision") {
+        const resultMatch = obs.detail.match(/--- Result ---\n([\s\S]{10,300})/);
+        if (resultMatch) {
+          const result = resultMatch[1].trim();
+          if (/decided|选择|go with|方案|plan is|will do|approved/i.test(result)) {
+            const oneLiner = result.split("\n")[0].slice(0, 100);
+            if (oneLiner && !decisions.includes(oneLiner)) decisions.push(oneLiner);
+          }
+        }
+      }
+
+      // Projects from observation summaries
+      const projMatch = obs.summary.match(/\[([^\]]{3,40})\]/);
+      if (projMatch) {
+        const proj = projMatch[1];
+        if (!projects.includes(proj)) projects.push(proj);
+      }
+
+      // Deadlines from detail text
+      const dlMatch = obs.detail.match(/(?:deadline|due|截止|before)\s*[:：]?\s*(.{5,40})/i);
+      if (dlMatch) {
+        const dl = dlMatch[1].trim().slice(0, 60);
+        if (!deadlines.includes(dl)) deadlines.push(dl);
+      }
+    }
+
+    // Compile: overwrite with latest understanding (not append)
+    if (decisions.length > 0) {
+      snap.recentDecisions = decisions.slice(0, MAX_ITEMS_PER_SECTION);
+      updated += decisions.length;
+    }
+    if (projects.length > 0) {
+      snap.activeProjects = [...new Set([...projects, ...snap.activeProjects])].slice(0, MAX_ITEMS_PER_SECTION);
+      updated += projects.length;
+    }
+    if (deadlines.length > 0) {
+      snap.upcomingDeadlines = [...new Set([...deadlines, ...snap.upcomingDeadlines])].slice(0, MAX_ITEMS_PER_SECTION);
+      updated += deadlines.length;
+    }
+
+    snap.updatedAt = new Date().toISOString();
+    saveSnapshot(snap);
+
+    if (updated > 0) {
+      const { emitAgentEvent } = await import("./event-bus");
+      emitAgentEvent({
+        type: "intent_analysis",
+        intentType: "memory_consolidation",
+        text: `Compiled ${updated} items from observation timeline into context snapshot`,
+      });
+    }
+  } catch { /* observation-log not ready */ }
+
+  return { updated, snapshot: snap };
+}
+
+/**
+ * Start periodic memory consolidation (GBrain "dream cycle").
+ * Runs consolidateMemory every intervalMs (default: 1 hour).
+ */
+let _consolidationTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startConsolidationCycle(intervalMs = 3600_000): void {
+  if (_consolidationTimer) return;
+  _consolidationTimer = setInterval(() => {
+    consolidateMemory().catch(() => {});
+  }, intervalMs);
+}
+
+export function stopConsolidationCycle(): void {
+  if (_consolidationTimer) {
+    clearInterval(_consolidationTimer);
+    _consolidationTimer = null;
+  }
+}
+
 // ── Prompt Injection ──
 
 /**

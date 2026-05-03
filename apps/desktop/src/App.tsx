@@ -72,8 +72,11 @@ function App() {
     import("./lib/scenario-engine").then(m => m.initScenarioEngine()).catch(console.warn);
     // Initialize strategy presets (evolver-inspired)
     import("./lib/strategy-presets").then(m => m.initStrategy()).catch(console.warn);
-    // Bootstrap cross-session context
-    import("./lib/context-bootstrap").then(m => m.autoCollectContext()).catch(console.warn);
+    // Bootstrap cross-session context + start hourly memory consolidation
+    import("./lib/context-bootstrap").then(m => {
+      m.autoCollectContext();
+      m.startConsolidationCycle();
+    }).catch(console.warn);
     // Start observation log auto-capture (subscribes to event bus)
     import("./lib/observation-log").then(m => m.startAutoCapture()).catch(console.warn);
     // Start memory nudges (proactive memory from conversations)
