@@ -404,10 +404,10 @@ function ChatPage({ conversation, conversations, onConversationsUpdate }: ChatPa
 <style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:20px;font-size:13px;line-height:1.6}
 h1{font-size:18px;border-bottom:2px solid #333;padding-bottom:8px}
 .msg{margin:12px 0;padding:8px 12px;border-radius:8px}
-.user{background:#e8f4fd;border-left:3px solid #3b82f6}
-.assistant{background:#f0f0f0;border-left:3px solid #10b981}
-.role{font-weight:bold;font-size:11px;color:#666;margin-bottom:4px}
-pre{background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px}
+.user{background:#eef2ff;border-left:3px solid #4f46e5}
+.assistant{background:#f8f8fa;border-left:3px solid #6b7280}
+.role{font-weight:bold;font-size:11px;color:#6b7280;margin-bottom:4px}
+pre{background:#1c1c2e;color:#e0e0e8;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px}
 code{font-family:'JetBrains Mono',monospace;font-size:12px}
 </style></head><body>
 <h1>${title}</h1>
@@ -453,7 +453,7 @@ ${msgs.map(m => `<div class="msg ${m.role}"><div class="role">${m.role === "user
 
     for (const msg of localMessages) {
       const isUser = msg.role === "user";
-      ctx.fillStyle = isUser ? "#3b82f6" : "#10b981";
+      ctx.fillStyle = isUser ? "#4f46e5" : "#6b7280";
       ctx.font = "bold 11px system-ui";
       ctx.fillText(isUser ? "User" : "Assistant", 16, y);
       y += 16;
@@ -1196,7 +1196,7 @@ ${t("chat.modelUseHint")}`;
           {askPending.options.length > 0 ? (
             <Group gap="xs" wrap="wrap">
               {askPending.options.map((opt, i) => (
-                <Button key={i} size="xs" variant="light" color="violet"
+                <Button key={i} size="xs" variant="light" color="indigo"
                   onClick={() => handleAskAnswer(opt)}>
                   {opt}
                 </Button>
@@ -1220,7 +1220,7 @@ ${t("chat.modelUseHint")}`;
                   }
                 }}
               />
-              <Button size="xs" color="violet" onClick={() => handleAskAnswer(askInput)}
+              <Button size="xs" color="indigo" onClick={() => handleAskAnswer(askInput)}
                 disabled={!askInput.trim()}>
                 {t("chat.answer")}
               </Button>
