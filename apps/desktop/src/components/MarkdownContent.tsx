@@ -33,8 +33,8 @@ function CopyButton({ text }: { text: string }) {
         top: 6,
         right: 6,
         border: "none",
-        background: "rgba(255,255,255,0.1)",
-        color: copied ? "#4ade80" : "#9ca3af",
+        background: "color-mix(in oklch, white 10%, transparent)",
+        color: copied ? "var(--success)" : "var(--fg-subtle)",
         cursor: "pointer",
         borderRadius: 4,
         padding: "2px 8px",
@@ -42,8 +42,8 @@ function CopyButton({ text }: { text: string }) {
         fontFamily: "inherit",
         transition: "color 0.2s, background 0.2s",
       }}
-      onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
-      onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+      onMouseEnter={e => (e.currentTarget.style.background = "color-mix(in oklch, white 18%, transparent)")}
+      onMouseLeave={e => (e.currentTarget.style.background = "color-mix(in oklch, white 10%, transparent)")}
     >
       {copied ? "✓ Copied" : "Copy"}
     </button>
@@ -73,7 +73,7 @@ const MarkdownComponents: Components = {
         borderRadius: 4,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontSize: "0.9em",
-        backgroundColor: "rgba(127, 127, 127, 0.15)",
+        backgroundColor: "var(--surface)",
       }} className="md-inline-code">{children}</code>
     );
   },

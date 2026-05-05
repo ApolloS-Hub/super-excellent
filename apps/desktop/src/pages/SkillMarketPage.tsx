@@ -7,9 +7,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Stack, Text, Paper, Group, Badge, Button, SimpleGrid,
-  ScrollArea, useMantineColorScheme,
+  ScrollArea,
 } from "@mantine/core";
 import { registerTemplate, getTemplates, type WorkflowTemplate } from "../lib/workflows";
+import Icon, { type IconName } from "../components/Icon";
 
 // ═══════════ Built-in Skills ═══════════
 
@@ -17,7 +18,7 @@ interface SkillDefinition {
   id: string;
   name: string;
   nameEn: string;
-  emoji: string;
+  icon: IconName;
   description: string;
   descriptionEn: string;
   category: string;
@@ -30,7 +31,7 @@ const BUILTIN_SKILLS: SkillDefinition[] = [
     id: "skill_daily_report",
     name: "日报生成器",
     nameEn: "Daily Report Generator",
-    emoji: "📊",
+    icon: "chart",
     description: "收集各角色的产出，汇总生成结构化日报",
     descriptionEn: "Collect outputs from each role and generate structured daily reports",
     category: "效率",
@@ -51,7 +52,7 @@ const BUILTIN_SKILLS: SkillDefinition[] = [
     id: "skill_meeting_minutes",
     name: "会议纪要",
     nameEn: "Meeting Minutes",
-    emoji: "📝",
+    icon: "edit",
     description: "录音转文字，提取要点，生成结构化会议纪要",
     descriptionEn: "Transcribe recording, extract key points, generate structured minutes",
     category: "协作",
@@ -72,7 +73,7 @@ const BUILTIN_SKILLS: SkillDefinition[] = [
     id: "skill_competitive_analysis",
     name: "竞品分析",
     nameEn: "Competitive Analysis",
-    emoji: "🔍",
+    icon: "search",
     description: "搜索竞品信息，对比分析，生成竞品报告",
     descriptionEn: "Research competitors, compare features, generate analysis report",
     category: "市场",
@@ -93,7 +94,7 @@ const BUILTIN_SKILLS: SkillDefinition[] = [
     id: "skill_content_calendar",
     name: "内容排期",
     nameEn: "Content Calendar",
-    emoji: "📅",
+    icon: "menu",
     description: "规划一周内容，分配给角色，跟踪进度",
     descriptionEn: "Plan weekly content, assign to roles, track progress",
     category: "内容",
@@ -115,7 +116,7 @@ const BUILTIN_SKILLS: SkillDefinition[] = [
     id: "skill_data_dashboard",
     name: "数据报表",
     nameEn: "Data Dashboard",
-    emoji: "📈",
+    icon: "chart",
     description: "从表格读数据，分析趋势，生成可视化报告",
     descriptionEn: "Read data from sheets, analyze trends, generate visual reports",
     category: "数据",
@@ -189,9 +190,6 @@ const TAG_I18N_KEYS: Record<string, string> = {
 
 function SkillMarketPage({ onBack }: SkillMarketPageProps) {
   const { t } = useTranslation();
-  const { colorScheme } = useMantineColorScheme();
-  const isDark = colorScheme === "dark";
-
   const [installed, setInstalled] = useState<Set<string>>(() => getInstalledSkillIds());
   const [filter, setFilter] = useState<string | null>(null);
 
@@ -237,12 +235,13 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
     <ScrollArea style={{ height: "calc(100vh - 70px)" }} offsetScrollbars>
     <Stack maw={900} mx="auto" pb="xl">
       <Group justify="space-between">
-        <Group gap="xs">
-          <Text size="xl" fw={700}>{`🛒 ${t("skills.title")}`}</Text>
-          <Badge variant="light" color="blue">{t("skills.skillCount", { count: BUILTIN_SKILLS.length })}</Badge>
+        <Group gap={10}>
+          <Icon name="skills" size={20} stroke={1.5} />
+          <Text size="xl" fw={620}>{t("skills.title")}</Text>
+          <Badge variant="light">{t("skills.skillCount", { count: BUILTIN_SKILLS.length })}</Badge>
           <Badge variant="light" color="green">{t("skills.installedCount", { count: installed.size })}</Badge>
         </Group>
-        <Button variant="subtle" onClick={onBack}>← {t("nav.conversations")}</Button>
+        <Button variant="subtle" size="sm" leftSection={<Icon name="chevron-right" size={13} style={{ transform: "rotate(180deg)" }} />} onClick={onBack}>{t("nav.conversations")}</Button>
       </Group>
 
       <Text size="sm" c="dimmed">
@@ -284,15 +283,13 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
                 radius="md"
                 withBorder
                 style={{
-                  borderColor: isInstalled
-                    ? `var(--mantine-color-green-${isDark ? "8" : "3"})`
-                    : undefined,
+                  borderColor: isInstalled ? "var(--success)" : undefined,
                   borderWidth: isInstalled ? 2 : undefined,
                 }}
               >
                 <Group justify="space-between" mb="xs" wrap="nowrap">
                   <Group gap="xs" wrap="nowrap">
-                    <Text size="xl">{skill.emoji}</Text>
+                    <Icon name={skill.icon} size={20} stroke={1.6} />
                     <Stack gap={0}>
                       <Text size="sm" fw={600}>{t(`skills.${skill.id}.name`)}</Text>
                       <Text size="xs" c="dimmed">{skill.nameEn}</Text>
@@ -326,16 +323,17 @@ function SkillMarketPage({ onBack }: SkillMarketPageProps) {
                 <Group mt="sm">
                   {isInstalled ? (
                     <Group gap="xs">
-                      <Badge color="green" variant="light">{`✅ ${t("skills.installed")}`}</Badge>
+                      <Badge color="green" variant="light" leftSection={<Icon name="check" size={10} stroke={2.5} />}>{t("skills.installed")}</Badge>
                       <Button size="xs" variant="subtle" color="red"
                         onClick={() => handleUninstall(skill)}>
                         {t("skills.uninstall")}
                       </Button>
                     </Group>
                   ) : (
-                    <Button size="xs" variant="light" color="blue"
+                    <Button size="xs" variant="light"
+                      leftSection={<Icon name="arrow-down" size={13} />}
                       onClick={() => handleInstall(skill)}>
-                      {`📥 ${t("skills.install")}`}
+                      {t("skills.install")}
                     </Button>
                   )}
                 </Group>
