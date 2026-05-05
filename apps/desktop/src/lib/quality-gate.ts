@@ -91,6 +91,32 @@ const UNIVERSAL_CHECKS: QualityCheck[] = [
       return { passed: !found, reason: `Contains refusal language: "${found}"` };
     },
   },
+  {
+    id: "no_ai_slop",
+    description: "Output must not contain generic AI filler, invented statistics, or buzzword soup",
+    check: (output) => {
+      const slopPatterns: Array<{ pattern: RegExp; label: string }> = [
+        // Filler preambles
+        { pattern: /in today'?s (?:rapidly )?(?:evolving|changing|digital|modern)\s+\w*\s*(?:landscape|world|era)/i, label: "filler preamble" },
+        { pattern: /it'?s (?:important|worth|crucial|essential) to (?:note|understand|recognize|remember) that/i, label: "filler hedge" },
+        { pattern: /(?:as we all know|as you (?:may )?know|needless to say)/i, label: "empty assertion" },
+        { pattern: /let me (?:start by saying|begin by noting|first say)/i, label: "stalling opener" },
+        { pattern: /(?:in conclusion|to summarize|all in all|at the end of the day),?\s/i, label: "cliché closer" },
+        // Invented statistics
+        { pattern: /(?:studies|research|data|surveys?) (?:show|suggest|indicate|reveal|confirm)s? (?:that )?(?:up to |approximately |about |over |nearly )?\d{2,3}%/i, label: "likely invented statistic" },
+        // Buzzword soup (3+ buzzwords in close proximity)
+        { pattern: /(?:synergy|paradigm|leverage|holistic|robust|scalable|cutting[- ]edge|game[- ]changer|next[- ]gen(?:eration)?|disruptive|innovative|transformative){1}[\s\S]{0,40}(?:synergy|paradigm|leverage|holistic|robust|scalable|cutting[- ]edge|game[- ]changer|next[- ]gen(?:eration)?|disruptive|innovative|transformative)/i, label: "buzzword cluster" },
+        // Emotional manipulation
+        { pattern: /(?:imagine a world|picture this|what if I told you|the secret (?:is|to))/i, label: "emotional hook" },
+      ];
+      const hits = slopPatterns.filter(s => s.pattern.test(output));
+      if (hits.length === 0) return { passed: true };
+      return {
+        passed: false,
+        reason: `AI slop detected: ${hits.map(h => h.label).join(", ")}. Rewrite with substance, not filler.`,
+      };
+    },
+  },
 ];
 
 // ── Role-specific checks ──
