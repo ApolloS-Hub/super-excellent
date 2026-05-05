@@ -1191,7 +1191,7 @@ ${t("chat.modelUseHint")}`;
 
       {/* ask_user question card — rendered above input when agent asks a question */}
       {askPending && (
-        <Paper p="md" withBorder radius="md" mx="sm" style={{ borderColor: "var(--mantine-color-violet-5)" }}>
+        <Paper p="md" withBorder radius="md" mx="sm" style={{ borderColor: "var(--accent)" }}>
           <Text size="sm" fw={600} mb="xs">❓ {askPending.question}</Text>
           {askPending.options.length > 0 ? (
             <Group gap="xs" wrap="wrap">
@@ -1318,47 +1318,46 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
   const errorCount = toolCalls.filter(tc => tc.status === "error").length;
 
   return (
-    <Paper
-      p="sm" radius="md"
-      bg={isUser
-        ? (isDark ? "blue.9" : "blue.1")
-        : (isDark ? "dark.6" : "gray.1")
-      }
-      ml={isUser ? "auto" : 0}
-      mr={isUser ? 0 : "auto"}
-      maw="85%"
-      style={{ position: "relative", overflowWrap: "break-word", wordBreak: "break-word", overflow: "hidden" }}
+    <div
+      className={`msg-bubble ${isUser ? "msg-bubble-user" : "msg-bubble-assistant"}`}
+      style={{
+        marginLeft: isUser ? "auto" : 0,
+        marginRight: isUser ? 0 : "auto",
+        maxWidth: "78%",
+        position: "relative",
+        overflowWrap: "break-word",
+        wordBreak: "break-word",
+        overflow: "hidden",
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Streaming indicator — animated pulse when waiting for first token */}
+      {/* Streaming indicator */}
       {message.isStreaming && !mainContent && toolCalls.length === 0 && (
         <Group gap="xs" py="xs">
-          <Box style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", animation: "pulse 1.5s infinite" }} />
+          <div className="typing-dots">
+            <span /><span style={{ animationDelay: "0.15s" }} /><span style={{ animationDelay: "0.3s" }} />
+          </div>
           <Text size="xs" c="dimmed">{t("chat.thinkingStatus")}</Text>
         </Group>
       )}
 
       {isUser ? (
-        <Text size="sm" c={isDark ? "white" : "dark"} style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.content}</Text>
+        <Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{message.content}</Text>
       ) : (
         <Stack gap="xs">
-          {/* Thinking section — collapsible, separate from main text */}
+          {/* Thinking section */}
           {thinkingLines.length > 0 && (
-            <Paper
-              p="xs" radius="sm" withBorder
-              style={{ borderColor: isDark ? "var(--mantine-color-dark-4)" : "var(--mantine-color-gray-3)" }}
-              bg={isDark ? "dark.7" : "gray.0"}
-            >
+            <div className="msg-bubble-thinking" style={{ padding: "8px 12px" }}>
               <Group
                 gap="xs" style={{ cursor: "pointer" }}
                 onClick={() => setShowThinking(!showThinking)}
               >
-                <Badge size="xs" variant="light" color="violet">Reasoning</Badge>
+                <Badge size="xs" variant="light" color="indigo">Reasoning</Badge>
                 <Text size="xs" c="dimmed" style={{ flex: 1 }}>
                   {t("chat.steps", { count: thinkingLines.length })}
                 </Text>
-                <Text size="xs" c="dimmed">{showThinking ? "▼" : "▶"}</Text>
+                <Icon name={showThinking ? "chevron-down" : "chevron-right"} size={11} stroke={2} />
               </Group>
               <Collapse in={showThinking}>
                 <Box mt={4} p="xs" style={{ borderRadius: 4, maxHeight: 300, overflow: "auto" }}
@@ -1368,7 +1367,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
                   </Text>
                 </Box>
               </Collapse>
-            </Paper>
+            </div>
           )}
 
           {/* Tool calls section — each tool as an independent collapsible card */}
@@ -1416,7 +1415,7 @@ function MessageBubble({ message, onRetry, onRewind }: { message: ChatMessage; o
           )}
         </Group>
       )}
-    </Paper>
+    </div>
   );
 }
 
