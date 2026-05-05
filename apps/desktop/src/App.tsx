@@ -567,7 +567,7 @@ function App() {
               </div>
             </div>
             {/* Divider */}
-            <div style={{ width: 2, background: "var(--mantine-color-dark-4)", flexShrink: 0 }} />
+            <div style={{ width: 2, background: "var(--border)", flexShrink: 0 }} />
             {/* Right panel */}
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
               <SplitPanelHeader
@@ -623,7 +623,7 @@ function SplitPanelHeader({
   const { t } = useTranslation();
   const current = conversations.find(c => c.id === selectedId);
   return (
-    <Group gap="xs" px="xs" py={4} style={{ borderBottom: "1px solid var(--mantine-color-dark-4)", flexShrink: 0 }}>
+    <Group gap="xs" px="xs" py={4} style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
       <Badge size="xs" variant="light" color="blue">{label}</Badge>
       <Menu>
         <Menu.Target>

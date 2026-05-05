@@ -1078,12 +1078,15 @@ ${t("chat.modelUseHint")}`;
       {dragOver && (
         <Box style={{
           position: "absolute", inset: 0, zIndex: 100,
-          background: "rgba(59, 130, 246, 0.15)",
-          border: "2px dashed #3b82f6", borderRadius: 12,
+          background: "color-mix(in oklch, var(--accent) 12%, transparent)",
+          border: "2px dashed var(--accent)", borderRadius: 12,
           display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
         }}>
-          <Text size="xl" fw={700} c="blue">📎 {t("chat.dropFilesHere")}</Text>
+          <Group gap={8}>
+            <Icon name="file" size={20} />
+            <Text size="xl" fw={700} c="var(--accent)">{t("chat.dropFilesHere")}</Text>
+          </Group>
         </Box>
       )}
 
@@ -1097,7 +1100,7 @@ ${t("chat.modelUseHint")}`;
         <Group gap="xs">
           <CostBadge conversationId={conversation?.id ?? null} compact />
           {planModeActive && (
-            <Badge color="violet" variant="light" size="sm" leftSection="📐">
+            <Badge color="indigo" variant="light" size="sm" leftSection={<Icon name="sliders" size={11} />}>
               {t("chat.planMode")}
             </Badge>
           )}
@@ -1114,18 +1117,18 @@ ${t("chat.modelUseHint")}`;
           </Tooltip>
           <Menu>
             <Menu.Target>
-              <ActionIcon variant="subtle" size="sm"><Text size="xs">📤</Text></ActionIcon>
+              <ActionIcon variant="subtle" size="sm"><Icon name="arrow-down" size={14} /></ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Label>{t("chat.exportLabel")}</Menu.Label>
-              <Menu.Item onClick={exportAsMarkdown}>📝 {t("chat.exportMarkdown")}</Menu.Item>
-              <Menu.Item onClick={exportAsJSON}>📋 {t("chat.exportJSON")}</Menu.Item>
-              <Menu.Item onClick={exportAsPDF}>📄 {t("chat.exportPDF")}</Menu.Item>
-              <Menu.Item onClick={exportAsImage}>🖼️ {t("chat.exportImage")}</Menu.Item>
-              <Menu.Item onClick={exportAsPptx}>📊 {t("chat.exportPPTX")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="edit" size={13} />} onClick={exportAsMarkdown}>{t("chat.exportMarkdown")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="file" size={13} />} onClick={exportAsJSON}>{t("chat.exportJSON")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="file" size={13} />} onClick={exportAsPDF}>{t("chat.exportPDF")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="monitor" size={13} />} onClick={exportAsImage}>{t("chat.exportImage")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="chart" size={13} />} onClick={exportAsPptx}>{t("chat.exportPPTX")}</Menu.Item>
               <Menu.Divider />
               <Menu.Label>{t("chat.importLabel")}</Menu.Label>
-              <Menu.Item onClick={importClaudeJsonl}>📥 {t("chat.importClaudeJSONL")}</Menu.Item>
+              <Menu.Item leftSection={<Icon name="arrow-down" size={13} />} onClick={importClaudeJsonl}>{t("chat.importClaudeJSONL")}</Menu.Item>
             </Menu.Dropdown>
           </Menu>
         </Group>
@@ -1178,8 +1181,9 @@ ${t("chat.modelUseHint")}`;
         <Group gap="xs" px="sm">
           {droppedFiles.map((file, i) => (
             <Badge key={i} variant="outline" color="blue"
+              leftSection={<Icon name="file" size={11} />}
               rightSection={<Text size="xs" style={{ cursor: "pointer" }} onClick={() => removeFile(i)}>✕</Text>}>
-              📎 {file.name}
+              {file.name}
             </Badge>
           ))}
         </Group>
