@@ -194,6 +194,64 @@ describe("quality-gate: gatedExecute", () => {
   });
 });
 
+describe("quality-gate: anti-AI-slop check", () => {
+  it("catches filler preambles", () => {
+    const result = runQualityGate(
+      "In today's rapidly evolving digital landscape, it's essential to understand the importance of proper task management and productivity frameworks.",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(true);
+  });
+
+  it("catches 'it's important to note that' hedge", () => {
+    const result = runQualityGate(
+      "It's important to note that the implementation requires careful consideration of various factors and trade-offs involved.",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(true);
+  });
+
+  it("catches invented statistics", () => {
+    const result = runQualityGate(
+      "Studies show that 87% of teams using agile methodology report improved outcomes when applying these recommended strategies.",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(true);
+  });
+
+  it("catches buzzword clusters", () => {
+    const result = runQualityGate(
+      "Our holistic approach leverages cutting-edge paradigm shifts to deliver a scalable, innovative, and disruptive next-generation solution.",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(true);
+  });
+
+  it("catches emotional manipulation hooks", () => {
+    const result = runQualityGate(
+      "Imagine a world where your productivity doubles overnight. What if I told you the secret is simpler than you think?",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(true);
+  });
+
+  it("passes clean, direct output", () => {
+    const result = runQualityGate(
+      "The API endpoint returns a 401 status when the token expires. Refresh via POST /auth/refresh with the stored refresh_token. Implementation in auth-service.ts line 45.",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(false);
+  });
+
+  it("passes Chinese output without false positives", () => {
+    const result = runQualityGate(
+      "根据代码审查结果，coordinator.ts 第 280 行的错误处理需要从静默 catch 改为 console.warn 输出。修改后重新运行测试确认通过。",
+      ctx(),
+    );
+    expect(result.failedChecks.some(f => f.checkId === "no_ai_slop")).toBe(false);
+  });
+});
+
 describe("quality-gate: introspection", () => {
   it("getAvailableChecks lists universal + role-specific", () => {
     const writerChecks = getAvailableChecks("writer");
