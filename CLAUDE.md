@@ -149,6 +149,46 @@ Modules communicate via event bus (`emitAgentEvent`), not direct
 imports between peers. One action should ripple to all dependents
 through events, not tight coupling.
 
+### Orchestration Discipline (Symphony)
+Worker dispatch follows a strict discipline:
+
+- **Stall detection**: If a worker emits no events for 60 seconds,
+  it's considered stalled and killed. The 90s overall timeout is a
+  hard ceiling but the stall timeout catches "alive but stuck" workers.
+- **Blocker awareness**: Scenario steps with `inputFrom` check
+  upstream status before executing. If an upstream step failed,
+  downstream steps are immediately failed with "Blocked" — don't
+  waste tokens on doomed work.
+- **Single authority**: The coordinator is the single point of
+  dispatch. Workers don't self-select or claim tasks — the
+  coordinator decides based on intent analysis, scenario matching,
+  and stagnation state.
+- **Reconciliation on every tick**: Before dispatching new work,
+  always check the state of running workers (stagnation, quality
+  gate, bounded context).
+
+### Anti-AI-Slop (Open Design)
+Worker outputs are checked for generic AI filler:
+- Filler preambles ("In today's rapidly evolving landscape...")
+- Hedge phrases ("It's important to note that...")
+- Invented statistics ("studies show 87%...")
+- Buzzword clusters (holistic + cutting-edge + paradigm)
+- Emotional hooks ("imagine a world", "what if I told you")
+
+Detected slop triggers a quality-gate retry with explicit feedback.
+Workers using Karpathy's "simplicity first" principle should not
+produce slop, but this catches edge cases.
+
+### Memory Consolidation (GBrain)
+The context-bootstrap runs an hourly "dream cycle" that compiles
+observation-log timeline entries into compiled truth:
+- Decisions from worker dispatch results → overwrite recentDecisions
+- Project names from summaries → merge into activeProjects
+- Deadlines from detail text → merge into upcomingDeadlines
+
+This keeps context-bootstrap fresh even without user interaction.
+`consolidateMemory()` runs via `startConsolidationCycle(3600_000)`.
+
 ### Imperative → Declarative Transformation
 Transform imperative tasks into declarative goals with verification:
 "Add validation" → "Write tests for invalid inputs, then make them
@@ -351,12 +391,15 @@ These numbers encode institutional knowledge. Change with caution:
 | Quality gate threshold (balanced) | 0.6 | Evolver presets |
 | Quality gate threshold (harden) | 0.75 | Evolver presets |
 | Stagnation: failures before switch | 3 in 10min | Evolver |
+| Stall timeout: no worker output | 60s | Symphony |
+| Worker overall timeout | 90s | coordinator.ts |
 | Bounded context: turns before summary | 15 | garden-skills |
 | Bounded context: token estimate limit | ~50K | garden-skills |
 | Scenario max steps | 10 | garden-skills |
 | Observation dedup: Jaccard threshold | 0.85 | claude-mem |
 | Observation store max entries | 2000 | claude-mem |
 | Memory nudge cooldown | 30s | Hermes |
+| Memory consolidation cycle | 1 hour | GBrain |
 | Command execution timeout | 180s | Evolver |
 | Progressive disclosure L1 tokens | ~50-100/result | claude-mem |
 | Progressive disclosure L3 tokens | ~500-1000/result | claude-mem |
@@ -377,6 +420,8 @@ These numbers encode institutional knowledge. Change with caution:
 | `/schedule <desc>` | Hermes | Natural-language cron task scheduling |
 | `/schedule list` | Hermes | List all scheduled tasks |
 | `/schedule cancel <id>` | Hermes | Cancel a task |
+| `/insights [--days N]` | Hermes | Usage analytics (top workers, cost, knowledge graph density) |
+| `/strategy [preset]` | Evolver | View or change strategy (balanced/innovate/harden/repair) |
 | `/meeting` | lenny-skills | Running effective meetings skill |
 | `/hard-talk` | lenny-skills | Difficult conversations skill |
 | `/write` | lenny-skills | Written communication skill |
@@ -415,6 +460,13 @@ Every major system traces back to an open-source project we studied:
 | Karpathy Principles | andrej-karpathy-skills | coordinator.ts |
 | Module Size / Helper / Enum Rules | openai/codex AGENTS.md | CLAUDE.md §2 |
 | Bidirectional Links | bkywksj/knowledge-base | observation-log.ts |
+| Memory Consolidation | garrytan/gbrain | context-bootstrap.ts |
+| Usage Analytics (/insights) | hermes-agent (v2) | commands.ts |
+| Anti-AI-Slop Check | nexu-io/open-design | quality-gate.ts |
+| DESIGN.md 9-section Spec | nexu-io/open-design | DESIGN.md |
+| Stall-aware Timeout | openai/symphony | coordinator.ts |
+| Blocker-aware Dispatch | openai/symphony | scenario-engine.ts |
 | Lark HTTP + OAuth | original (replaced lark-cli) | lark-client.ts, lark-token-store.ts |
+| Lark Doc Block Write | original | lark-client.ts |
 | Icon System | original (replaced emoji) | Icon.tsx |
 | Dark Mode Fix | original | styles.css |
