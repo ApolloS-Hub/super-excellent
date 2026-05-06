@@ -230,8 +230,23 @@ export async function executeScenarioStep(
   instance.updatedAt = Date.now();
 
   // Build prompt with upstream outputs
+  // Symphony-inspired: check blockers before proceeding
   let prompt = step.action;
   if (step.inputFrom?.length) {
+    const blockedUpstream = step.inputFrom.filter(sid => {
+      const r = instance.stepResults[sid];
+      return r && r.status === "failed";
+    });
+    if (blockedUpstream.length > 0 && !step.optional) {
+      result.status = "failed";
+      result.output = `Blocked: upstream step(s) ${blockedUpstream.join(", ")} failed`;
+      result.completedAt = Date.now();
+      instance.status = "failed";
+      instance.updatedAt = Date.now();
+      persistInstances();
+      return result;
+    }
+
     const upstreamContext = step.inputFrom
       .map(sid => {
         const r = instance.stepResults[sid];

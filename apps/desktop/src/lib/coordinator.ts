@@ -500,13 +500,38 @@ async function callWorkerLLM(
   onEvent: EventCallback,
   _history?: Array<{ role: string; content: string }>,
 ): Promise<string> {
-  // 90-second overall timeout for worker execution
-  const timeoutMs = 90000;
-  const timeoutPromise = new Promise<string>((_, reject) =>
-    setTimeout(() => reject(new Error(`Worker ${worker.name} timeout (${timeoutMs / 1000}s)`)), timeoutMs)
+  // Symphony-inspired: 90s overall timeout + 60s stall timeout (no activity)
+  const overallTimeoutMs = 90_000;
+  const stallTimeoutMs = 60_000;
+  let lastActivity = Date.now();
+
+  // Track activity from events
+  const stallAwareOnEvent: EventCallback = (event) => {
+    lastActivity = Date.now();
+    onEvent(event);
+  };
+
+  const overallTimeout = new Promise<string>((_, reject) =>
+    setTimeout(() => reject(new Error(`Worker ${worker.name} timeout (${overallTimeoutMs / 1000}s)`)), overallTimeoutMs)
   );
+
+  const stallCheck = new Promise<string>((_, reject) => {
+    const timer = setInterval(() => {
+      if (Date.now() - lastActivity > stallTimeoutMs) {
+        clearInterval(timer);
+        reject(new Error(`Worker ${worker.name} stalled (no output for ${stallTimeoutMs / 1000}s)`));
+      }
+    }, 5000);
+    // Clean up if the main promise resolves first
+    setTimeout(() => clearInterval(timer), overallTimeoutMs + 1000);
+  });
+
   try {
-    return await Promise.race([callWorkerLLMInner(worker, task, config, onEvent, _history), timeoutPromise]);
+    return await Promise.race([
+      callWorkerLLMInner(worker, task, config, stallAwareOnEvent, _history),
+      overallTimeout,
+      stallCheck,
+    ]);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     // Surface error to UI so user doesn't see infinite "thinking"
