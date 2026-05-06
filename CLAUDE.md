@@ -371,6 +371,15 @@ exhaust system resources.
 Cloud AI features require explicit user consent. Vault data never
 syncs to cloud without approval.
 
+### Safety-first defaults (openclaw-control-center)
+Every destructive or mutating operation defaults to OFF:
+- Read-only mode is the default — mutations require explicit opt-in
+- Approval actions are dry-run by default — real execution only after
+  explicit confirmation
+- The system never auto-modifies its own configuration files
+- Data isolation: new features store data in their own namespace
+  (e.g., `__se_lark_*` in localStorage), not in shared config
+
 ## 10. Git Workflow
 
 - Develop on `claude/complete-agent-system-iOqvq` branch
@@ -466,6 +475,7 @@ Every major system traces back to an open-source project we studied:
 | DESIGN.md 9-section Spec | nexu-io/open-design | DESIGN.md |
 | Stall-aware Timeout | openai/symphony | coordinator.ts |
 | Blocker-aware Dispatch | openai/symphony | scenario-engine.ts |
+| Safety-first Defaults | openclaw-control-center | CLAUDE.md §9, permission-engine.ts |
 | Lark HTTP + OAuth | original (replaced lark-cli) | lark-client.ts, lark-token-store.ts |
 | Lark Doc Block Write | original | lark-client.ts |
 | Icon System | original (replaced emoji) | Icon.tsx |
