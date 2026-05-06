@@ -779,6 +779,38 @@ registerCommand({
   },
 });
 
+// ═══════════ Control Center: /freeze + /unfreeze ═══════════
+
+registerCommand({
+  name: "freeze",
+  aliases: ["pause-all", "stop-all"],
+  description: "Emergency stop — freeze all worker dispatches globally",
+  handler: async () => {
+    const { freezeDispatch, isDispatchFrozen } = await import("./coordinator");
+    const zh = i18n.language.startsWith("zh");
+    if (isDispatchFrozen()) return zh ? "已处于冻结状态。" : "Already frozen.";
+    freezeDispatch();
+    return zh
+      ? "已冻结所有 Worker 派发。秘书不会执行任何新任务直到 `/unfreeze`。"
+      : "All worker dispatches frozen. No new tasks will execute until `/unfreeze`.";
+  },
+});
+
+registerCommand({
+  name: "unfreeze",
+  aliases: ["resume-all", "thaw"],
+  description: "Resume worker dispatches after a /freeze",
+  handler: async () => {
+    const { unfreezeDispatch, isDispatchFrozen } = await import("./coordinator");
+    const zh = i18n.language.startsWith("zh");
+    if (!isDispatchFrozen()) return zh ? "未处于冻结状态。" : "Not frozen.";
+    unfreezeDispatch();
+    return zh
+      ? "已解冻。Worker 派发恢复正常。"
+      : "Unfrozen. Worker dispatches resumed.";
+  },
+});
+
 // ═══════════ Hermes-inspired: /insights + /schedule ═══════════
 
 registerCommand({
