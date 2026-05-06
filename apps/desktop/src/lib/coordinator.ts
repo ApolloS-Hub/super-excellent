@@ -217,6 +217,24 @@ export function analyzeIntent(message: string): IntentResult {
 
 // ═══════════ 任务派发 ═══════════
 
+// ═══════════ Global dispatch freeze (openclaw-control-center inspired) ═══════════
+
+let _frozen = false;
+
+export function freezeDispatch(): void {
+  _frozen = true;
+  emitAgentEvent({ type: "intent_analysis", intentType: "freeze", text: "Dispatch frozen — all worker dispatches paused" });
+}
+
+export function unfreezeDispatch(): void {
+  _frozen = false;
+  emitAgentEvent({ type: "intent_analysis", intentType: "unfreeze", text: "Dispatch unfrozen — worker dispatches resumed" });
+}
+
+export function isDispatchFrozen(): boolean {
+  return _frozen;
+}
+
 /**
  * 派发任务给指定 Worker
  * Worker 使用自己的 system prompt 独立执行
@@ -228,6 +246,16 @@ export async function dispatchToWorker(
   onEvent: EventCallback,
   history?: Array<{ role: string; content: string }>,
 ): Promise<WorkerResult> {
+  // ── Global freeze check ──
+  if (_frozen) {
+    return {
+      workerId,
+      workerName: workerId,
+      success: false,
+      output: "Dispatch is frozen. Use /unfreeze to resume worker dispatches.",
+    };
+  }
+
   const worker = getWorker(workerId);
   if (!worker) {
     return {

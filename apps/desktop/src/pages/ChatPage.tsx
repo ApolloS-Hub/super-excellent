@@ -1096,9 +1096,11 @@ ${t("chat.modelUseHint")}`;
         </Notification>
       )}
 
-      <Group justify="space-between" gap="xs" px="sm" pt={4}>
-        <Group gap="xs">
+      {/* ── Control status bar (openclaw-control-center inspired) ── */}
+      <Group justify="space-between" gap="xs" px="sm" pt={4} style={{ flexShrink: 0 }}>
+        <Group gap={6}>
           <CostBadge conversationId={conversation?.id ?? null} compact />
+          <StatusBarIndicators conversationId={conversation?.id ?? null} />
           {planModeActive && (
             <Badge color="indigo" variant="light" size="sm" leftSection={<Icon name="sliders" size={11} />}>
               {t("chat.planMode")}
@@ -1112,7 +1114,7 @@ ${t("chat.modelUseHint")}`;
               size="sm"
               onClick={() => setShowHistory(h => !h)}
             >
-              <Text size="xs">📜</Text>
+              <Icon name="file" size={13} />
             </ActionIcon>
           </Tooltip>
           <Menu>
@@ -1599,6 +1601,64 @@ function ToolCallCard({ name, input, output, status }: {
         </Box>
       </Collapse>
     </Paper>
+  );
+}
+
+/** Status bar indicators — strategy, context pressure, freeze state, budget warning */
+function StatusBarIndicators({ conversationId }: { conversationId: string | null }) {
+  const [strategy, setStrategy] = useState("balanced");
+  const [turns, setTurns] = useState(0);
+  const [frozen, setFrozen] = useState(false);
+  const [budgetRatio, setBudgetRatio] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => {
+      import("../lib/strategy-presets").then(m => setStrategy(m.getStrategy().preset)).catch(() => {});
+      import("../lib/coordinator").then(m => setFrozen(m.isDispatchFrozen())).catch(() => {});
+      if (conversationId) {
+        import("../lib/bounded-context").then(m => {
+          const tracker = m.getTracker(conversationId);
+          if (tracker) setTurns(tracker.turnCount);
+        }).catch(() => {});
+        const budgetStr = localStorage.getItem("cost-quota-per-conversation");
+        if (budgetStr) {
+          const maxCost = parseFloat(budgetStr);
+          if (maxCost > 0) {
+            import("../lib/cost-tracker").then(m => {
+              m.getConversationUsage(conversationId).then(usage => {
+                if (usage) setBudgetRatio(usage.totalCost / maxCost);
+              });
+            }).catch(() => {});
+          }
+        }
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, [conversationId]);
+
+  const budgetColor = budgetRatio >= 0.95 ? "var(--danger)" : budgetRatio >= 0.8 ? "var(--warning)" : "var(--fg-subtle)";
+
+  return (
+    <>
+      {frozen && (
+        <Badge size="xs" variant="filled" color="red">FROZEN</Badge>
+      )}
+      <Badge size="xs" variant="outline" color="gray" style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>
+        {strategy}
+      </Badge>
+      {turns > 0 && (
+        <Badge size="xs" variant="light" color={turns >= 12 ? "orange" : "gray"} style={{ fontFamily: "var(--font-mono)" }}>
+          {turns}/15
+        </Badge>
+      )}
+      {budgetRatio > 0 && (
+        <Badge size="xs" variant="light" style={{ fontFamily: "var(--font-mono)", color: budgetColor }}>
+          {(budgetRatio * 100).toFixed(0)}%
+        </Badge>
+      )}
+    </>
   );
 }
 
