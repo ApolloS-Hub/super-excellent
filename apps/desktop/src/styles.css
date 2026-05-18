@@ -510,6 +510,11 @@ p, li, td { text-wrap: pretty; line-height: 1.6; }
   flex-shrink: 0;
 }
 
+/* Slash command autocomplete menu item hover */
+.slash-cmd-item:hover {
+  background: var(--accent-soft);
+}
+
 /* ══════════════════════════════════════════════════════════════
    Kbd
    ══════════════════════════════════════════════════════════════ */

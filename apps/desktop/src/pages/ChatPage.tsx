@@ -1231,7 +1231,11 @@ ${t("chat.modelUseHint")}`;
         </Paper>
       )}
 
-      <Group gap="sm" align="flex-end">
+      <Group gap="sm" align="flex-end" style={{ position: "relative" }}>
+        {/* Slash command autocomplete */}
+        {input.startsWith("/") && input.length > 1 && input.length < 20 && !input.includes(" ") && (
+          <SlashCommandMenu query={input.slice(1)} onSelect={(cmd) => setInput(`/${cmd} `)} />
+        )}
         <Textarea
           flex={1}
           placeholder={t("chat.input_placeholder")}
@@ -1604,17 +1608,66 @@ function ToolCallCard({ name, input, output, status }: {
   );
 }
 
+/** Slash command autocomplete popup — cc-haha inspired */
+function SlashCommandMenu({ query, onSelect }: { query: string; onSelect: (cmd: string) => void }) {
+  const [commands, setCommands] = useState<Array<{ name: string; description: string }>>([]);
+
+  useEffect(() => {
+    import("../lib/commands").then(m => {
+      const all = m.listCommands();
+      const q = query.toLowerCase();
+      const filtered = all
+        .filter(c => c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
+        .slice(0, 8);
+      setCommands(filtered.map(c => ({ name: c.name, description: c.description })));
+    }).catch(() => {});
+  }, [query]);
+
+  if (commands.length === 0) return null;
+
+  return (
+    <Paper
+      withBorder radius="md" p={4}
+      shadow="md"
+      style={{
+        position: "absolute", bottom: "100%", left: 0, right: 60,
+        marginBottom: 6, zIndex: 200, maxHeight: 240, overflow: "auto",
+      }}
+    >
+      <Stack gap={2}>
+        {commands.map(cmd => (
+          <Group
+            key={cmd.name}
+            gap="xs" px="sm" py={4}
+            style={{ cursor: "pointer", borderRadius: 6, transition: "background 100ms" }}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(cmd.name); }}
+            className="slash-cmd-item"
+          >
+            <Text size="xs" fw={600} ff="monospace" c="var(--accent)">/{cmd.name}</Text>
+            <Text size="xs" c="dimmed" truncate>{cmd.description}</Text>
+          </Group>
+        ))}
+      </Stack>
+    </Paper>
+  );
+}
+
 /** Status bar indicators — strategy, context pressure, freeze state, budget warning */
 function StatusBarIndicators({ conversationId }: { conversationId: string | null }) {
   const [strategy, setStrategy] = useState("balanced");
   const [turns, setTurns] = useState(0);
   const [frozen, setFrozen] = useState(false);
   const [budgetRatio, setBudgetRatio] = useState(0);
+  const [branch, setBranch] = useState("");
 
   useEffect(() => {
     const refresh = () => {
       import("../lib/strategy-presets").then(m => setStrategy(m.getStrategy().preset)).catch(() => {});
       import("../lib/coordinator").then(m => setFrozen(m.isDispatchFrozen())).catch(() => {});
+      import("../lib/env-scanner").then(m => {
+        const snap = m.getLastSnapshot();
+        if (snap?.projects?.[0]?.branchName) setBranch(snap.projects[0].branchName);
+      }).catch(() => {});
       if (conversationId) {
         import("../lib/bounded-context").then(m => {
           const tracker = m.getTracker(conversationId);
@@ -1648,6 +1701,11 @@ function StatusBarIndicators({ conversationId }: { conversationId: string | null
       <Badge size="xs" variant="outline" color="gray" style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>
         {strategy}
       </Badge>
+      {branch && (
+        <Badge size="xs" variant="light" color="gray" leftSection={<Icon name="feather" size={9} />} style={{ fontFamily: "var(--font-mono)" }}>
+          {branch}
+        </Badge>
+      )}
       {turns > 0 && (
         <Badge size="xs" variant="light" color={turns >= 12 ? "orange" : "gray"} style={{ fontFamily: "var(--font-mono)" }}>
           {turns}/15
