@@ -213,3 +213,23 @@ Things that are **explicitly forbidden**:
 | Full-bleed hero sections | This is a productivity tool, not a landing page |
 | Hardcoded hex/rgb colors | Always use CSS custom properties |
 | Marketing adjectives in UI copy | No "powerful", "seamless", "revolutionary" |
+| Rounded card with left-border accent | Overused pattern in dashboards |
+| Hand-drawn SVG illustrations | Doesn't match our geometric/stroke aesthetic |
+| Invented metrics in UI | "99.9% accuracy" without data source = slop |
+
+### 5-Dimensional Self-Critique (Open Design)
+
+Before shipping any significant UI change, score 1-5 on each:
+
+1. **Philosophy** — Does this reflect our "tight chrome" direction,
+   or is it generic/decorative?
+2. **Hierarchy** — Is there a clear reading flow? Can a user find
+   the primary action in under 2 seconds?
+3. **Execution** — Are tokens, spacing, and alignment pixel-correct?
+   Any hardcoded values that should be variables?
+4. **Specificity** — Is this designed for *our* product, or could it
+   be any dashboard/chat app?
+5. **Restraint** — Did we resist adding "one more thing"? Is every
+   element earning its space?
+
+**Hard gate**: Score < 3 on any dimension → revise before shipping.

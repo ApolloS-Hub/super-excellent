@@ -1231,37 +1231,36 @@ ${t("chat.modelUseHint")}`;
         </Paper>
       )}
 
-      <Group gap="sm" align="flex-end" style={{ position: "relative" }}>
+      <div className="chat-input-wrapper" style={{ margin: "0 12px 8px", position: "relative" }}>
         {/* Slash command autocomplete */}
         {input.startsWith("/") && input.length > 1 && input.length < 20 && !input.includes(" ") && (
           <SlashCommandMenu query={input.slice(1)} onSelect={(cmd) => setInput(`/${cmd} `)} />
         )}
-        <Textarea
-          flex={1}
-          placeholder={t("chat.input_placeholder")}
-          value={input}
-          onChange={(e) => setInput(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          disabled={isLoading || !!askPending}
-          size="md"
-          minRows={1}
-          maxRows={6}
-          autosize
-          styles={{
-            input: {
-              borderRadius: 12,
-              paddingInline: 14,
-              paddingBlock: 10,
-              fontSize: 14,
-              lineHeight: 1.55,
-            },
-          }}
-        />
+        <Group gap="sm" align="flex-end" p="xs">
+          <Textarea
+            flex={1}
+            placeholder={t("chat.input_placeholder")}
+            value={input}
+            onChange={(e) => setInput(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            disabled={isLoading || !!askPending}
+            minRows={1}
+            maxRows={6}
+            autosize
+            variant="unstyled"
+            styles={{
+              input: {
+                fontSize: 14,
+                lineHeight: 1.55,
+                padding: "4px 0",
+              },
+            }}
+          />
         {isLoading && !isPausedState ? (
           <Group gap={6}>
             <Button onClick={handlePause} color="gray" variant="default" size="md" leftSection={<Icon name="pause" size={14} />}>
@@ -1291,6 +1290,7 @@ ${t("chat.modelUseHint")}`;
           </Button>
         )}
       </Group>
+      </div>
     </Stack>
   );
 }
