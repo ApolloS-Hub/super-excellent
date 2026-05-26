@@ -59,8 +59,10 @@ impl ApiClient {
     }
 
     fn base_url(&self) -> String {
-        self.config.base_url.clone()
-            .unwrap_or_else(|| self.config.provider.default_base_url().to_string())
+        let url = self.config.base_url.clone()
+            .unwrap_or_else(|| self.config.provider.default_base_url().to_string());
+        // Strip trailing /v1 to avoid double /v1/v1/messages
+        url.trim_end_matches('/').trim_end_matches("/v1").trim_end_matches("/V1").to_string()
     }
 
     // ═══════════ Anthropic ═══════════

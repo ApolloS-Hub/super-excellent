@@ -2072,7 +2072,9 @@ export async function validateApiKey(
 }
 
 async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Promise<{ valid: boolean; error?: string }> {
-  const baseURL = config.baseURL || "https://api.anthropic.com";
+  let baseURL = config.baseURL || "https://api.anthropic.com";
+  // Strip trailing /v1 to avoid double /v1/v1/messages
+  baseURL = baseURL.replace(/\/v1\/?$/, "");
   const resp = await fetchWithRetry(`${baseURL}/v1/messages`, {
     method: "POST",
     signal,
