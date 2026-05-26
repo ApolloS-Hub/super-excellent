@@ -284,31 +284,31 @@ p, li, td { text-wrap: pretty; line-height: 1.6; }
    Message bubbles — solid, not gradient
    ══════════════════════════════════════════════════════════════ */
 
-.msg-bubble { animation: slide-up 180ms var(--ease); }
+.msg-bubble {
+  animation: slide-up 180ms var(--ease);
+  margin-bottom: 10px;
+}
 
 .msg-bubble-user {
   background: var(--accent);
   color: white;
-  border-radius: 14px 14px 2px 14px;
-  padding: 9px 13px;
-  max-width: 78%;
-  box-shadow: var(--shadow-xs);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px;
+  max-width: 72%;
+  box-shadow: var(--shadow-sm);
   line-height: 1.55;
+  font-size: 14px;
 }
 
-[data-mantine-color-scheme="light"] .msg-bubble-assistant {
+.msg-bubble-assistant {
   background: var(--surface-raised);
   border: 1px solid var(--border);
-  border-radius: 14px 14px 14px 2px;
-  padding: 10px 14px;
+  border-radius: 16px 16px 16px 4px;
+  padding: 12px 16px;
   box-shadow: var(--shadow-xs);
-}
-
-[data-mantine-color-scheme="dark"] .msg-bubble-assistant {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 14px 14px 14px 2px;
-  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 88%;
 }
 
 .msg-bubble-thinking {
@@ -508,6 +508,11 @@ p, li, td { text-wrap: pretty; line-height: 1.6; }
   width: 6px; height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* Slash command autocomplete menu item hover */
+.slash-cmd-item:hover {
+  background: var(--accent-soft);
 }
 
 /* ══════════════════════════════════════════════════════════════
