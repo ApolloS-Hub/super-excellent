@@ -66,6 +66,24 @@ export async function deleteFileTauri(path: string): Promise<string> {
 
 // ═══════════ Agent Commands (Phase 2: Rust Backend) ═══════════
 
+export interface ProxyFetchResponse {
+  status: number;
+  status_text: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export async function proxyFetchTauri(
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body: string | null | undefined,
+  proxyUrl?: string | null,
+): Promise<ProxyFetchResponse> {
+  return invoke("proxy_fetch", { method, url, headers, body, proxyUrl }) as Promise<ProxyFetchResponse>;
+}
+
+
 export async function agentChat(
   provider: string,
   apiKey: string,

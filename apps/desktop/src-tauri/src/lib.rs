@@ -24,6 +24,66 @@ struct AppState {
     permission_mode: Mutex<PermissionMode>,
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ProxyFetchResponse {
+    status: u16,
+    status_text: String,
+    headers: std::collections::HashMap<String, String>,
+    body: String,
+}
+
+/// HTTP request through an explicit proxy.
+/// Used by the frontend for LLM endpoints because browser/WebView fetch cannot
+/// apply a per-request HTTP proxy and often fails on private gateway DNS/CORS.
+#[tauri::command]
+async fn proxy_fetch(
+    method: String,
+    url: String,
+    headers: std::collections::HashMap<String, String>,
+    body: Option<String>,
+    proxy_url: Option<String>,
+) -> Result<Value, String> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120));
+
+    if let Some(proxy) = proxy_url.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        builder = builder.proxy(reqwest::Proxy::all(proxy)
+            .map_err(|e| format!("Invalid proxy URL: {}", e))?);
+    }
+
+    let client = builder.build().map_err(|e| format!("HTTP client error: {}", e))?;
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|e| format!("Invalid HTTP method: {}", e))?;
+
+    let mut req = client.request(method, &url);
+    for (name, value) in headers {
+        let header_name = reqwest::header::HeaderName::from_bytes(name.as_bytes())
+            .map_err(|e| format!("Invalid header name '{}': {}", name, e))?;
+        let header_value = reqwest::header::HeaderValue::from_str(&value)
+            .map_err(|e| format!("Invalid header value for '{}': {}", name, e))?;
+        req = req.header(header_name, header_value);
+    }
+    if let Some(body) = body {
+        req = req.body(body);
+    }
+
+    let resp = req.send().await.map_err(|e| format!("Request failed: {}", e))?;
+    let status = resp.status();
+    let status_text = status.canonical_reason().unwrap_or("").to_string();
+    let headers = resp.headers().iter()
+        .filter_map(|(k, v)| v.to_str().ok().map(|vv| (k.as_str().to_string(), vv.to_string())))
+        .collect::<std::collections::HashMap<_, _>>();
+    let body = resp.text().await.map_err(|e| format!("Read response failed: {}", e))?;
+
+    serde_json::to_value(ProxyFetchResponse {
+        status: status.as_u16(),
+        status_text,
+        headers,
+        body,
+    }).map_err(|e| format!("Serialize response failed: {}", e))
+}
+
 // ═══════════ Agent Commands ═══════════
 
 /// Send a chat message with streaming via Tauri events
@@ -607,6 +667,7 @@ pub fn run() {
             set_workspace_dir,
             set_permission_mode,
             validate_api_key,
+            proxy_fetch,
             // Session commands
             save_session,
             load_session,

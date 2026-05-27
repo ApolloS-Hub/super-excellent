@@ -7,7 +7,7 @@
  * 
  * Phase 2: All API calls now route through Rust when running as Tauri app.
  */
-import { isTauriAvailable, validateApiKeyRust } from "./tauri-bridge";
+import { isTauriAvailable, proxyFetchTauri, validateApiKeyRust } from "./tauri-bridge";
 import { analyzeIntent } from "./coordinator";
 import { emitAgentEvent as emitBusEvent } from "./event-bus";
 import { watchdogWrap, getWatchdogState, markRecovered } from "./watchdog";
@@ -66,6 +66,39 @@ export interface AgentEvent {
 }
 
 type EventCallback = (event: AgentEvent) => void;
+
+function headersToRecord(headers?: HeadersInit): Record<string, string> {
+  if (!headers) return {};
+  if (headers instanceof Headers) return Object.fromEntries(headers.entries());
+  if (Array.isArray(headers)) return Object.fromEntries(headers);
+  return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, String(v)]));
+}
+
+function bodyToString(body?: BodyInit | null): string | undefined {
+  if (body == null) return undefined;
+  if (typeof body === "string") return body;
+  if (body instanceof URLSearchParams) return body.toString();
+  return String(body);
+}
+
+async function llmFetch(config: AgentConfig, url: string, init: RequestInit = {}): Promise<Response> {
+  const proxyURL = config.proxyURL?.trim();
+  if (proxyURL && isTauriAvailable()) {
+    const result = await proxyFetchTauri(
+      init.method || "GET",
+      url,
+      headersToRecord(init.headers),
+      bodyToString(init.body),
+      proxyURL,
+    );
+    return new Response(result.body, {
+      status: result.status,
+      statusText: result.status_text,
+      headers: result.headers,
+    });
+  }
+  return fetchWithRetry(url, init);
+}
 
 // ═══════════ LoopState — Agent Loop 的显式状态机 ═══════════
 
@@ -871,7 +904,7 @@ export async function callAnthropic(
 
     let response: Response;
     try {
-      response = await fetchWithRetry(`${baseURL}/v1/messages`, {
+      response = await llmFetch(config, `${baseURL}/v1/messages`, {
         method: "POST",
         signal: combinedSignal,
         headers: {
@@ -1109,7 +1142,7 @@ export async function callGemini(
 
     if (iteration > 1) onEvent({ type: "thinking", text: i18n.language.startsWith("zh") ? `\n🔄 Gemini 第 ${iteration}/${MAX_ITERATIONS} 轮\n` : `\n🔄 Gemini round ${iteration}/${MAX_ITERATIONS}\n` });
 
-    const response = await fetchWithRetry(
+    const response = await llmFetch(config,
       `${baseURL}/v1beta/models/${model}:generateContent?key=${config.apiKey}`,
       {
         method: "POST",
@@ -1300,7 +1333,7 @@ async function _callOpenAINonStream(
 
     let response: Response;
     try {
-      response = await fetchWithRetry(`${baseURL}/v1/chat/completions`, {
+      response = await llmFetch(config, `${baseURL}/v1/chat/completions`, {
         method: "POST", headers, body: JSON.stringify(body), signal,
       });
     } catch (e) {
@@ -1597,7 +1630,7 @@ export async function callOpenAI(
 
     let response: Response;
     try {
-      response = await fetchWithRetry(`${baseURL}/v1/chat/completions`, {
+      response = await llmFetch(config, `${baseURL}/v1/chat/completions`, {
         method: "POST", headers, body: JSON.stringify(body), signal,
       });
     } catch (e) {
@@ -2075,7 +2108,7 @@ async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Prom
   let baseURL = config.baseURL || "https://api.anthropic.com";
   // Strip trailing /v1 to avoid double /v1/v1/messages
   baseURL = baseURL.replace(/\/v1\/?$/, "");
-  const resp = await fetchWithRetry(`${baseURL}/v1/messages`, {
+  const resp = await llmFetch(config, `${baseURL}/v1/messages`, {
     method: "POST",
     signal,
     headers: {
@@ -2115,7 +2148,7 @@ async function validateAnthropic(config: AgentConfig, signal: AbortSignal): Prom
 async function validateOpenAI(config: AgentConfig, signal: AbortSignal): Promise<{ valid: boolean; error?: string }> {
   const rawBaseURL = config.baseURL || "https://api.openai.com";
   const baseURL = rawBaseURL.replace(/\/v1\/?$/, "");
-  const resp = await fetchWithRetry(`${baseURL}/v1/models`, {
+  const resp = await llmFetch(config, `${baseURL}/v1/models`, {
     signal,
     headers: {
       "Authorization": `Bearer ${config.apiKey}`,
@@ -2140,7 +2173,7 @@ async function validateOpenAI(config: AgentConfig, signal: AbortSignal): Promise
 
 async function validateGoogle(config: AgentConfig, signal: AbortSignal): Promise<{ valid: boolean; error?: string }> {
   const baseURL = config.baseURL || "https://generativelanguage.googleapis.com";
-  const resp = await fetchWithRetry(`${baseURL}/v1beta/models?key=${config.apiKey}`, { signal });
+  const resp = await llmFetch(config, `${baseURL}/v1beta/models?key=${config.apiKey}`, { signal });
 
   if (resp.status === 400 || resp.status === 403) {
     const body = await resp.text().catch(() => "");
